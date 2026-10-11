@@ -1,0 +1,42 @@
+name: corte
+
+on:
+  schedule:
+    # 05:15 UTC = 00:15 en Bogotá. 17:00 UTC = 12:00 en Bogotá.
+    - cron: "15 5 * * *"
+    - cron: "0 17 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  corte:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    concurrency:
+      group: corte
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run corte
+        env:
+          # 17:00 UTC es el corte de las 12:00 en Bogotá. El otro horario, y un lanzamiento manual, es el de la noche.
+          CORTE: ${{ github.event.schedule == '0 17 * * *' && 'mediodia' || 'noche' }}
+      - name: Guardar /data
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data
+          git diff --cached --quiet || git commit -m "Corte de datos"
+          git push
+      - name: Publicar en Vercel
+        if: always()
+        run: curl -X POST "${{ secrets.VERCEL_DEPLOY_HOOK }}"

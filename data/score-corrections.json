@@ -1,0 +1,1054 @@
+{
+  "correctedAt": "2026-10-10T13:51:42-05:00",
+  "rule": "Ningún resultado se guarda si el estado no es finalizado. Un marcador leído en juego se borra. Si la página de resultados ya lo tiene en fin, se reemplaza por ese resultado y se anota la corrección.",
+  "casesFound": 79,
+  "correctedToFinal": 3,
+  "inPlayScoresRemoved": 76,
+  "remainingNotFinalizedWithScore": [],
+  "corrected": [
+    {
+      "id": "M39ZPFNk",
+      "kickoff": "2026-10-03T07:00:00-05:00",
+      "competition": "GERMANY: Oberliga Bayern Süd",
+      "home": "Heimstetten",
+      "away": "Erlbach",
+      "status": "por-jugar",
+      "stored": [
+        0,
+        0
+      ],
+      "action": "corregido al resultado final",
+      "final": [
+        0,
+        0
+      ],
+      "source": "m.flashscore.co resultados, estado fin"
+    },
+    {
+      "id": "SE9gk8Jr",
+      "kickoff": "2026-10-05T00:00:00-05:00",
+      "competition": "MONGOLIA: Premier League",
+      "home": "FC Ulaanbaatar",
+      "away": "Ulaangom City",
+      "status": "en-juego",
+      "stored": [
+        5,
+        0
+      ],
+      "action": "corregido al resultado final",
+      "final": [
+        8,
+        0
+      ],
+      "source": "m.flashscore.co resultados, estado fin"
+    },
+    {
+      "id": "4G06URbL",
+      "kickoff": "2026-10-05T08:00:00-05:00",
+      "competition": "PARAGUAY: Copa de Primera - Clausura",
+      "home": "Recoleta",
+      "away": "Libertad Asuncion",
+      "status": "por-jugar",
+      "stored": [
+        1,
+        1
+      ],
+      "action": "corregido al resultado final",
+      "final": [
+        1,
+        2
+      ],
+      "source": "m.flashscore.co resultados, estado fin"
+    }
+  ],
+  "cleared": [
+    {
+      "id": "Wfrhko9b",
+      "kickoff": "2026-10-09T12:45:00-05:00",
+      "competition": "KUWAIT: Premier League",
+      "home": "Al Salmiya",
+      "away": "Al Shabab",
+      "status": "en-juego",
+      "stored": [
+        0,
+        2
+      ],
+      "action": "marcador retirado: el partido no está finalizado"
+    },
+    {
+      "id": "YNUpxObU",
+      "kickoff": "2026-10-10T10:00:00-05:00",
+      "competition": "IRAQ: Stars League",
+      "home": "Al Kahraba",
+      "away": "Karbala",
+      "status": "en-juego",
+      "stored": [
+        0,
+        0
+      ],
+      "action": "marcador retirado: el partido no está finalizado"
+    },
+    {
+      "id": "4zFm3xhf",
+      "kickoff": "2026-10-10T10:00:00-05:00",
+      "competition": "MONTENEGRO: Prva Crnogorska Liga",
+      "home": "Buducnost",
+      "away": "Sutjeska",
+      "status": "en-juego",
+      "stored": [
+        0,
+        0
+      ],
+      "action": "marcador retirado: el partido no está finalizado"
+    },
+    {
+      "id": "zsCRwLHr",
+      "kickoff": "2026-10-10T11:00:00-05:00",
+      "competition": "SPAIN: Tercera RFEF - Group 3",
+      "home": "Atletico Albericia",
+      "away": "Castro",
+      "status": "en-juego",
+      "stored": [
+        0,
+        0
+      ],
+      "action": "marcador retirado: el partido no está finalizado"
+    },
+    {
+      "id": "KfLC2v8e",
+      "kickoff": "2026-10-10T11:00:00-05:00",
+      "competition": "SPAIN: Tercera RFEF - Group 5",
+      "home": "San Juan Atletico de Montcada",
+      "away": "Atletic Lleida",
+      "status": "en-juego",
+      "stored": [
+        0,
+        0
+      ],
+      "action": "marcador retirado: el partido no está finalizado"
+    },
+    {
+      "id": "Y7W7iXHM",
+      "kickoff": "2026-10-10T11:30:00-05:00",
+      "competition": "ALBANIA: Abissnet Superiore",
+      "home": "AF Elbasani",
+      "away": "Vora",
+      "status": "en-juego",
+      "stored": [
+        1,
+        1
+      ],
+      "action": "marcador retirado: el partido no está finalizado"
+    },
+    {
+      "id": "Ecr4zcek",
+      "kickoff": "2026-10-10T11:30:00-05:00",
+      "competition": "ECUADOR: Liga Pro - Championship Group",
+      "home": "Ind. del Valle",
+      "away": "Aucas",
+      "status": "en-juego",
+      "stored": [
+        2,
+        1
+      ],
+      "action": "marcador retirado: el partido no está finalizado"
+    },
+    {
+      "id": "4lCeUGzf",
+      "kickoff": "2026-10-10T11:30:00-05:00",
+      "competition": "ENGLAND: National League",
+      "home": "Forest Green",
+      "away": "Hartlepool",
+      "status": "en-juego",
+      "stored": [
+        2,
+        4
+      ],
+      "action": "marcador retirado: el partido no está finalizado"
+    },
+    {
+      "id": "hQ2NzTJb",
+      "kickoff": "2026-10-10T11:30:00-05:00",
+      "competition": "ENGLAND: Premier League",
+      "home": "Manchester Utd",
+      "away": "Tottenham",
+      "status": "en-juego",
+      "stored": [
+        1,
+        1
+      ],
+      "action": "marcador retirado: el partido no está finalizado"
+    },
+    {
+      "id": "vRKQIaWI",
+      "kickoff": "2026-10-10T11:30:00-05:00",
+      "competition": "GREECE: Super League",
+      "home": "AEK Athens",
+      "away": "OFI Crete",
+      "status": "en-juego",
+      "stored": [
+        3,
+        0
+      ],
+      "action": "marcador retirado: el partido no está finalizado"
+    },
+    {
+      "id": "jFRBt3OP",
+      "kickoff": "2026-10-10T11:30:00-05:00",
+      "competition": "GREECE: Super League",
+      "home": "Asteras Tripolis",
+      "away": "Atromitos",
+      "status": "en-juego",
+      "stored": [
+        2,
+        1
+      ],
+      "action": "marcador retirado: el partido no está finalizado"
+    },
+    {
+      "id": "dGhI2s5N",
+      "kickoff": "2026-10-10T11:30:00-05:00",
+      "competition": "ISRAEL: Ligat ha'Al",
+      "home": "Maccabi Tel Aviv",
+      "away": "Sakhnin",
+      "status": "en-juego",
+      "stored": [
+        0,
+        0
+      ],
+      "action": "marcador retirado: el partido no está finalizado"
+    },
+    {
+      "id": "vyzHWgxH",
+      "kickoff": "2026-10-10T11:30:00-05:00",
+      "competition": "JORDAN: Premier League",
+      "home": "Al Salt",
+      "away": "Al Faisaly Amman",
+      "status": "en-juego",
+      "stored": [
+        0,
+        0
+      ],
+      "action": "marcador retirado: el partido no está finalizado"
+    },
+    {
+      "id": "dbJejd7U",
+      "kickoff": "2026-10-10T11:30:00-05:00",
+      "competition": "PORTUGAL: Liga 3",
+      "home": "Covilha",
+      "away": "Oliveirense",
+      "status": "en-juego",
+      "stored": [
+        0,
+        0
+      ],
+      "action": "marcador retirado: el partido no está finalizado"
+    },
+    {
+      "id": "fPswxUUG",
+      "kickoff": "2026-10-10T11:30:00-05:00",
+      "competition": "RUSSIA: Premier League",
+      "home": "Krasnodar",
+      "away": "Zenit",
+      "status": "en-juego",
+      "stored": [
+        2,
+        3
+      ],
+      "action": "marcador retirado: el partido no está finalizado"
+    },
+    {
+      "id": "Es8BsIUP",
+      "kickoff": "2026-10-10T11:30:00-05:00",
+      "competition": "SPAIN: LaLiga",
+      "home": "Barcelona",
+      "away": "Getafe",
+      "status": "en-juego",
+      "stored": [
+        3,
+        0
+      ],
+      "action": "marcador retirado: el partido no está finalizado"
+    },
+    {
+      "id": "EF75c4np",
+      "kickoff": "2026-10-10T11:30:00-05:00",
+      "competition": "SPAIN: LaLiga2",
+      "home": "Eldense",
+      "away": "Cordoba",
+      "status": "en-juego",
+      "stored": [
+        1,
+        1
+      ],
+      "action": "marcador retirado: el partido no está finalizado"
+    },
+    {
+      "id": "j9IgsyvC",
+      "kickoff": "2026-10-10T11:30:00-05:00",
+      "competition": "SPAIN: Primera RFEF - Group 2",
+      "home": "Teruel",
+      "away": "Alcorcon",
+      "status": "en-juego",
+      "stored": [
+        1,
+        0
+      ],
+      "action": "marcador retirado: el partido no está finalizado"
+    },
+    {
+      "id": "rPxuLZcC",
+      "kickoff": "2026-10-10T11:45:00-05:00",
+      "competition": "NETHERLANDS: Eredivisie",
+      "home": "Feyenoord",
+      "away": "AZ Alkmaar",
+      "status": "en-juego",
+      "stored": [
+        2,
+        0
+      ],
+      "action": "marcador retirado: el partido no está finalizado"
+    },
+    {
+      "id": "SGECOaUN",
+      "kickoff": "2026-10-10T11:45:00-05:00",
+      "competition": "SPAIN: Primera RFEF - Group 1",
+      "home": "Cacereno",
+      "away": "Unionistas",
+      "status": "en-juego",
+      "stored": [
+        1,
+        1
+      ],
+      "action": "marcador retirado: el partido no está finalizado"
+    },
+    {
+      "id": "Ct2hywET",
+      "kickoff": "2026-10-10T11:45:00-05:00",
+      "competition": "SPAIN: Primera RFEF - Group 1",
+      "home": "UD Ourense",
+      "away": "Barakaldo",
+      "status": "en-juego",
+      "stored": [
+        1,
+        0
+      ],
+      "action": "marcador retirado: el partido no está finalizado"
+    },
+    {
+      "id": "vVv73RfE",
+      "kickoff": "2026-10-10T11:45:00-05:00",
+      "competition": "SPAIN: Primera RFEF - Group 2",
+      "home": "Jaen",
+      "away": "Villarreal B",
+      "status": "en-juego",
+      "stored": [
+        2,
+        2
+      ],
+      "action": "marcador retirado: el partido no está finalizado"
+    },
+    {
+      "id": "MaspKCs3",
+      "kickoff": "2026-10-10T12:00:00-05:00",
+      "competition": "BULGARIA: efbet League",
+      "home": "Botev Plovdiv",
+      "away": "Slavia Sofia",
+      "status": "en-juego",
+      "stored": [
+        1,
+        0
+      ],
+      "action": "marcador retirado: el partido no está finalizado"
+    },
+    {
+      "id": "MJQtKkbD",
+      "kickoff": "2026-10-10T12:00:00-05:00",
+      "competition": "GEORGIA: Crystalbet Erovnuli Liga 2",
+      "home": "Dusheti",
+      "away": "Telavi",
+      "status": "en-juego",
+      "stored": [
+        0,
+        4
+      ],
+      "action": "marcador retirado: el partido no está finalizado"
+    },
+    {
+      "id": "lCmDxINF",
+      "kickoff": "2026-10-10T12:00:00-05:00",
+      "competition": "NORWAY: Division 2 - Group 1",
+      "home": "Mjondalen",
+      "away": "Pors",
+      "status": "en-juego",
+      "stored": [
+        0,
+        0
+      ],
+      "action": "marcador retirado: el partido no está finalizado"
+    },
+    {
+      "id": "ImKwvh13",
+      "kickoff": "2026-10-10T12:00:00-05:00",
+      "competition": "POLAND: III Liga - Group III",
+      "home": "Bytom Odrzanski",
+      "away": "Zaglebie II",
+      "status": "en-juego",
+      "stored": [
+        1,
+        1
+      ],
+      "action": "marcador retirado: el partido no está finalizado"
+    },
+    {
+      "id": "SxMWF41f",
+      "kickoff": "2026-10-10T12:00:00-05:00",
+      "competition": "PORTUGAL: Liga Portugal",
+      "home": "Maritimo",
+      "away": "FC Porto",
+      "status": "en-juego",
+      "stored": [
+        1,
+        1
+      ],
+      "action": "marcador retirado: el partido no está finalizado"
+    },
+    {
+      "id": "QokkPTaK",
+      "kickoff": "2026-10-10T12:00:00-05:00",
+      "competition": "QATAR: QSL",
+      "home": "Al Ahli Doha",
+      "away": "Al Sailiya",
+      "status": "en-juego",
+      "stored": [
+        4,
+        0
+      ],
+      "action": "marcador retirado: el partido no está finalizado"
+    },
+    {
+      "id": "4AqfeVpT",
+      "kickoff": "2026-10-10T12:00:00-05:00",
+      "competition": "SERBIA: Mozzart Bet Super Liga",
+      "home": "Radnicki 1923",
+      "away": "Crvena zvezda",
+      "status": "en-juego",
+      "stored": [
+        0,
+        2
+      ],
+      "action": "marcador retirado: el partido no está finalizado"
+    },
+    {
+      "id": "KxzTD2pF",
+      "kickoff": "2026-10-10T12:00:00-05:00",
+      "competition": "SPAIN: Tercera RFEF - Group 2",
+      "home": "Mosconia",
+      "away": "Union Club Ceares",
+      "status": "en-juego",
+      "stored": [
+        2,
+        0
+      ],
+      "action": "marcador retirado: el partido no está finalizado"
+    },
+    {
+      "id": "IL8igEc3",
+      "kickoff": "2026-10-10T12:00:00-05:00",
+      "competition": "USA: MLS",
+      "home": "Toronto FC",
+      "away": "CF Montreal",
+      "status": "en-juego",
+      "stored": [
+        0,
+        0
+      ],
+      "action": "marcador retirado: el partido no está finalizado"
+    },
+    {
+      "id": "YP3ewUXG",
+      "kickoff": "2026-10-10T12:30:00-05:00",
+      "competition": "AUSTRIA: Bundesliga",
+      "home": "Austria Vienna",
+      "away": "Sturm Graz",
+      "status": "en-juego",
+      "stored": [
+        0,
+        1
+      ],
+      "action": "marcador retirado: el partido no está finalizado"
+    },
+    {
+      "id": "6DdtBVTQ",
+      "kickoff": "2026-10-10T12:30:00-05:00",
+      "competition": "EUROPE: Euro U17 Women - Qualification - Round 1 - League A",
+      "home": "Austria U17 W",
+      "away": "Northern Ireland U17 W",
+      "status": "en-juego",
+      "stored": [
+        2,
+        0
+      ],
+      "action": "marcador retirado: el partido no está finalizado"
+    },
+    {
+      "id": "0KtnMmAD",
+      "kickoff": "2026-10-10T12:30:00-05:00",
+      "competition": "FAROE ISLANDS: Premier League",
+      "home": "07 Vestur Sorvagur",
+      "away": "Streymur",
+      "status": "en-juego",
+      "stored": [
+        1,
+        0
+      ],
+      "action": "marcador retirado: el partido no está finalizado"
+    },
+    {
+      "id": "jZaavVjK",
+      "kickoff": "2026-10-10T12:30:00-05:00",
+      "competition": "HUNGARY: NB I.",
+      "home": "Paks",
+      "away": "MTK Budapest",
+      "status": "en-juego",
+      "stored": [
+        1,
+        0
+      ],
+      "action": "marcador retirado: el partido no está finalizado"
+    },
+    {
+      "id": "pKPMsSUh",
+      "kickoff": "2026-10-10T12:30:00-05:00",
+      "competition": "IRAQ: Stars League",
+      "home": "Al Karma",
+      "away": "Al Karkh",
+      "status": "en-juego",
+      "stored": [
+        2,
+        0
+      ],
+      "action": "marcador retirado: el partido no está finalizado"
+    },
+    {
+      "id": "Sl4ODpet",
+      "kickoff": "2026-10-10T12:30:00-05:00",
+      "competition": "ITALY: Serie B",
+      "home": "Arezzo",
+      "away": "Cremonese",
+      "status": "en-juego",
+      "stored": [
+        0,
+        0
+      ],
+      "action": "marcador retirado: el partido no está finalizado"
+    },
+    {
+      "id": "2yNPwpxo",
+      "kickoff": "2026-10-10T13:00:00-05:00",
+      "competition": "ARGENTINA: Primera Nacional",
+      "home": "Colegiales",
+      "away": "Tristan Suarez",
+      "status": "en-juego",
+      "stored": [
+        0,
+        0
+      ],
+      "action": "marcador retirado: el partido no está finalizado"
+    },
+    {
+      "id": "hYtGyO6d",
+      "kickoff": "2026-10-10T13:00:00-05:00",
+      "competition": "BELGIUM: Challenger Pro League",
+      "home": "Beerschot VA",
+      "away": "RFC Liege",
+      "status": "en-juego",
+      "stored": [
+        0,
+        0
+      ],
+      "action": "marcador retirado: el partido no está finalizado"
+    },
+    {
+      "id": "SYmRK2vJ",
+      "kickoff": "2026-10-10T13:00:00-05:00",
+      "competition": "BELGIUM: National Division 1 - ACFF",
+      "home": "Charleroi B",
+      "away": "OC Charleroi",
+      "status": "en-juego",
+      "stored": [
+        1,
+        0
+      ],
+      "action": "marcador retirado: el partido no está finalizado"
+    },
+    {
+      "id": "vVr3Q6As",
+      "kickoff": "2026-10-10T13:00:00-05:00",
+      "competition": "BELGIUM: National Division 1 - ACFF",
+      "home": "Meux",
+      "away": "Union Rochefortoise",
+      "status": "en-juego",
+      "stored": [
+        0,
+        0
+      ],
+      "action": "marcador retirado: el partido no está finalizado"
+    },
+    {
+      "id": "zaHVrFQ8",
+      "kickoff": "2026-10-10T13:00:00-05:00",
+      "competition": "BELGIUM: National Division 1 - ACFF",
+      "home": "RWDM Brussels",
+      "away": "Tubize-Braine",
+      "status": "en-juego",
+      "stored": [
+        0,
+        0
+      ],
+      "action": "marcador retirado: el partido no está finalizado"
+    },
+    {
+      "id": "thlEsDYp",
+      "kickoff": "2026-10-10T13:00:00-05:00",
+      "competition": "BELGIUM: National Division 1 - VV",
+      "home": "Houtvenne",
+      "away": "Knokke",
+      "status": "en-juego",
+      "stored": [
+        1,
+        0
+      ],
+      "action": "marcador retirado: el partido no está finalizado"
+    },
+    {
+      "id": "KxKnqQ9k",
+      "kickoff": "2026-10-10T13:00:00-05:00",
+      "competition": "BELGIUM: National Division 1 - VV",
+      "home": "SK Roeselare",
+      "away": "Dessel",
+      "status": "en-juego",
+      "stored": [
+        1,
+        0
+      ],
+      "action": "marcador retirado: el partido no está finalizado"
+    },
+    {
+      "id": "tQg73fe4",
+      "kickoff": "2026-10-10T13:00:00-05:00",
+      "competition": "BELGIUM: National Division 1 - VV",
+      "home": "Zelzate",
+      "away": "Hoogstraten",
+      "status": "en-juego",
+      "stored": [
+        1,
+        0
+      ],
+      "action": "marcador retirado: el partido no está finalizado"
+    },
+    {
+      "id": "v5V7PZMa",
+      "kickoff": "2026-10-10T13:00:00-05:00",
+      "competition": "BRAZIL: Carioca B1",
+      "home": "Duque de Caxias",
+      "away": "Audax RJ",
+      "status": "en-juego",
+      "stored": [
+        0,
+        0
+      ],
+      "action": "marcador retirado: el partido no está finalizado"
+    },
+    {
+      "id": "8p3sM0G7",
+      "kickoff": "2026-10-10T13:00:00-05:00",
+      "competition": "BRAZIL: Carioca B1",
+      "home": "Nova Cidade",
+      "away": "Campo Grande",
+      "status": "en-juego",
+      "stored": [
+        0,
+        0
+      ],
+      "action": "marcador retirado: el partido no está finalizado"
+    },
+    {
+      "id": "CITFNDiC",
+      "kickoff": "2026-10-10T13:00:00-05:00",
+      "competition": "BRAZIL: Carioca B1",
+      "home": "Sao Cristovao",
+      "away": "Goytacaz",
+      "status": "en-juego",
+      "stored": [
+        0,
+        0
+      ],
+      "action": "marcador retirado: el partido no está finalizado"
+    },
+    {
+      "id": "fijQW0E7",
+      "kickoff": "2026-10-10T13:00:00-05:00",
+      "competition": "BRAZIL: Carioca U20 - Taca Guanabara",
+      "home": "Marica U20",
+      "away": "Fluminense U20",
+      "status": "en-juego",
+      "stored": [
+        0,
+        0
+      ],
+      "action": "marcador retirado: el partido no está finalizado"
+    },
+    {
+      "id": "fBtKhryR",
+      "kickoff": "2026-10-10T13:00:00-05:00",
+      "competition": "BRAZIL: Carioca U20 - Taca Guanabara",
+      "home": "Nova Iguacu U20",
+      "away": "Volta Redonda U20",
+      "status": "en-juego",
+      "stored": [
+        0,
+        0
+      ],
+      "action": "marcador retirado: el partido no está finalizado"
+    },
+    {
+      "id": "0AlAzqFr",
+      "kickoff": "2026-10-10T13:00:00-05:00",
+      "competition": "BRAZIL: Carioca U20 - Taca Guanabara",
+      "home": "Sampaio Correa FE U20",
+      "away": "Madureira U20",
+      "status": "en-juego",
+      "stored": [
+        0,
+        0
+      ],
+      "action": "marcador retirado: el partido no está finalizado"
+    },
+    {
+      "id": "S2LbyfN6",
+      "kickoff": "2026-10-10T13:00:00-05:00",
+      "competition": "BRAZIL: Copa Santa Catarina",
+      "home": "Figueirense",
+      "away": "Hercilio Luz",
+      "status": "en-juego",
+      "stored": [
+        0,
+        0
+      ],
+      "action": "marcador retirado: el partido no está finalizado"
+    },
+    {
+      "id": "lfywEY2c",
+      "kickoff": "2026-10-10T13:00:00-05:00",
+      "competition": "BRAZIL: Gaucho 2 - Play Offs",
+      "home": "Santa Cruz RS",
+      "away": "Apafut",
+      "status": "en-juego",
+      "stored": [
+        0,
+        0
+      ],
+      "action": "marcador retirado: el partido no está finalizado"
+    },
+    {
+      "id": "l2BiTk7N",
+      "kickoff": "2026-10-10T13:00:00-05:00",
+      "competition": "BRAZIL: Gaucho 3",
+      "home": "Real SC",
+      "away": "Panambi",
+      "status": "en-juego",
+      "stored": [
+        1,
+        0
+      ],
+      "action": "marcador retirado: el partido no está finalizado"
+    },
+    {
+      "id": "fkiNxX7d",
+      "kickoff": "2026-10-10T13:00:00-05:00",
+      "competition": "BRAZIL: Mineiro Women",
+      "home": "Atletico-MG W",
+      "away": "Cruzeiro W",
+      "status": "en-juego",
+      "stored": [
+        0,
+        1
+      ],
+      "action": "marcador retirado: el partido no está finalizado"
+    },
+    {
+      "id": "On3LWUXG",
+      "kickoff": "2026-10-10T13:00:00-05:00",
+      "competition": "CHILE: Liga de Ascenso",
+      "home": "S. Wanderers",
+      "away": "Curico Unido",
+      "status": "en-juego",
+      "stored": [
+        1,
+        0
+      ],
+      "action": "marcador retirado: el partido no está finalizado"
+    },
+    {
+      "id": "40V1p3gK",
+      "kickoff": "2026-10-10T13:00:00-05:00",
+      "competition": "CHILE: Liga de Primera",
+      "home": "Cobresal",
+      "away": "U. De Concepcion",
+      "status": "en-juego",
+      "stored": [
+        0,
+        0
+      ],
+      "action": "marcador retirado: el partido no está finalizado"
+    },
+    {
+      "id": "0ha3rTGU",
+      "kickoff": "2026-10-10T13:00:00-05:00",
+      "competition": "FRANCE: Ligue 2",
+      "home": "St Etienne",
+      "away": "Rodez",
+      "status": "en-juego",
+      "stored": [
+        1,
+        0
+      ],
+      "action": "marcador retirado: el partido no está finalizado"
+    },
+    {
+      "id": "Q740wQiS",
+      "kickoff": "2026-10-10T13:00:00-05:00",
+      "competition": "MEXICO: Liga Premier Serie A",
+      "home": "Canoneros",
+      "away": "Club Calor",
+      "status": "en-juego",
+      "stored": [
+        0,
+        1
+      ],
+      "action": "marcador retirado: el partido no está finalizado"
+    },
+    {
+      "id": "CbJ4yerg",
+      "kickoff": "2026-10-10T13:00:00-05:00",
+      "competition": "NETHERLANDS: Eredivisie",
+      "home": "Sittard",
+      "away": "Twente",
+      "status": "en-juego",
+      "stored": [
+        1,
+        0
+      ],
+      "action": "marcador retirado: el partido no está finalizado"
+    },
+    {
+      "id": "fNAMZYMH",
+      "kickoff": "2026-10-10T13:00:00-05:00",
+      "competition": "PERU: Liga 1 - Clausura",
+      "home": "AD Tarma",
+      "away": "FC Cajamarca",
+      "status": "en-juego",
+      "stored": [
+        0,
+        0
+      ],
+      "action": "marcador retirado: el partido no está finalizado"
+    },
+    {
+      "id": "nPHNrc6j",
+      "kickoff": "2026-10-10T13:00:00-05:00",
+      "competition": "SAUDI ARABIA: Saudi Professional League",
+      "home": "Al Hilal",
+      "away": "Al Ittihad",
+      "status": "en-juego",
+      "stored": [
+        1,
+        0
+      ],
+      "action": "marcador retirado: el partido no está finalizado"
+    },
+    {
+      "id": "f3G4QLaB",
+      "kickoff": "2026-10-10T13:00:00-05:00",
+      "competition": "SPAIN: Primera RFEF - Group 1",
+      "home": "CD Coria",
+      "away": "CD Extremadura",
+      "status": "en-juego",
+      "stored": [
+        1,
+        0
+      ],
+      "action": "marcador retirado: el partido no está finalizado"
+    },
+    {
+      "id": "hInqJTgd",
+      "kickoff": "2026-10-10T13:00:00-05:00",
+      "competition": "SPAIN: Segunda RFEF - Group 5",
+      "home": "Salamanca",
+      "away": "San Sebastian Reyes",
+      "status": "en-juego",
+      "stored": [
+        1,
+        0
+      ],
+      "action": "marcador retirado: el partido no está finalizado"
+    },
+    {
+      "id": "nZvZiLNe",
+      "kickoff": "2026-10-10T13:00:00-05:00",
+      "competition": "SPAIN: Tercera RFEF - Group 2",
+      "home": "Club Siero",
+      "away": "L'Entregu",
+      "status": "en-juego",
+      "stored": [
+        1,
+        0
+      ],
+      "action": "marcador retirado: el partido no está finalizado"
+    },
+    {
+      "id": "GWXMw1FM",
+      "kickoff": "2026-10-10T13:00:00-05:00",
+      "competition": "URUGUAY: Liga AUF Uruguaya - Clausura",
+      "home": "Wanderers",
+      "away": "Boston River",
+      "status": "en-juego",
+      "stored": [
+        0,
+        1
+      ],
+      "action": "marcador retirado: el partido no está finalizado"
+    },
+    {
+      "id": "dWb7unrh",
+      "kickoff": "2026-10-10T13:15:00-05:00",
+      "competition": "POLAND: Ekstraklasa",
+      "home": "Jagiellonia",
+      "away": "Gornik Zabrze",
+      "status": "en-juego",
+      "stored": [
+        0,
+        0
+      ],
+      "action": "marcador retirado: el partido no está finalizado"
+    },
+    {
+      "id": "SlpdETtn",
+      "kickoff": "2026-10-10T13:15:00-05:00",
+      "competition": "SLOVENIA: Prva liga",
+      "home": "O. Ljubljana",
+      "away": "Mura",
+      "status": "en-juego",
+      "stored": [
+        0,
+        0
+      ],
+      "action": "marcador retirado: el partido no está finalizado"
+    },
+    {
+      "id": "Q9h3HiLb",
+      "kickoff": "2026-10-10T15:00:00-05:00",
+      "competition": "ARGENTINA: Primera B",
+      "home": "Arsenal Sarandi",
+      "away": "San Martin Burzaco",
+      "status": "en-juego",
+      "stored": [
+        0,
+        0
+      ],
+      "action": "marcador retirado: el partido no está finalizado"
+    },
+    {
+      "id": "YwzdNMiK",
+      "kickoff": "2026-10-10T15:00:00-05:00",
+      "competition": "ARGENTINA: Primera B",
+      "home": "Flandria",
+      "away": "Defensores Unidos",
+      "status": "en-juego",
+      "stored": [
+        0,
+        0
+      ],
+      "action": "marcador retirado: el partido no está finalizado"
+    },
+    {
+      "id": "80rAaJaD",
+      "kickoff": "2026-10-10T15:00:00-05:00",
+      "competition": "ARGENTINA: Primera B",
+      "home": "Ituzaingo",
+      "away": "Argentino de Quilmes",
+      "status": "en-juego",
+      "stored": [
+        0,
+        0
+      ],
+      "action": "marcador retirado: el partido no está finalizado"
+    },
+    {
+      "id": "M38qEIE6",
+      "kickoff": "2026-10-10T15:00:00-05:00",
+      "competition": "ARGENTINA: Primera B",
+      "home": "Laferrere",
+      "away": "Dep. Merlo",
+      "status": "en-juego",
+      "stored": [
+        0,
+        0
+      ],
+      "action": "marcador retirado: el partido no está finalizado"
+    },
+    {
+      "id": "fkpKD9KN",
+      "kickoff": "2026-10-10T15:00:00-05:00",
+      "competition": "ARGENTINA: Primera B",
+      "home": "Villa Dalmine",
+      "away": "Liniers",
+      "status": "en-juego",
+      "stored": [
+        0,
+        0
+      ],
+      "action": "marcador retirado: el partido no está finalizado"
+    },
+    {
+      "id": "OCm5oetf",
+      "kickoff": "2026-10-11T08:00:00-05:00",
+      "competition": "MOROCCO: Botola 2",
+      "home": "Ittihad Khemisset",
+      "away": "Olympique Khouribga",
+      "status": "en-juego",
+      "stored": [
+        1,
+        1
+      ],
+      "action": "marcador retirado: el partido no está finalizado"
+    },
+    {
+      "id": "jJDtsJHM",
+      "kickoff": "2026-10-11T10:00:00-05:00",
+      "competition": "SPAIN: Tercera RFEF - Group 10",
+      "home": "Ceuta B",
+      "away": "Conil",
+      "status": "en-juego",
+      "stored": [
+        3,
+        0
+      ],
+      "action": "marcador retirado: el partido no está finalizado"
+    },
+    {
+      "id": "t2NXPLr1",
+      "kickoff": "2026-10-11T11:00:00-05:00",
+      "competition": "SPAIN: Tercera RFEF - Group 7",
+      "home": "Cala Pozuelo",
+      "away": "RC Alcobendas",
+      "status": "en-juego",
+      "stored": [
+        1,
+        0
+      ],
+      "action": "marcador retirado: el partido no está finalizado"
+    }
+  ]
+}

@@ -1,0 +1,124 @@
+{
+  "builtAt": "2026-10-04T16:32:50.542Z",
+  "rule": "Solo partidos ya finalizados y solo con goles anteriores a su inicio. La tabla de temporada no entra, para no usar información posterior.",
+  "playedInCut": 9,
+  "scored": 9,
+  "brier": 0.5153,
+  "rps": 0.216,
+  "bins": [
+    {
+      "label": "0–40%",
+      "n": 4,
+      "hit": 4,
+      "rate": 1
+    },
+    {
+      "label": "40–50%",
+      "n": 4,
+      "hit": 4,
+      "rate": 1
+    },
+    {
+      "label": "50–60%",
+      "n": 1,
+      "hit": 1,
+      "rate": 1
+    },
+    {
+      "label": "60–70%",
+      "n": 0,
+      "hit": 0,
+      "rate": null
+    },
+    {
+      "label": "70–100%",
+      "n": 0,
+      "hit": 0,
+      "rate": null
+    }
+  ],
+  "rows": [
+    {
+      "fixtureId": "401841593",
+      "score": "3-0",
+      "pHome": 0.394,
+      "pDraw": 0.31,
+      "pAway": 0.296,
+      "brier": 0.551,
+      "rps": 0.2273
+    },
+    {
+      "fixtureId": "401861111",
+      "score": "2-1",
+      "pHome": 0.363,
+      "pDraw": 0.286,
+      "pAway": 0.351,
+      "brier": 0.6108,
+      "rps": 0.2644
+    },
+    {
+      "fixtureId": "401861112",
+      "score": "3-0",
+      "pHome": 0.378,
+      "pDraw": 0.303,
+      "pAway": 0.319,
+      "brier": 0.5809,
+      "rps": 0.2446
+    },
+    {
+      "fixtureId": "401861113",
+      "score": "0-7",
+      "pHome": 0.329,
+      "pDraw": 0.259,
+      "pAway": 0.412,
+      "brier": 0.5212,
+      "rps": 0.227
+    },
+    {
+      "fixtureId": "401861114",
+      "score": "4-0",
+      "pHome": 0.509,
+      "pDraw": 0.262,
+      "pAway": 0.229,
+      "brier": 0.3622,
+      "rps": 0.1469
+    },
+    {
+      "fixtureId": "401861115",
+      "score": "1-0",
+      "pHome": 0.363,
+      "pDraw": 0.312,
+      "pAway": 0.325,
+      "brier": 0.6089,
+      "rps": 0.2559
+    },
+    {
+      "fixtureId": "401900325",
+      "score": "2-0",
+      "pHome": 0.443,
+      "pDraw": 0.272,
+      "pAway": 0.285,
+      "brier": 0.4662,
+      "rps": 0.196
+    },
+    {
+      "fixtureId": "401903233",
+      "score": "0-4",
+      "pHome": 0.281,
+      "pDraw": 0.277,
+      "pAway": 0.443,
+      "brier": 0.4659,
+      "rps": 0.1947
+    },
+    {
+      "fixtureId": "401917862",
+      "score": "6-0",
+      "pHome": 0.441,
+      "pDraw": 0.308,
+      "pAway": 0.251,
+      "brier": 0.4703,
+      "rps": 0.1876
+    }
+  ],
+  "sumCheck": 1
+}

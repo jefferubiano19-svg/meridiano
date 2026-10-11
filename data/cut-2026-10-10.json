@@ -1,0 +1,336 @@
+{
+  "cut": "2026-10-10",
+  "startedAtBogota": "2026-10-10T13:35:13-05:00",
+  "startedBy": "mensaje en el chat, 10 oct 2026",
+  "source": "https://m.flashscore.co/?d=0&s=1",
+  "tomorrowUrl": "https://m.flashscore.co/?d=1&s=1",
+  "oddsUrl": "https://m.flashscore.co/?d=0&s=5",
+  "agendaToday": 1734,
+  "agendaTomorrow": 1272,
+  "scheduledNotStarted": 276,
+  "live": 79,
+  "finishedToday": 1379,
+  "wplay1x2Kept": 882,
+  "predictionsSaved": 147,
+  "predictionsSkipped": {
+    "sin-historial": 12,
+    "formato": 12,
+    "hora-pasada": 105,
+    "ya-empezo": 0
+  },
+  "combo": [
+    {
+      "id": "zaFXRqbf",
+      "clock": "13:45",
+      "home": "Brest",
+      "away": "Angers",
+      "league": "FRANCIA: Ligue 1"
+    },
+    {
+      "id": "O2jXVDGP",
+      "clock": "13:45",
+      "home": "Lorient",
+      "away": "Paris FC",
+      "league": "FRANCIA: Ligue 1"
+    },
+    {
+      "id": "fos3Qivm",
+      "clock": "13:45",
+      "home": "Mónaco",
+      "away": "Toulouse",
+      "league": "FRANCIA: Ligue 1"
+    },
+    {
+      "id": "K6cIM9wC",
+      "clock": "13:45",
+      "home": "PSG",
+      "away": "Le Mans",
+      "league": "FRANCIA: Ligue 1"
+    },
+    {
+      "id": "ncIZ9aS9",
+      "clock": "13:45",
+      "home": "Barracas Central",
+      "away": "Huracán",
+      "league": "ARGENTINA: Liga Profesional - Clausura"
+    },
+    {
+      "id": "2mAGw9Ti",
+      "clock": "14:00",
+      "home": "Real Madrid",
+      "away": "Villarreal",
+      "league": "ESPAÑA: LaLiga EA Sports"
+    },
+    {
+      "id": "voLdwHDt",
+      "clock": "14:00",
+      "home": "Ajax",
+      "away": "Nijmegen",
+      "league": "PAÍSES BAJOS: Eredivisie"
+    },
+    {
+      "id": "x6ri3RHl",
+      "clock": "14:30",
+      "home": "Academico Viseu",
+      "away": "Estoril",
+      "league": "PORTUGAL: Liga Portugal"
+    },
+    {
+      "id": "OtXhNn9K",
+      "clock": "14:30",
+      "home": "Casa Pia",
+      "away": "Santa Clara",
+      "league": "PORTUGAL: Liga Portugal"
+    },
+    {
+      "id": "j7pTdhXN",
+      "clock": "15:00",
+      "home": "Central Córdoba",
+      "away": "Estudiantes L.P.",
+      "league": "ARGENTINA: Liga Profesional - Clausura"
+    },
+    {
+      "id": "KAQ6bSid",
+      "clock": "16:00",
+      "home": "Vasco",
+      "away": "Remo",
+      "league": "BRASIL: Serie A Betano"
+    },
+    {
+      "id": "vie8gvrT",
+      "clock": "17:15",
+      "home": "Tigre",
+      "away": "Banfield",
+      "league": "ARGENTINA: Liga Profesional - Clausura"
+    },
+    {
+      "id": "CvXwE3dn",
+      "clock": "18:00",
+      "home": "Juárez",
+      "away": "Tijuana",
+      "league": "MÉXICO: Liga MX - Apertura"
+    },
+    {
+      "id": "2oeEcrC5",
+      "clock": "18:00",
+      "home": "Querétaro",
+      "away": "Atlante",
+      "league": "MÉXICO: Liga MX - Apertura"
+    },
+    {
+      "id": "rVs1NFDk",
+      "clock": "18:10",
+      "home": "Junior",
+      "away": "Inter Bogotá",
+      "league": "COLOMBIA: Primera A - Clausura"
+    },
+    {
+      "id": "CheNVkPb",
+      "clock": "18:30",
+      "home": "Atlanta Utd",
+      "away": "Cincinnati",
+      "league": "ESTADOS UNIDOS: MLS"
+    },
+    {
+      "id": "KIbVTTgB",
+      "clock": "18:30",
+      "home": "Charlotte",
+      "away": "FC Dallas",
+      "league": "ESTADOS UNIDOS: MLS"
+    },
+    {
+      "id": "0S6wS7ON",
+      "clock": "18:30",
+      "home": "Inter Miami",
+      "away": "DC United",
+      "league": "ESTADOS UNIDOS: MLS"
+    },
+    {
+      "id": "dbh9Mono",
+      "clock": "18:30",
+      "home": "New England Revolution",
+      "away": "Seattle Sounders",
+      "league": "ESTADOS UNIDOS: MLS"
+    },
+    {
+      "id": "C6zdpkvh",
+      "clock": "18:30",
+      "home": "New York Red Bulls",
+      "away": "San Diego FC",
+      "league": "ESTADOS UNIDOS: MLS"
+    }
+  ],
+  "fullSheetsRead": 0,
+  "fullSheetsNote": "Los 20 del Combo de hoy aún no empiezan. No se leyó una ficha finalizada. Las de ayer del Combo del 5 oct están en sheets-recovered.json.",
+  "standings": "NO LEÍDAS. m.flashscore.co/clasificacion/ está prohibido por robots.txt y no se abrió por otro camino.",
+  "feedCheck": [
+    {
+      "id": "4jyY5UrI",
+      "home": "FC Batyr",
+      "away": "Khan Tengri",
+      "visible": [
+        1,
+        1
+      ],
+      "feed": [
+        1,
+        1
+      ],
+      "match": true
+    },
+    {
+      "id": "4dfW8Ufc",
+      "home": "Kazajistán F",
+      "away": "Irlanda F",
+      "visible": [
+        0,
+        8
+      ],
+      "feed": [
+        0,
+        5
+      ],
+      "match": false
+    },
+    {
+      "id": "Io5YW0Hd",
+      "home": "Uerdingen",
+      "away": "Solingen-Wald",
+      "visible": [
+        2,
+        3
+      ],
+      "feed": [
+        0,
+        2
+      ],
+      "match": false
+    },
+    {
+      "id": "Sv1epknI",
+      "home": "Pau FC",
+      "away": "Laval",
+      "visible": [
+        3,
+        2
+      ],
+      "feed": [
+        1,
+        1
+      ],
+      "match": false
+    },
+    {
+      "id": "QN0NWb6F",
+      "home": "Shimshon Tel Aviv",
+      "away": "Kfar Saba 1928",
+      "visible": [
+        3,
+        0
+      ],
+      "feed": [
+        3,
+        0
+      ],
+      "match": true
+    },
+    {
+      "id": "C2qV6ZF7",
+      "home": "Alemania F",
+      "away": "Australia F",
+      "visible": [
+        4,
+        2
+      ],
+      "feed": [
+        2,
+        1
+      ],
+      "match": false
+    },
+    {
+      "id": "SQJZLshc",
+      "home": "Jerusalem FC",
+      "away": "M. Ironi Kiryat Malachi",
+      "visible": [
+        0,
+        1
+      ],
+      "feed": [
+        0,
+        1
+      ],
+      "match": true
+    },
+    {
+      "id": "bTUpi7vn",
+      "home": "Kazma SC",
+      "away": "Al Arabi",
+      "visible": [
+        1,
+        1
+      ],
+      "feed": [
+        1,
+        0
+      ],
+      "match": false
+    },
+    {
+      "id": "dU3bH8NM",
+      "home": "Abo",
+      "away": "PEPO",
+      "visible": [
+        0,
+        2
+      ],
+      "feed": [
+        0,
+        1
+      ],
+      "match": false
+    },
+    {
+      "id": "hn7kkwRG",
+      "home": "Suwon FC",
+      "away": "Hwaseong",
+      "visible": [
+        1,
+        0
+      ],
+      "feed": [
+        0,
+        0
+      ],
+      "match": false
+    }
+  ],
+  "feedUsed": false,
+  "recoveredDays": {
+    "2026-10-09": {
+      "count": 578,
+      "finished": 559,
+      "url": "https://m.flashscore.co/?d=-1&s=3"
+    },
+    "2026-10-08": {
+      "count": 174,
+      "finished": 165,
+      "url": "https://m.flashscore.co/?d=-2&s=3"
+    },
+    "2026-10-07": {
+      "count": 259,
+      "finished": 236,
+      "url": "https://m.flashscore.co/?d=-3&s=3"
+    },
+    "2026-10-06": {
+      "count": 207,
+      "finished": 185,
+      "url": "https://m.flashscore.co/?d=-4&s=3"
+    }
+  },
+  "failed": [
+    "Clasificaciones de las ligas del Combo: robots.txt de m.flashscore.co prohíbe /clasificacion/.",
+    "Cuotas previas de las fichas del 5 oct: el feed de cuotas no entregó casas.",
+    "ClubElo y Transfermarkt: no se leyeron en este corte."
+  ]
+}

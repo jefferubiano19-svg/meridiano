@@ -1,0 +1,28 @@
+{
+  "rule": "CLV de cada marca de valor: cuota de la marca contra el cierre de la misma casa y el mismo lado. La cuota de cierre se lee antes del inicio, en el corte de las 12:00 hora de Bogotá, para los partidos con marca que empiezan después de ese corte. Una cuota leída después del inicio no es cierre. La marca no se edita. Parámetros congelados hasta 500 predicciones evaluadas.",
+  "closeOddsRule": "Corte de las 12:00. Solo partidos con marca de valor cuyo inicio es posterior a esa lectura.",
+  "closeOdds2026-10-10": {
+    "cut": "12:00",
+    "ran": false,
+    "reason": "El corte de las 12:00 del 10 oct no se ejecutó. La única marca guardada, Montenegro–Armenia, ya había empezado el 5 oct. No hay otra marca con inicio posterior, así que no se guardó ninguna cuota de cierre."
+  },
+  "evaluatedPredictions": 20,
+  "predictionRows": 194,
+  "freezeUntil": 500,
+  "marks": [
+    {
+      "matchId": "8twU9Dfc",
+      "home": "Montenegro",
+      "away": "Armenia",
+      "house": "Betplay",
+      "side": "away",
+      "odds": 6.75,
+      "markedAt": "2026-10-05T09:17:42-05:00",
+      "kickoff": "2026-10-05T13:45:00-05:00",
+      "closingOdds": null,
+      "clv": null,
+      "status": "sin cierre: la ficha no entregó la cuota de Betplay al cierre. La marca 6.75 no se editó. CLV no calculado.",
+      "checkedAt": "2026-10-10T13:35:13-05:00"
+    }
+  ]
+}

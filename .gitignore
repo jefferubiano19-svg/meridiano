@@ -1,0 +1,8 @@
+node_modules
+.vercel
+dist
+.output
+*.zip
+data/pglite
+__pycache__
+attachments

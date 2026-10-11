@@ -1,0 +1,888 @@
+{
+  "tag": "recuperado",
+  "readAtBogota": "2026-10-10T13:40:00-05:00",
+  "feed": "feed de Flashscore https://www.flashscore.co/x/feed/",
+  "feedVerified": true,
+  "checks": [
+    {
+      "id": "4jyY5UrI",
+      "home": "FC Batyr",
+      "away": "Khan Tengri",
+      "visible": [
+        1,
+        1
+      ],
+      "feed": [
+        1,
+        1
+      ],
+      "match": true
+    },
+    {
+      "id": "4dfW8Ufc",
+      "home": "Kazajistán F",
+      "away": "Irlanda F",
+      "visible": [
+        0,
+        8
+      ],
+      "feed": [
+        0,
+        8
+      ],
+      "match": true
+    },
+    {
+      "id": "Io5YW0Hd",
+      "home": "Uerdingen",
+      "away": "Solingen-Wald",
+      "visible": [
+        2,
+        3
+      ],
+      "feed": [
+        2,
+        3
+      ],
+      "match": true
+    },
+    {
+      "id": "Sv1epknI",
+      "home": "Pau FC",
+      "away": "Laval",
+      "visible": [
+        3,
+        2
+      ],
+      "feed": [
+        3,
+        2
+      ],
+      "match": true
+    },
+    {
+      "id": "QN0NWb6F",
+      "home": "Shimshon Tel Aviv",
+      "away": "Kfar Saba 1928",
+      "visible": [
+        3,
+        0
+      ],
+      "feed": [
+        3,
+        0
+      ],
+      "match": true
+    },
+    {
+      "id": "C2qV6ZF7",
+      "home": "Alemania F",
+      "away": "Australia F",
+      "visible": [
+        4,
+        2
+      ],
+      "feed": [
+        4,
+        2
+      ],
+      "match": true
+    },
+    {
+      "id": "SQJZLshc",
+      "home": "Jerusalem FC",
+      "away": "M. Ironi Kiryat Malachi",
+      "visible": [
+        0,
+        1
+      ],
+      "feed": [
+        0,
+        1
+      ],
+      "match": true
+    },
+    {
+      "id": "bTUpi7vn",
+      "home": "Kazma SC",
+      "away": "Al Arabi",
+      "visible": [
+        1,
+        1
+      ],
+      "feed": [
+        1,
+        1
+      ],
+      "match": true
+    },
+    {
+      "id": "dU3bH8NM",
+      "home": "Abo",
+      "away": "PEPO",
+      "visible": [
+        0,
+        2
+      ],
+      "feed": [
+        0,
+        2
+      ],
+      "match": true
+    },
+    {
+      "id": "hn7kkwRG",
+      "home": "Suwon FC",
+      "away": "Hwaseong",
+      "visible": [
+        1,
+        0
+      ],
+      "feed": [
+        1,
+        0
+      ],
+      "match": true
+    }
+  ],
+  "sheets": [
+    {
+      "matchId": "0S71mnle",
+      "home": "Hunters",
+      "away": "Amtat",
+      "kickoff": "2026-10-05T03:00:00-05:00",
+      "tag": "recuperado",
+      "feed": "https://www.flashscore.co/x/feed/df_st_1_0S71mnle",
+      "readAtBogota": "2026-10-10T13:40:00-05:00",
+      "scoreVisible": [
+        6,
+        1
+      ],
+      "scoreFeed": [
+        6,
+        1
+      ],
+      "scoreAgrees": true,
+      "xg": null,
+      "xgot": null,
+      "corners": null,
+      "shots": null,
+      "lineup": null,
+      "priorOdds": "NO DISPONIBLE"
+    },
+    {
+      "matchId": "xIvgkyeC",
+      "home": "Malaysia",
+      "away": "Vietnam",
+      "kickoff": "2026-10-05T04:00:00-05:00",
+      "tag": "recuperado",
+      "feed": "https://www.flashscore.co/x/feed/df_st_1_xIvgkyeC",
+      "readAtBogota": "2026-10-10T13:40:00-05:00",
+      "scoreVisible": [
+        1,
+        0
+      ],
+      "scoreFeed": [
+        1,
+        0
+      ],
+      "scoreAgrees": true,
+      "xg": null,
+      "xgot": null,
+      "corners": [
+        "2",
+        "3"
+      ],
+      "shots": [
+        "7",
+        "14"
+      ],
+      "lineup": {
+        "homeFormation": "1-4-2-3-1",
+        "awayFormation": "1-3-4-2-1",
+        "names": 44
+      },
+      "priorOdds": "NO DISPONIBLE"
+    },
+    {
+      "matchId": "dtQOQfUp",
+      "home": "Mykonos",
+      "away": "Pannaxiakos",
+      "kickoff": "2026-10-05T05:30:00-05:00",
+      "tag": "recuperado",
+      "feed": "https://www.flashscore.co/x/feed/df_st_1_dtQOQfUp",
+      "readAtBogota": "2026-10-10T13:40:00-05:00",
+      "scoreVisible": [
+        1,
+        0
+      ],
+      "scoreFeed": [
+        1,
+        0
+      ],
+      "scoreAgrees": true,
+      "xg": null,
+      "xgot": null,
+      "corners": null,
+      "shots": null,
+      "lineup": null,
+      "priorOdds": "NO DISPONIBLE"
+    },
+    {
+      "matchId": "0tNVUAng",
+      "home": "Uganda",
+      "away": "D.R. Congo",
+      "kickoff": "2026-10-05T08:00:00-05:00",
+      "tag": "recuperado",
+      "feed": "https://www.flashscore.co/x/feed/df_st_1_0tNVUAng",
+      "readAtBogota": "2026-10-10T13:40:00-05:00",
+      "scoreVisible": [
+        1,
+        1
+      ],
+      "scoreFeed": [
+        1,
+        1
+      ],
+      "scoreAgrees": true,
+      "xg": null,
+      "xgot": null,
+      "corners": [
+        "3",
+        "2"
+      ],
+      "shots": [
+        "8",
+        "15"
+      ],
+      "lineup": {
+        "homeFormation": null,
+        "awayFormation": null,
+        "names": 34
+      },
+      "priorOdds": "NO DISPONIBLE"
+    },
+    {
+      "matchId": "I9PgmjEU",
+      "home": "Mauritius",
+      "away": "Sri Lanka",
+      "kickoff": "2026-10-05T10:00:00-05:00",
+      "tag": "recuperado",
+      "feed": "https://www.flashscore.co/x/feed/df_st_1_I9PgmjEU",
+      "readAtBogota": "2026-10-10T13:40:00-05:00",
+      "scoreVisible": [
+        2,
+        3
+      ],
+      "scoreFeed": [
+        2,
+        3
+      ],
+      "scoreAgrees": true,
+      "xg": null,
+      "xgot": null,
+      "corners": [
+        "0",
+        "0"
+      ],
+      "shots": [
+        "0",
+        "0"
+      ],
+      "lineup": {
+        "homeFormation": null,
+        "awayFormation": null,
+        "names": 11
+      },
+      "priorOdds": "NO DISPONIBLE"
+    },
+    {
+      "matchId": "CKQADDDr",
+      "home": "Cyprus",
+      "away": "Latvia",
+      "kickoff": "2026-10-05T11:00:00-05:00",
+      "tag": "recuperado",
+      "feed": "https://www.flashscore.co/x/feed/df_st_1_CKQADDDr",
+      "readAtBogota": "2026-10-10T13:40:00-05:00",
+      "scoreVisible": [
+        2,
+        1
+      ],
+      "scoreFeed": [
+        2,
+        1
+      ],
+      "scoreAgrees": true,
+      "xg": [
+        "1.79",
+        "0.78"
+      ],
+      "xgot": [
+        "3.02",
+        "0.48"
+      ],
+      "corners": [
+        "7",
+        "3"
+      ],
+      "shots": [
+        "19",
+        "12"
+      ],
+      "lineup": {
+        "homeFormation": "1-4-2-3-1",
+        "awayFormation": "1-5-4-1",
+        "names": 47
+      },
+      "priorOdds": "NO DISPONIBLE"
+    },
+    {
+      "matchId": "ObOnd9T8",
+      "home": "Rwanda",
+      "away": "Kenya",
+      "kickoff": "2026-10-05T11:00:00-05:00",
+      "tag": "recuperado",
+      "feed": "https://www.flashscore.co/x/feed/df_st_1_ObOnd9T8",
+      "readAtBogota": "2026-10-10T13:40:00-05:00",
+      "scoreVisible": [
+        0,
+        0
+      ],
+      "scoreFeed": [
+        0,
+        0
+      ],
+      "scoreAgrees": true,
+      "xg": null,
+      "xgot": null,
+      "corners": [
+        "2",
+        "2"
+      ],
+      "shots": [
+        "9",
+        "8"
+      ],
+      "lineup": {
+        "homeFormation": null,
+        "awayFormation": null,
+        "names": 41
+      },
+      "priorOdds": "NO DISPONIBLE"
+    },
+    {
+      "matchId": "EmmmJQ3L",
+      "home": "France",
+      "away": "Belgium",
+      "kickoff": "2026-10-05T13:45:00-05:00",
+      "tag": "recuperado",
+      "feed": "https://www.flashscore.co/x/feed/df_st_1_EmmmJQ3L",
+      "readAtBogota": "2026-10-10T13:40:00-05:00",
+      "scoreVisible": [
+        4,
+        1
+      ],
+      "scoreFeed": [
+        4,
+        1
+      ],
+      "scoreAgrees": true,
+      "xg": [
+        "1.96",
+        "0.59"
+      ],
+      "xgot": [
+        "1.70",
+        "0.81"
+      ],
+      "corners": [
+        "9",
+        "2"
+      ],
+      "shots": [
+        "23",
+        "5"
+      ],
+      "lineup": {
+        "homeFormation": "1-4-3-3",
+        "awayFormation": "1-4-3-3",
+        "names": 45
+      },
+      "priorOdds": "NO DISPONIBLE"
+    },
+    {
+      "matchId": "d8KSN37t",
+      "home": "Italy",
+      "away": "Turkey",
+      "kickoff": "2026-10-05T13:45:00-05:00",
+      "tag": "recuperado",
+      "feed": "https://www.flashscore.co/x/feed/df_st_1_d8KSN37t",
+      "readAtBogota": "2026-10-10T13:40:00-05:00",
+      "scoreVisible": [
+        3,
+        1
+      ],
+      "scoreFeed": [
+        3,
+        1
+      ],
+      "scoreAgrees": true,
+      "xg": [
+        "2.03",
+        "1.61"
+      ],
+      "xgot": [
+        "2.76",
+        "1.65"
+      ],
+      "corners": [
+        "3",
+        "9"
+      ],
+      "shots": [
+        "15",
+        "14"
+      ],
+      "lineup": {
+        "homeFormation": "1-4-3-3",
+        "awayFormation": "1-3-4-2-1",
+        "names": 48
+      },
+      "priorOdds": "NO DISPONIBLE"
+    },
+    {
+      "matchId": "0rhJIHdB",
+      "home": "Bosnia & Herzegovina",
+      "away": "Poland",
+      "kickoff": "2026-10-05T13:45:00-05:00",
+      "tag": "recuperado",
+      "feed": "https://www.flashscore.co/x/feed/df_st_1_0rhJIHdB",
+      "readAtBogota": "2026-10-10T13:40:00-05:00",
+      "scoreVisible": [
+        1,
+        0
+      ],
+      "scoreFeed": [
+        1,
+        0
+      ],
+      "scoreAgrees": true,
+      "xg": [
+        "1.17",
+        "1.56"
+      ],
+      "xgot": [
+        "0.99",
+        "0.83"
+      ],
+      "corners": [
+        "2",
+        "8"
+      ],
+      "shots": [
+        "9",
+        "18"
+      ],
+      "lineup": {
+        "homeFormation": "1-4-4-2",
+        "awayFormation": "1-4-1-4-1",
+        "names": 48
+      },
+      "priorOdds": "NO DISPONIBLE"
+    },
+    {
+      "matchId": "McQArpFs",
+      "home": "Northern Ireland",
+      "away": "Georgia",
+      "kickoff": "2026-10-05T13:45:00-05:00",
+      "tag": "recuperado",
+      "feed": "https://www.flashscore.co/x/feed/df_st_1_McQArpFs",
+      "readAtBogota": "2026-10-10T13:40:00-05:00",
+      "scoreVisible": [
+        0,
+        0
+      ],
+      "scoreFeed": [
+        0,
+        0
+      ],
+      "scoreAgrees": true,
+      "xg": [
+        "1.91",
+        "0.33"
+      ],
+      "xgot": [
+        "1.51",
+        "1.18"
+      ],
+      "corners": [
+        "8",
+        "4"
+      ],
+      "shots": [
+        "15",
+        "7"
+      ],
+      "lineup": {
+        "homeFormation": "1-3-4-2-1",
+        "awayFormation": "1-4-2-3-1",
+        "names": 48
+      },
+      "priorOdds": "NO DISPONIBLE"
+    },
+    {
+      "matchId": "SbevBQf2",
+      "home": "Romania",
+      "away": "Sweden",
+      "kickoff": "2026-10-05T13:45:00-05:00",
+      "tag": "recuperado",
+      "feed": "https://www.flashscore.co/x/feed/df_st_1_SbevBQf2",
+      "readAtBogota": "2026-10-10T13:40:00-05:00",
+      "scoreVisible": [
+        0,
+        1
+      ],
+      "scoreFeed": [
+        0,
+        1
+      ],
+      "scoreAgrees": true,
+      "xg": [
+        "0.56",
+        "2.84"
+      ],
+      "xgot": [
+        "0.41",
+        "1.44"
+      ],
+      "corners": [
+        "5",
+        "4"
+      ],
+      "shots": [
+        "13",
+        "12"
+      ],
+      "lineup": {
+        "homeFormation": "1-4-2-3-1",
+        "awayFormation": "1-4-2-3-1",
+        "names": 47
+      },
+      "priorOdds": "NO DISPONIBLE"
+    },
+    {
+      "matchId": "tQF4SXOq",
+      "home": "Ukraine",
+      "away": "Hungary",
+      "kickoff": "2026-10-05T13:45:00-05:00",
+      "tag": "recuperado",
+      "feed": "https://www.flashscore.co/x/feed/df_st_1_tQF4SXOq",
+      "readAtBogota": "2026-10-10T13:40:00-05:00",
+      "scoreVisible": [
+        1,
+        2
+      ],
+      "scoreFeed": [
+        1,
+        2
+      ],
+      "scoreAgrees": true,
+      "xg": [
+        "1.39",
+        "1.36"
+      ],
+      "xgot": [
+        "0.95",
+        "1.58"
+      ],
+      "corners": [
+        "5",
+        "4"
+      ],
+      "shots": [
+        "17",
+        "10"
+      ],
+      "lineup": {
+        "homeFormation": "1-4-2-3-1",
+        "awayFormation": "1-4-2-3-1",
+        "names": 48
+      },
+      "priorOdds": "NO DISPONIBLE"
+    },
+    {
+      "matchId": "8twU9Dfc",
+      "home": "Montenegro",
+      "away": "Armenia",
+      "kickoff": "2026-10-05T13:45:00-05:00",
+      "tag": "recuperado",
+      "feed": "https://www.flashscore.co/x/feed/df_st_1_8twU9Dfc",
+      "readAtBogota": "2026-10-10T13:40:00-05:00",
+      "scoreVisible": [
+        0,
+        0
+      ],
+      "scoreFeed": [
+        0,
+        0
+      ],
+      "scoreAgrees": true,
+      "xg": [
+        "0.52",
+        "0.21"
+      ],
+      "xgot": [
+        "0.29",
+        "0.74"
+      ],
+      "corners": [
+        "4",
+        "2"
+      ],
+      "shots": [
+        "8",
+        "9"
+      ],
+      "lineup": {
+        "homeFormation": "1-4-3-3",
+        "awayFormation": "1-4-2-3-1",
+        "names": 48
+      },
+      "priorOdds": "NO DISPONIBLE"
+    },
+    {
+      "matchId": "0lJmdkRQ",
+      "home": "Liechtenstein",
+      "away": "Gibraltar",
+      "kickoff": "2026-10-05T13:45:00-05:00",
+      "tag": "recuperado",
+      "feed": "https://www.flashscore.co/x/feed/df_st_1_0lJmdkRQ",
+      "readAtBogota": "2026-10-10T13:40:00-05:00",
+      "scoreVisible": [
+        0,
+        2
+      ],
+      "scoreFeed": [
+        0,
+        2
+      ],
+      "scoreAgrees": true,
+      "xg": null,
+      "xgot": null,
+      "corners": [
+        "1",
+        "4"
+      ],
+      "shots": [
+        "7",
+        "11"
+      ],
+      "lineup": {
+        "homeFormation": "1-4-4-2",
+        "awayFormation": "1-4-3-3",
+        "names": 46
+      },
+      "priorOdds": "NO DISPONIBLE"
+    },
+    {
+      "matchId": "x2FVi6kR",
+      "home": "Dep. Riestra",
+      "away": "Central Cordoba",
+      "kickoff": "2026-10-05T14:45:00-05:00",
+      "tag": "recuperado",
+      "feed": "https://www.flashscore.co/x/feed/df_st_1_x2FVi6kR",
+      "readAtBogota": "2026-10-10T13:40:00-05:00",
+      "scoreVisible": [
+        1,
+        1
+      ],
+      "scoreFeed": [
+        1,
+        1
+      ],
+      "scoreAgrees": true,
+      "xg": [
+        "0.41",
+        "0.44"
+      ],
+      "xgot": [
+        "0.92",
+        "0.76"
+      ],
+      "corners": [
+        "3",
+        "3"
+      ],
+      "shots": [
+        "7",
+        "10"
+      ],
+      "lineup": {
+        "homeFormation": "1-4-4-2",
+        "awayFormation": "1-4-1-4-1",
+        "names": 47
+      },
+      "priorOdds": "NO DISPONIBLE"
+    },
+    {
+      "matchId": "Kf2B3nsA",
+      "home": "Estudiantes L.P.",
+      "away": "Gimnasia Mendoza",
+      "kickoff": "2026-10-05T17:00:00-05:00",
+      "tag": "recuperado",
+      "feed": "https://www.flashscore.co/x/feed/df_st_1_Kf2B3nsA",
+      "readAtBogota": "2026-10-10T13:40:00-05:00",
+      "scoreVisible": [
+        3,
+        0
+      ],
+      "scoreFeed": [
+        3,
+        0
+      ],
+      "scoreAgrees": true,
+      "xg": [
+        "2.93",
+        "1.38"
+      ],
+      "xgot": [
+        "2.02",
+        "0.18"
+      ],
+      "corners": [
+        "4",
+        "5"
+      ],
+      "shots": [
+        "17",
+        "10"
+      ],
+      "lineup": {
+        "homeFormation": "1-4-2-3-1",
+        "awayFormation": "1-4-2-3-1",
+        "names": 47
+      },
+      "priorOdds": "NO DISPONIBLE"
+    },
+    {
+      "matchId": "UafApOs1",
+      "home": "Velez Sarsfield",
+      "away": "Platense",
+      "kickoff": "2026-10-05T17:00:00-05:00",
+      "tag": "recuperado",
+      "feed": "https://www.flashscore.co/x/feed/df_st_1_UafApOs1",
+      "readAtBogota": "2026-10-10T13:40:00-05:00",
+      "scoreVisible": [
+        2,
+        2
+      ],
+      "scoreFeed": [
+        2,
+        2
+      ],
+      "scoreAgrees": true,
+      "xg": [
+        "1.56",
+        "2.51"
+      ],
+      "xgot": [
+        "2.54",
+        "1.51"
+      ],
+      "corners": [
+        "4",
+        "4"
+      ],
+      "shots": [
+        "10",
+        "15"
+      ],
+      "lineup": {
+        "homeFormation": "1-4-2-3-1",
+        "awayFormation": "1-4-4-2",
+        "names": 48
+      },
+      "priorOdds": "NO DISPONIBLE"
+    },
+    {
+      "matchId": "h4u9G705",
+      "home": "Ind. Medellin",
+      "away": "Santa Fe",
+      "kickoff": "2026-10-05T19:00:00-05:00",
+      "tag": "recuperado",
+      "feed": "https://www.flashscore.co/x/feed/df_st_1_h4u9G705",
+      "readAtBogota": "2026-10-10T13:40:00-05:00",
+      "scoreVisible": [
+        0,
+        1
+      ],
+      "scoreFeed": [
+        0,
+        1
+      ],
+      "scoreAgrees": true,
+      "xg": [
+        "0.74",
+        "2.47"
+      ],
+      "xgot": [
+        "0.81",
+        "1.08"
+      ],
+      "corners": [
+        "7",
+        "5"
+      ],
+      "shots": [
+        "20",
+        "16"
+      ],
+      "lineup": {
+        "homeFormation": "1-4-2-3-1",
+        "awayFormation": "1-4-4-1-1",
+        "names": 42
+      },
+      "priorOdds": "NO DISPONIBLE"
+    },
+    {
+      "matchId": "jZ60eudJ",
+      "home": "Banfield",
+      "away": "Rosario Central",
+      "kickoff": "2026-10-05T19:15:00-05:00",
+      "tag": "recuperado",
+      "feed": "https://www.flashscore.co/x/feed/df_st_1_jZ60eudJ",
+      "readAtBogota": "2026-10-10T13:40:00-05:00",
+      "scoreVisible": [
+        1,
+        1
+      ],
+      "scoreFeed": [
+        1,
+        1
+      ],
+      "scoreAgrees": true,
+      "xg": [
+        "2.18",
+        "0.66"
+      ],
+      "xgot": [
+        "0.83",
+        "0.66"
+      ],
+      "corners": [
+        "7",
+        "3"
+      ],
+      "shots": [
+        "21",
+        "12"
+      ],
+      "lineup": {
+        "homeFormation": "1-4-2-3-1",
+        "awayFormation": "1-4-2-3-1",
+        "names": 48
+      },
+      "priorOdds": "NO DISPONIBLE"
+    }
+  ]
+}

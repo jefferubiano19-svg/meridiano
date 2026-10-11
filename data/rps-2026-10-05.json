@@ -1,0 +1,274 @@
+{
+  "readAtBogota": "2026-10-10T13:51:42-05:00",
+  "rule": "RPS = 0,5 × ((F1−O1)² + (F1+F2−O1−O2)²), el mismo del backtest. Media de los 20 partidos evaluados. El consenso solo existe donde la fila guardada trae cuotas.",
+  "nEvaluated": 20,
+  "rpsModel": 0.20071144583666684,
+  "rpsPublished": 0.1943724342786294,
+  "rpsMarketOnSame20": null,
+  "nWithConsensus": 15,
+  "rpsModelWhereMarket": 0.1886486334409989,
+  "rpsPublishedWhereMarket": 0.18019661803028228,
+  "rpsMarket": 0.17994553752388634,
+  "rows": [
+    {
+      "matchId": "0S71mnle",
+      "home": "Hunters",
+      "away": "Amtat",
+      "score": [
+        6,
+        1
+      ],
+      "level": "C",
+      "rpsModel": 0.09793582700435287,
+      "rpsPublished": 0.09793582700435287,
+      "rpsMarket": null
+    },
+    {
+      "matchId": "xIvgkyeC",
+      "home": "Malaysia",
+      "away": "Vietnam",
+      "score": [
+        1,
+        0
+      ],
+      "level": "C",
+      "rpsModel": 0.19765166687443017,
+      "rpsPublished": 0.19765166687443017,
+      "rpsMarket": null
+    },
+    {
+      "matchId": "dtQOQfUp",
+      "home": "Mykonos",
+      "away": "Pannaxiakos",
+      "score": [
+        1,
+        0
+      ],
+      "level": "C",
+      "rpsModel": 0.17671986363426528,
+      "rpsPublished": 0.17671986363426528,
+      "rpsMarket": null
+    },
+    {
+      "matchId": "0tNVUAng",
+      "home": "Uganda",
+      "away": "D.R. Congo",
+      "score": [
+        1,
+        1
+      ],
+      "level": "B",
+      "rpsModel": 0.1204453523060487,
+      "rpsPublished": 0.1204453523060487,
+      "rpsMarket": null
+    },
+    {
+      "matchId": "I9PgmjEU",
+      "home": "Mauritius",
+      "away": "Sri Lanka",
+      "score": [
+        2,
+        3
+      ],
+      "level": "5.4",
+      "rpsModel": 0.5917467052992568,
+      "rpsPublished": 0.5917467052992568,
+      "rpsMarket": null
+    },
+    {
+      "matchId": "CKQADDDr",
+      "home": "Cyprus",
+      "away": "Latvia",
+      "score": [
+        2,
+        1
+      ],
+      "level": "5.4",
+      "rpsModel": 0.14243320458570166,
+      "rpsPublished": 0.10542225962941167,
+      "rpsMarket": 0.09755026243824111
+    },
+    {
+      "matchId": "ObOnd9T8",
+      "home": "Rwanda",
+      "away": "Kenya",
+      "score": [
+        0,
+        0
+      ],
+      "level": "5.4",
+      "rpsModel": 0.14453663630411284,
+      "rpsPublished": 0.12879864791981124,
+      "rpsMarket": 0.1273457769539603
+    },
+    {
+      "matchId": "EmmmJQ3L",
+      "home": "France",
+      "away": "Belgium",
+      "score": [
+        4,
+        1
+      ],
+      "level": "5.4",
+      "rpsModel": 0.11698852336138531,
+      "rpsPublished": 0.08314788327569642,
+      "rpsMarket": 0.07610142006312104
+    },
+    {
+      "matchId": "d8KSN37t",
+      "home": "Italy",
+      "away": "Turkey",
+      "score": [
+        3,
+        1
+      ],
+      "level": "5.4",
+      "rpsModel": 0.11698852336138531,
+      "rpsPublished": 0.06851014464025255,
+      "rpsMarket": 0.05943648165688164
+    },
+    {
+      "matchId": "0rhJIHdB",
+      "home": "Bosnia & Herzegovina",
+      "away": "Poland",
+      "score": [
+        1,
+        0
+      ],
+      "level": "5.4",
+      "rpsModel": 0.2565567128047533,
+      "rpsPublished": 0.30388733119212386,
+      "rpsMarket": 0.3166565077958194
+    },
+    {
+      "matchId": "McQArpFs",
+      "home": "Northern Ireland",
+      "away": "Georgia",
+      "score": [
+        0,
+        0
+      ],
+      "level": "5.4",
+      "rpsModel": 0.14386335363498134,
+      "rpsPublished": 0.12489531379006658,
+      "rpsMarket": 0.12179067301105373
+    },
+    {
+      "matchId": "SbevBQf2",
+      "home": "Romania",
+      "away": "Sweden",
+      "score": [
+        0,
+        1
+      ],
+      "level": "5.4",
+      "rpsModel": 0.1551887601228864,
+      "rpsPublished": 0.13024508761287257,
+      "rpsMarket": 0.12455753847663044
+    },
+    {
+      "matchId": "tQF4SXOq",
+      "home": "Ukraine",
+      "away": "Hungary",
+      "score": [
+        1,
+        2
+      ],
+      "level": "5.4",
+      "rpsModel": 0.3991261386174101,
+      "rpsPublished": 0.3186760209529595,
+      "rpsMarket": 0.2994431427913529
+    },
+    {
+      "matchId": "8twU9Dfc",
+      "home": "Montenegro",
+      "away": "Armenia",
+      "score": [
+        0,
+        0
+      ],
+      "level": "5.4",
+      "rpsModel": 0.1932569222844338,
+      "rpsPublished": 0.20462452709576479,
+      "rpsMarket": 0.20735421256007422
+    },
+    {
+      "matchId": "0lJmdkRQ",
+      "home": "Liechtenstein",
+      "away": "Gibraltar",
+      "score": [
+        0,
+        2
+      ],
+      "level": "5.4",
+      "rpsModel": 0.23513994993486112,
+      "rpsPublished": 0.2893796930595585,
+      "rpsMarket": 0.3034816983906322
+    },
+    {
+      "matchId": "x2FVi6kR",
+      "home": "Dep. Riestra",
+      "away": "Central Cordoba",
+      "score": [
+        1,
+        1
+      ],
+      "level": "B",
+      "rpsModel": 0.12207834282679134,
+      "rpsPublished": 0.14061384509895283,
+      "rpsMarket": 0.14672775088126205
+    },
+    {
+      "matchId": "Kf2B3nsA",
+      "home": "Estudiantes L.P.",
+      "away": "Gimnasia Mendoza",
+      "score": [
+        3,
+        0
+      ],
+      "level": "B",
+      "rpsModel": 0.25500330121383363,
+      "rpsPublished": 0.12987337502560461,
+      "rpsMarket": 0.10810389194676356
+    },
+    {
+      "matchId": "UafApOs1",
+      "home": "Velez Sarsfield",
+      "away": "Platense",
+      "score": [
+        2,
+        2
+      ],
+      "level": "B",
+      "rpsModel": 0.12241828695939065,
+      "rpsPublished": 0.1368180275243255,
+      "rpsMarket": 0.14207501692006963
+    },
+    {
+      "matchId": "h4u9G705",
+      "home": "Ind. Medellin",
+      "away": "Santa Fe",
+      "score": [
+        0,
+        1
+      ],
+      "level": "B",
+      "rpsModel": 0.29603785964528806,
+      "rpsPublished": 0.39377066741442907,
+      "rpsMarket": 0.419025714447127
+    },
+    {
+      "matchId": "jZ60eudJ",
+      "home": "Banfield",
+      "away": "Rosario Central",
+      "score": [
+        1,
+        1
+      ],
+      "level": "B",
+      "rpsModel": 0.1301129859577682,
+      "rpsPublished": 0.1442864462224048,
+      "rpsMarket": 0.14953297452530556
+    }
+  ]
+}
