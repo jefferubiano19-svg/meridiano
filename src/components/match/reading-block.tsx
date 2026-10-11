@@ -5,7 +5,7 @@ const SIDE = { home: "local", draw: "empate", away: "visita" } as const;
 
 export function wayText(way: Way | null): string {
   if (!way) return MISSING;
-  return `1 ${formatPct(way.home)} · X ${formatPct(way.draw)} · 2 ${formatPct(way.away)}`;
+  return `Local ${formatPct(way.home)} · Empate ${formatPct(way.draw)} · Visita ${formatPct(way.away)}`;
 }
 
 export function kickLabel(iso: string): string {
@@ -25,9 +25,9 @@ export function ReadingBlock({ match }: { match: MatchReading }) {
   const readAt = match.value?.readAt;
   return (
     <dl className="mt-3 grid gap-2 text-sm">
-      <Row k="Probabilidad publicada" v={wayText(match.published)} />
-      <Row k="Modelo puro" v={wayText(match.model)} />
-      <Row k="Consenso del mercado" v={wayText(match.consensus)} />
+      <Row stack k="Probabilidad publicada" v={wayText(match.published)} />
+      <Row stack k="Modelo puro" v={wayText(match.model)} />
+      <Row stack k="Consenso del mercado" v={wayText(match.consensus)} />
       <Row k="Nivel" v={match.level || MISSING} />
       <Row k="Confianza" v={match.confidence || "baja"} />
       {match.revisar ? (
@@ -51,7 +51,15 @@ export function ReadingBlock({ match }: { match: MatchReading }) {
   );
 }
 
-function Row({ k, v }: { k: string; v: string }) {
+function Row({ k, v, stack = false }: { k: string; v: string; stack?: boolean }) {
+  if (stack && v !== MISSING) {
+    return (
+      <div className="grid gap-0.5">
+        <dt className="text-[10px] uppercase tracking-wide text-subtle">{k}</dt>
+        <dd className="tabular-nums text-fg">{v}</dd>
+      </div>
+    );
+  }
   return (
     <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
       <dt className="text-[10px] uppercase tracking-wide text-subtle">{k}</dt>
