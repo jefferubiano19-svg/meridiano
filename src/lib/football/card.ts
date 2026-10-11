@@ -251,7 +251,7 @@ function fromLevelC(match: AgendaMatch) {
   if (!raw) return null;
   const nation = nationForMatch(match.id) ?? nationModel(match.home, match.away, match.competition);
   return {
-    level: nation ? "5.4" : ("C" as const),
+    level: nation ? ("5.4" as const) : (raw.level ?? "C") as "A" | "C",
     lambdaHome: nation?.lambdaHome ?? raw.lambdaHome,
     lambdaAway: nation?.lambdaAway ?? raw.lambdaAway,
     model: way(nation?.p1x2 ?? raw.p1x2),

@@ -419,7 +419,9 @@ export function agendaFichaRow(match: AgendaMatch, titlePrefix = ""): Cell[] {
       }),
     );
   }
-  const note = started
+  const note = raw?.level === "A"
+    ? "Tarjeta de nivel A: Dixon-Coles de la liga, ajustado antes del partido."
+    : started
     ? `Tarjeta de nivel C, calculada después del partido. ${recent?.home?.n ?? 0} partidos del local y ${recent?.away?.n ?? 0} de la visita, anteriores al inicio.`
     : `Tarjeta de nivel C. No es una ficha completa. ${recent?.home?.n ?? 0} partidos del local y ${recent?.away?.n ?? 0} de la visita, anteriores al inicio.`;
   return rowFrom(

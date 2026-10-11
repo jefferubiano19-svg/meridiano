@@ -191,7 +191,7 @@ function readingOf(match: AgendaMatch): MatchReading {
     const recent = levelCFor(match.id, match.kickoff, match.competition);
     if (recent) {
       model = recent.p1x2;
-      level = "C";
+      level = recent.level ?? "C";
       total = recent.lambdaHome + recent.lambdaAway;
     }
   }
@@ -261,11 +261,20 @@ export function dayBoard(day: string): DayBoard {
   const today = agendaToday();
   const chosen = day || today;
   const rows = agendaOnDay(chosen).filter((match) => chosen !== today || match.status !== "finalizado");
-  rows.sort((a, b) => {
-    const rank = (status: string) => (status === "por-jugar" ? 0 : 1);
-    return rank(a.status) - rank(b.status) || a.kickoff.localeCompare(b.kickoff);
-  });
-  return { day: chosen, matches: rows.map(readingOf) };
+  // Entre un corte y otro el estado guardado envejece. Un partido "por-jugar" cuya hora ya pasó
+  // empezó, aunque el corte todavía no tenga su resultado: va después de los que faltan por jugar.
+  const now = Date.now();
+  const waiting = (match: AgendaMatch) => match.status === "por-jugar" && Date.parse(match.kickoff) <= now;
+  const rank = (match: AgendaMatch) =>
+    match.status === "por-jugar" && !waiting(match) ? 0 : match.status === "en-juego" ? 1 : waiting(match) ? 2 : 3;
+  rows.sort((a, b) => rank(a) - rank(b) || a.kickoff.localeCompare(b.kickoff));
+  return {
+    day: chosen,
+    matches: rows.map((match) => {
+      const reading = readingOf(match);
+      return waiting(match) ? { ...reading, status: "empezó, sin resultado aún" } : reading;
+    }),
+  };
 }
 
 function withPick(leg: CombinadaLeg): ComboMatch {

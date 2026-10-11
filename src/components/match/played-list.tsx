@@ -142,6 +142,8 @@ function PlayedCard({ match }: { match: AgendaMatch }) {
   const recent = recentFor(match.id);
   const hits: HitRead | null = hitsForAgenda(match);
   const started = match.status === "finalizado" || match.status === "en-juego";
+  const analysis = levelCFor(match.id, match.kickoff, match.competition);
+  const level = analysis?.level ?? "C";
   return (
     <RateCard
       href={`/agenda/${match.id}`}
@@ -149,7 +151,7 @@ function PlayedCard({ match }: { match: AgendaMatch }) {
       when={`${agendaDay(match)} · ${score}`}
       home={match.home}
       away={match.away}
-      analysis={levelCFor(match.id, match.kickoff, match.competition)}
+      analysis={analysis}
       score={
         started
           ? { home: match.homeScore, away: match.awayScore, status: match.status }
@@ -157,9 +159,11 @@ function PlayedCard({ match }: { match: AgendaMatch }) {
       }
       hits={hits}
       note={
-        recent?.home && recent.away
-          ? `Tarjeta de nivel C, calculada después del partido. ${recent.home.n} partidos del local y ${recent.away.n} de la visita, anteriores al inicio.`
-          : "NO DISPONIBLE. No hay partidos previos publicados de los dos."
+        level === "A" && analysis
+          ? "Tarjeta de nivel A: Dixon-Coles de la liga, ajustado antes del partido."
+          : recent?.home && recent.away
+            ? `Tarjeta de nivel C, calculada después del partido. ${recent.home.n} partidos del local y ${recent.away.n} de la visita, anteriores al inicio.`
+            : "NO DISPONIBLE. No hay partidos previos publicados de los dos."
       }
     />
   );

@@ -7,9 +7,8 @@ import { settle } from "@/lib/football/hits";
 import { AGENDA } from "@/lib/football/agenda";
 import { formatPct } from "@/lib/football/format";
 import { flashscoreStatusLabel } from "@/lib/football/flashscore";
-import { analyzeRecent, recentFor, type SideRead } from "@/lib/football/recent";
+import { analyzeRecent, levelCFor, recentFor, type SideRead } from "@/lib/football/recent";
 import { findBook, BOOK_FETCHED_AT } from "@/lib/football/books";
-import { dixonRecent } from "@/lib/football/dixon";
 
 function when(ts: number | null): string {
   if (!ts) return "";
@@ -38,7 +37,9 @@ export function AgendaFicha({ id, pick, page }: { id: string; pick?: string; pag
   const recent = recentFor(match.id);
   const home = recent?.home ?? null;
   const away = recent?.away ?? null;
-  const analysis = home && away ? dixonRecent(match.home, match.away) ?? analyzeRecent(home, away, match.kickoff, match.competition) : null;
+  const analysis =
+    levelCFor(match.id, match.kickoff, match.competition) ??
+    (home && away ? analyzeRecent(home, away, match.kickoff, match.competition) : null);
   const book = findBook(match.home, match.away);
   const started = match.status === "finalizado" || match.status === "en-juego";
   const settled =

@@ -38,7 +38,8 @@ export function CouponCard({ leg, index }: { leg: CombinadaLeg; index: number })
           })()}
           note={(() => {
             const recent = recentFor(leg.id);
-            const base = `Pata ${leg.pick}. Tarjeta de nivel C. El detalle abre al pulsar la tarjeta.`;
+            const level = levelCFor(leg.id, leg.kickoff, leg.competition)?.level ?? "C";
+            const base = `Pata ${leg.pick}. Tarjeta de nivel ${level}. El detalle abre al pulsar la tarjeta.`;
             return recent?.home && recent.away
               ? `${base} ${recent.home.n} partidos del local y ${recent.away.n} de la visita.`
               : base;

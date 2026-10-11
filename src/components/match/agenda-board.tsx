@@ -222,7 +222,7 @@ function AgendaCard({ match }: { match: AgendaMatch }) {
       : nation
         ? `Sección 5.4. Elo ${nation.eloHome} contra ${nation.eloAway}, regresión de ${nation.fit}.${pub?.review ? ` ${pub.review}` : ""}`
         : analysis && recent?.home && recent.away
-          ? `Tarjeta de nivel C. No es una ficha completa. ${recent.home.n} partidos del local y ${recent.away.n} de la visita, anteriores al inicio.${pub?.review ? ` ${pub.review}` : ""}`
+          ? `Tarjeta de nivel ${raw?.level ?? "C"}${raw?.level === "A" ? ": Dixon-Coles de la liga." : ". No es una ficha completa."} ${recent.home.n} partidos del local y ${recent.away.n} de la visita, anteriores al inicio.${pub?.review ? ` ${pub.review}` : ""}`
           : "NO DISPONIBLE. No hay partidos previos publicados de los dos.";
   return (
     <RateCard
