@@ -8,6 +8,7 @@ import { boardDayLabel } from "@/lib/football/format";
 import type { DayBoard } from "@/lib/football/dto";
 import { loadDay } from "@/lib/football/pages";
 import { useAgendaToday } from "@/lib/football/use-today";
+import { matchesSearch, searchText } from "@/lib/football/search";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/")({ component: Home });
@@ -38,11 +39,14 @@ function Home() {
 
   const filtered = useMemo(() => {
     const rows = board?.matches ?? [];
-    const q = query.trim().toLowerCase();
+    const q = query.trim();
     return rows.filter((match) => {
       if (onlyReview && !match.revisar && !match.value) return false;
       if (!q) return true;
-      return `${match.home} ${match.away} ${match.competition}`.toLowerCase().includes(q);
+      return matchesSearch(
+        q,
+        searchText([match.home, match.away, match.competition, match.homeEs, match.awayEs]),
+      );
     });
   }, [board, query, onlyReview]);
 

@@ -83,6 +83,11 @@ export function MatchReadingCard({
       <h2 className="mt-1 font-display text-2xl tracking-tight">
         {match.home} — {match.away}
       </h2>
+      {match.homeEs || match.awayEs ? (
+        <p className="mt-0.5 text-xs text-muted">
+          En español: {match.homeEs || match.home} — {match.awayEs || match.away}
+        </p>
+      ) : null}
       <p className="mt-1 text-xs text-muted">
         {kickLabel(match.kickoff)}
         {score ? ` · ${score}` : ""}

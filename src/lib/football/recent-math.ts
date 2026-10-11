@@ -1,8 +1,8 @@
 import type { ScoreCell, ThreeWay } from "./types";
 
 export interface RecentAnalysis {
-  /** "A" cuando sale del Dixon-Coles de la liga; sin valor es Nivel C. */
-  level?: "A" | "C";
+  /** "A": Dixon-Coles de la liga. "B": tabla de la temporada más resultados nuevos. "C": goles recientes. */
+  level?: "A" | "B" | "C";
   lambdaHome: number;
   lambdaAway: number;
   p1x2: ThreeWay;

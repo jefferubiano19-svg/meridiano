@@ -1,6 +1,7 @@
 import agendaFile from "../../../data/agenda.json";
 import data from "../../../data/agenda-read.json";
 import { levelAForAgenda } from "./dixon";
+import { TABLE_READ_MS, tableRow } from "./standings";
 import { leagueRate } from "./league-rate";
 import { analyzeCounts, analyzeLevelC, type RecentAnalysis } from "./recent-math";
 
@@ -15,6 +16,8 @@ export interface RecentGame {
 }
 
 export interface SideRead {
+  /** true si la base del historial es la tabla de la temporada (Nivel B). */
+  fromTable?: boolean;
   n: number;
   gf: number;
   ga: number;
@@ -159,8 +162,25 @@ function historyOf(name: string, competition: string, kickoffMs: number, own: Ra
     if (ms >= kickoffMs || read.n < 1) continue;
     if (!base || lastTs(read) > lastTs(base)) base = read;
   }
-  const games: RawGame[] = (base?.games ?? []).filter((game) => game[0] == null || game[0] * 1000 < kickoffMs);
-  const cutoffMs = base ? lastTs(base) * 1000 + HOUR_MS : -Infinity;
+  let games: RawGame[] = (base?.games ?? []).filter((game) => game[0] == null || game[0] * 1000 < kickoffMs);
+  let cutoffMs = base ? lastTs(base) * 1000 + HOUR_MS : -Infinity;
+  // Sin lectura de fichas útil: la tabla de la temporada hace de base (Nivel B), si se leyó antes del partido.
+  let fromTable = false;
+  if (games.length < 3 && TABLE_READ_MS < kickoffMs) {
+    const row = tableRow(competition, name);
+    if (row && row.gp >= 3) {
+      const readSec = Math.round(TABLE_READ_MS / 1000);
+      games = Array.from({ length: row.gp }, (_, i): RawGame => [
+        readSec - i * 7 * 24 * 3600,
+        competition,
+        null,
+        row.gf / row.gp,
+        row.ga / row.gp,
+      ]);
+      cutoffMs = TABLE_READ_MS;
+      fromTable = true;
+    }
+  }
   const added = (team?.results ?? [])
     .filter(([ms]) => ms > cutoffMs && ms < kickoffMs - HOUR_MS)
     .sort((a, b) => b[0] - a[0])
@@ -173,7 +193,8 @@ function historyOf(name: string, competition: string, kickoffMs: number, own: Ra
     gf += game[3];
     ga += game[4];
   }
-  return side({ n: all.length, gf, ga, games: all });
+  const value = side({ n: all.length, gf, ga, games: all });
+  return value ? { ...value, fromTable } : null;
 }
 
 const SIDE_CACHE = new Map<string, { home: SideRead | null; away: SideRead | null }>();
@@ -241,5 +262,6 @@ export function levelCFor(id: string, kickoff: string, competition = ""): Recent
   const recent = recentFor(id);
   if (!recent?.home || !recent?.away) return null;
   const analysis = levelC(recent.home, recent.away, kickoffMs, competition);
-  return analysis ? { ...analysis, level: "C" } : null;
+  if (!analysis) return null;
+  return { ...analysis, level: recent.home.fromTable || recent.away.fromTable ? "B" : "C" };
 }

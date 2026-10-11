@@ -25,6 +25,9 @@ export interface MatchReading {
   status: string;
   homeScore: number | null;
   awayScore: number | null;
+  /** Nombres en español (tabla de Flashscore en español) cuando difieren de los de la agenda. */
+  homeEs?: string | null;
+  awayEs?: string | null;
   published: Way | null;
   model: Way | null;
   consensus: Way | null;

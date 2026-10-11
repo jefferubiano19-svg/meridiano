@@ -1,4 +1,5 @@
 import { AGENDA, agendaOnDay, type AgendaMatch } from "./agenda";
+import { spanishName } from "./standings";
 import { buildCombinada, buildCombinadaManana, type CombinadaLeg } from "./combinada";
 import { agendaToday, agendaTomorrow, bogotaDay, shiftDay } from "./clock";
 import { MISSING, type ComboBoard, type ComboMatch, type ConsultaBoard, type DayBoard, type LeagueCard, type LeaguePage, type MatchReading, type ModeloBundle, type SearchBoard, type Way } from "./dto";
@@ -142,6 +143,8 @@ function seal(seed: Seed): MatchReading {
     status: seed.status,
     homeScore: seed.homeScore,
     awayScore: seed.awayScore,
+    homeEs: spanishName(seed.competition, seed.home),
+    awayEs: spanishName(seed.competition, seed.away),
     published: pub ? way(pub.published) : null,
     model,
     consensus: pub ? way(pub.consensus) : null,
