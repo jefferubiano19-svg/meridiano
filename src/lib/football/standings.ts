@@ -1,8 +1,11 @@
 import file from "../../../data/standings-2026-10-10.json";
+import autoFile from "../../../data/standings-auto.json";
+import { canonicalCompetition } from "./places";
 
 /* ---------------------------------------------------------------------------
  * Tabla de posiciones de la temporada (Nivel B) y nombres en español.
- * Fuente: www.flashscore.co, página de cada liga, leída el 10 oct 2026.
+ * Fuentes: www.flashscore.co, página de cada liga. La lectura del 10 oct 2026 (Grok) y la que
+ * hace el corte de la noche cada día (standings-auto.json). Para cada liga manda la más reciente.
  * La tabla de Flashscore en español usa los nombres que se ven en las casas
  * colombianas (Real Betis, Atlético de Madrid, Niza…). La agenda usa los de
  * Flashscore Lite (Betis, Atl. Madrid, Nice…). Aquí se emparejan.
@@ -21,8 +24,11 @@ interface League {
 }
 
 const data = file as unknown as { readAtBogota: string; leagues: League[] };
+const auto = autoFile as unknown as {
+  leagues: { competition: string; readAtBogota: string; rows: Row[] }[];
+};
 
-/** Momento de la lectura de la tabla. Lo jugado después se suma desde la agenda. */
+/** Momento de la lectura de la tabla de 10 oct. Lo jugado después se suma desde la agenda. */
 export const TABLE_READ_MS = Date.parse(data.readAtBogota);
 
 /** Liga de la tabla → competición de la agenda (con o sin fase, p. ej. " - Clausura"). */
@@ -78,30 +84,47 @@ function key(name: string): string {
 
 const escapeRe = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-const TABLES = data.leagues.flatMap((league) => {
+function makeTable(competition: string, rows: Row[], readMs: number) {
+  return {
+    competition,
+    readMs,
+    pattern: new RegExp(`^${escapeRe(competition)}(?: - .*)?$`, "i"),
+    byKey: new Map(rows.map((row) => [key(row.team), row])),
+    byName: new Map(rows.map((row) => [row.team, row])),
+  };
+}
+
+const LEGACY = data.leagues.flatMap((league) => {
   const competition = TABLE_TO_AGENDA[league.league];
   const rows = league.tables?.general?.rows ?? [];
   if (!competition || rows.length === 0) return [];
-  return [
-    {
-      competition,
-      pattern: new RegExp(`^${escapeRe(competition)}(?: - .*)?$`, "i"),
-      byKey: new Map(rows.map((row) => [key(row.team), row])),
-      byName: new Map(rows.map((row) => [row.team, row])),
-    },
-  ];
+  return [makeTable(competition, rows, TABLE_READ_MS)];
 });
 
+const AUTO = (auto.leagues ?? []).flatMap((league) => {
+  const readMs = Date.parse(league.readAtBogota);
+  const rows = (league.rows ?? []).filter((row) => row.gp > 0 && row.gf >= 0 && row.ga >= 0);
+  if (!league.competition || !Number.isFinite(readMs) || rows.length < 6) return [];
+  return [makeTable(league.competition, rows, readMs)];
+});
+
+/** Por liga, la tabla leída más tarde. */
+const TABLES = [...AUTO, ...LEGACY]
+  .sort((a, b) => b.readMs - a.readMs)
+  .filter((table, index, all) => all.findIndex((other) => other.competition === table.competition) === index);
+
 function tableFor(competition: string) {
-  return TABLES.find((table) => table.pattern.test(competition.trim())) ?? null;
+  const canonical = canonicalCompetition(competition).trim();
+  return TABLES.find((table) => table.pattern.test(canonical)) ?? null;
 }
 
 /** Fila de la tabla de ese equipo en esa liga, o null si la liga o el nombre no tienen pareja segura. */
-export function tableRow(competition: string, team: string): Row | null {
+export function tableRow(competition: string, team: string): (Row & { readMs: number }) | null {
   const table = tableFor(competition);
   if (!table) return null;
   const alias = ALIASES[table.competition]?.[team];
-  return (alias ? table.byName.get(alias) : undefined) ?? table.byKey.get(key(team)) ?? null;
+  const row = (alias ? table.byName.get(alias) : undefined) ?? table.byKey.get(key(team)) ?? null;
+  return row ? { ...row, readMs: table.readMs } : null;
 }
 
 /** Nombre en español de la tabla, solo si se escribe distinto al de la agenda. */

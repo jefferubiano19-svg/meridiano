@@ -2,6 +2,7 @@ import file from "../../../data/dixon.json";
 import homeFile from "../../../data/home-advantage.json";
 import strengthFile from "../../../data/market-strength.json";
 import { scoreboard } from "./engine";
+import { canonicalCompetition } from "./places";
 import type { RecentAnalysis } from "./recent-math";
 
 interface TeamRow {
@@ -132,6 +133,8 @@ const TEAM_ALIASES: Record<string, Record<string, string>> = {
     Leuven: "Oud-Heverlee Leuven",
   },
   turkey: { Basaksehir: "Buyuksehyr", Goztepe: "Goztep" },
+  // Nombres de Flashscore en español.
+  seriea: { "Nápoles": "Napoli", Bolonia: "Bologna", Roma: "AS Roma" },
 };
 
 const STOP_WORDS = new Set([
@@ -158,7 +161,8 @@ const LEAGUE_PATTERNS = COMPETITION_TO_LEAGUE.map(
 );
 
 export function leagueForCompetition(competition: string): string | null {
-  for (const [pattern, id] of LEAGUE_PATTERNS) if (pattern.test(competition.trim())) return id;
+  const canonical = canonicalCompetition(competition).trim();
+  for (const [pattern, id] of LEAGUE_PATTERNS) if (pattern.test(canonical)) return id;
   return null;
 }
 

@@ -8,6 +8,7 @@ import { isNational, nationForMatch, nationModel } from "./nations";
 import { blendMarket, MARKET_WEIGHT, publication } from "./publish";
 import { INCOMPATIBLE, levelCFor } from "./recent";
 import { analyzeLevelC } from "./recent-math";
+import { seasonShadow } from "./season";
 import type { ThreeWay } from "./types";
 
 /** Parámetros vigentes el 5 oct 2026. No cambian hasta 500 predicciones evaluadas. */
@@ -48,6 +49,8 @@ export interface BuiltCard {
     wplay: Way | null;
     xg: Way | null;
     clubElo: Way | null;
+    /** Liga BetPlay: modelo con toda la temporada 2026. */
+    season: Way | null;
     note: string;
   };
 }
@@ -313,6 +316,10 @@ export function buildCard(
       wplay: wplayShadow,
       xg,
       clubElo: clubElo(match.home, match.away, match.competition, kickoffMs),
+      season: (() => {
+        const value = seasonShadow(match.home, match.away, match.competition, kickoffMs);
+        return value ? way(value) : null;
+      })(),
       note: "No se publica. Al llegar a 500 partidos evaluados se compara con la publicada por la regla de la sección 9.2.",
     },
   };

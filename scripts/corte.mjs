@@ -15,6 +15,27 @@ const BUDGET_MS = 40 * 60 * 1000;
 const ODDS_CAP = 60;
 /** Las cuotas del consenso no pueden comerse más de este tiempo del corte. */
 const ODDS_BUDGET_MS = 18 * 60 * 1000;
+/** Tablas de posiciones que lee el corte de la noche: competición de la agenda → página de la liga en Flashscore. */
+const STANDINGS_PAGES = [
+  ["GERMANY: Bundesliga", "alemania/bundesliga"],
+  ["ENGLAND: Premier League", "inglaterra/premier-league"],
+  ["ITALY: Serie A", "italia/serie-a"],
+  ["SPAIN: LaLiga", "espana/laliga"],
+  ["FRANCE: Ligue 1", "francia/ligue-1"],
+  ["NETHERLANDS: Eredivisie", "paises-bajos/eredivisie"],
+  ["PORTUGAL: Liga Portugal", "portugal/liga-portugal"],
+  ["BRAZIL: Serie A Betano", "brasil/serie-a"],
+  ["ARGENTINA: Liga Profesional", "argentina/liga-profesional"],
+  ["MEXICO: Liga MX", "mexico/liga-mx"],
+  ["COLOMBIA: Primera A", "colombia/primera-a"],
+  ["USA: MLS", "usa/mls"],
+  ["ENGLAND: Championship", "inglaterra/championship"],
+  ["GERMANY: 2. Bundesliga", "alemania/2-bundesliga"],
+  ["SPAIN: LaLiga2", "espana/laliga2"],
+  ["TURKEY: Super Lig", "turquia/super-lig"],
+  ["BELGIUM: Jupiler Pro League", "belgica/jupiler-pro-league"],
+];
+
 /** Competiciones grandes sin Nivel A ni tabla que igual merecen consenso. */
 const BIG_COMPETITION =
   /^(GERMANY: Bundesliga|ENGLAND: Premier League|SPAIN: LaLiga|FRANCE: Ligue 1|ITALY: Serie A|EUROPE: (Champions League|Europa League|Conference League)|SOUTH AMERICA: Copa (Libertadores|Sudamericana)|COLOMBIA: Primera A)(?: - .*)?$/i;
@@ -348,6 +369,43 @@ async function readOdds(page) {
   return { books };
 }
 
+/** Lee la tabla general de una liga: equipo, PJ, G, E, P y goles "GF:GC". Solo filas que cuadran (PJ = G + E + P). */
+async function readStandings(page) {
+  await page.waitForSelector(".ui-table__row", { timeout: 12000 }).catch(() => undefined);
+  const rows = await page.evaluate(() => {
+    const out = [];
+    for (const row of document.querySelectorAll(".ui-table__row")) {
+      const link = row.querySelector(".tableCellParticipant__name, [class*='participantName'], a[href*='/equipo/']");
+      const team = (link?.textContent || "").trim();
+      if (!team) continue;
+      // Primero celda por celda; si la página no usa celdas reconocibles, el texto visible de la fila.
+      const cells = [...row.querySelectorAll("[class*='table__cell']")]
+        .filter((cell) => !cell.querySelector("[class*='table__cell']"))
+        .map((cell) => (cell.textContent || "").trim())
+        .filter(Boolean);
+      const at = cells.findIndex((cell) => cell.includes(team));
+      const byCells = at >= 0 ? cells.slice(at + 1).join(" ") : "";
+      const byText = (() => {
+        const text = (row.innerText || "").replace(/\s+/g, " ");
+        return text.slice(text.indexOf(team) + team.length);
+      })();
+      const pattern = /^\s*(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s*:\s*(\d+)/;
+      const found = byCells.match(pattern) || byText.match(pattern);
+      if (!found) continue;
+      out.push({ team, gp: +found[1], w: +found[2], d: +found[3], l: +found[4], gf: +found[5], ga: +found[6] });
+    }
+    return out;
+  });
+  const seen = new Set();
+  return {
+    rows: rows.filter((row) => {
+      if (seen.has(row.team) || row.gp !== row.w + row.d + row.l) return false;
+      seen.add(row.team);
+      return true;
+    }),
+  };
+}
+
 /** Guarda las cuotas leídas en data/combo-odds.json, el archivo del que sale el consenso de la app. */
 function storeOdds(results, started) {
   const file = readJsonOptional("combo-odds.json", { matches: [] });
@@ -482,6 +540,17 @@ async function main() {
   const yesterday = yesterdayHtml ? parseLite(yesterdayHtml) : [];
 
   const agenda = readJson("agenda.json");
+  // Lite a veces nombra el país en español ("INGLATERRA: ..."). Todo se guarda con el prefijo en inglés.
+  const { canonicalCompetition } = await import("../src/lib/football/places.ts");
+  let renamed = 0;
+  for (const row of agenda.matches) {
+    const canonical = canonicalCompetition(row[2]);
+    if (canonical !== row[2]) {
+      row[2] = canonical;
+      renamed += 1;
+    }
+  }
+  for (const list of [today, tomorrow, oddsRows, yesterday]) for (const row of list) row.league = canonicalCompetition(row.league);
   const byId = new Map(agenda.matches.map((row) => [row[0], row]));
   // Conflictos de cortes anteriores que no se aplicaron: manda la lectura de la página de resultados de ayer.
   for (const item of last.scoreConflicts ?? []) {
@@ -561,6 +630,28 @@ async function main() {
     const margin = row.odds.reduce((sum, price) => sum + 1 / price, 0) - 1;
     if (row.klass === "sched" && margin >= 0 && margin <= 0.15) keptOdds[row.id] = row.odds;
     else discardedOdds += 1;
+  }
+
+  // Tablas de posiciones (solo el corte de la noche): base del Nivel B y nombres en español.
+  let tablesRead = 0;
+  if (!noon) {
+    const tables = (await step("tablas", () => browserPages(STANDINGS_PAGES.map(([competition, path]) => ({
+      id: competition,
+      competition,
+      kind: "tabla",
+      url: `https://www.flashscore.co/futbol/${path}/clasificacion/`,
+      read: readStandings,
+    })), () => overBudget()))) ?? [];
+    const file = readJsonOptional("standings-auto.json", { leagues: [] });
+    const byCompetition = new Map((file.leagues ?? []).map((league) => [league.competition, league]));
+    for (const table of tables) {
+      if (!Array.isArray(table.rows) || table.rows.length < 6) continue;
+      byCompetition.set(table.competition, { competition: table.competition, page: table.url, readAtBogota: table.at ?? started, rows: table.rows });
+      tablesRead += 1;
+    }
+    file.source = "www.flashscore.co, tabla de cada liga en español. La escribe el corte de la noche.";
+    file.leagues = [...byCompetition.values()];
+    writeJson("standings-auto.json", file);
   }
 
   // Cuotas de varias casas ANTES de calcular: así la predicción guardada ya lleva el consenso (80 % mercado, 20 % modelo).
@@ -828,6 +919,8 @@ async function main() {
     closingOdds: closingRead,
     failures,
     reads: reads.length,
+    tablesRead,
+    competitionsRenamed: renamed,
     consensusTargets: oddsTargets.length,
     consensusRead: consensusStored,
     consensusWith3Houses: consensusRead.filter((row) => liveHouses(row) >= 3).length,

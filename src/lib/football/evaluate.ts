@@ -20,7 +20,7 @@ interface PredictionRow {
   consensus?: Way | null;
   published?: Way | null;
   probabilities?: Way | null;
-  shadow?: { wplay?: Way | null; xg?: Way | null; clubElo?: Way | null } | null;
+  shadow?: { wplay?: Way | null; xg?: Way | null; clubElo?: Way | null; season?: Way | null } | null;
 }
 
 interface AgendaRow {
@@ -104,6 +104,7 @@ export function evaluateRegistry(input: {
       wplay: wayOf(row.shadow?.wplay),
       xg: wayOf(row.shadow?.xg),
       clubElo: wayOf(row.shadow?.clubElo),
+      season: wayOf(row.shadow?.season),
     };
     byMatch.push({
       matchId,
@@ -122,6 +123,7 @@ export function evaluateRegistry(input: {
         wplay: shadow.wplay ? rps(shadow.wplay, actual) : null,
         xg: shadow.xg ? rps(shadow.xg, actual) : null,
         clubElo: shadow.clubElo ? rps(shadow.clubElo, actual) : null,
+        season: shadow.season ? rps(shadow.season, actual) : null,
       },
       publishedRps: published ? rps(published, actual) : null,
     });
@@ -130,7 +132,7 @@ export function evaluateRegistry(input: {
   const closed = input.marks.filter((mark) => typeof mark.clv === "number" && (mark.closingOdds ?? 0) > 1);
   const evaluated = byMatch.length;
   const compared = evaluated >= EVAL_GOAL;
-  const shadowBlock = (key: "wplay" | "xg" | "clubElo") => {
+  const shadowBlock = (key: "wplay" | "xg" | "clubElo" | "season") => {
     const item = shadowMean(byMatch, key);
     const better = item.rps != null && item.rpsPublished != null ? item.rps < item.rpsPublished : null;
     return { ...item, lowerRpsThanPublished: better };
@@ -162,6 +164,7 @@ export function evaluateRegistry(input: {
       wplay: compared ? shadowBlock("wplay") : null,
       xg: compared ? shadowBlock("xg") : null,
       clubElo: compared ? shadowBlock("clubElo") : null,
+      season: compared ? shadowBlock("season") : null,
     },
     matches: input.previous?.matches ?? evaluated,
     hits: input.previous?.hits ?? null,

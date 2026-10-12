@@ -1,7 +1,8 @@
 import agendaFile from "../../../data/agenda.json";
 import data from "../../../data/agenda-read.json";
 import { levelAForAgenda } from "./dixon";
-import { TABLE_READ_MS, tableRow } from "./standings";
+import { canonicalCompetition } from "./places";
+import { tableRow } from "./standings";
 import { leagueRate } from "./league-rate";
 import { analyzeCounts, analyzeLevelC, type RecentAnalysis } from "./recent-math";
 
@@ -73,7 +74,8 @@ const WOMEN = /women|femenin|féminine|feminine|frauen|\bliga f\b|\bwsl\b|\bnwsl
 const YOUTH = /sub[-\s]?\d+|\bu1[5-9]\b|\bu2[0-3]\b|juvenil|youth|primavera|reserves?|reservas?|\bii\b|\bb team\b/i;
 const HOUR_MS = 60 * 60 * 1000;
 
-function placeOf(competition: string): string {
+function placeOf(raw: string): string {
+  const competition = canonicalCompetition(raw);
   const cut = competition.indexOf(":");
   const prefix = cut > 0 ? competition.slice(0, cut).trim().toUpperCase() : "";
   return REGION_PREFIX.test(prefix) ? "" : prefix;
@@ -95,8 +97,52 @@ let TEAMS: Map<string, TeamHistory> | null = null;
 let ROW_BY_ID: Map<string, AgendaRow> | null = null;
 const PLACES_BY_NAME = new Map<string, Set<string>>();
 
-function teamKeyFor(name: string, competition: string): string | null {
-  const tier = tierOf(competition, name);
+/** Nombres que Flashscore en español traduce y en inglés no (ya sin tildes ni mayúsculas). */
+const EXONYMS: Record<string, string> = {
+  "atletico de madrid": "atl. madrid",
+  "club brujas": "club brugge",
+  napoles: "napoli",
+  bolonia: "bologna",
+  genova: "genoa",
+  "slavia praga": "slavia prague",
+  "sparta praga": "sparta prague",
+  "estrella roja": "crvena zvezda",
+  "bayern munich": "bayern munich",
+  "1860 munich": "1860 munich",
+  duisburgo: "duisburg",
+  augsburgo: "augsburg",
+  "augsburgo ii": "augsburg ii",
+  colonia: "fc koln",
+  oporto: "fc porto",
+  monaco: "monaco",
+  marsella: "marseille",
+  niza: "nice",
+  estrasburgo: "strasbourg",
+  "stade rennais": "rennes",
+  "sporting de lisboa": "sporting cp",
+  "copenhague": "fc copenhagen",
+  "basilea": "basel",
+  "ginebra": "servette",
+  "salzburgo": "salzburg",
+  "bucarest": "bucharest",
+  "estambul basaksehir": "basaksehir",
+};
+
+/** Nombre sin tildes ni mayúsculas ni país entre paréntesis: "Cúcuta" y "Cucuta" son el mismo equipo. */
+function plainName(name: string): string {
+  const plain = name
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\s*\([a-z]{2,4}\)\s*$/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  return EXONYMS[plain] ?? plain;
+}
+
+function teamKeyFor(rawName: string, competition: string): string | null {
+  const name = plainName(rawName);
+  const tier = tierOf(competition, rawName);
   let place = placeOf(competition);
   if (!place) {
     const places = PLACES_BY_NAME.get(`${tier}|${name}`);
@@ -113,7 +159,7 @@ function buildTeams(): Map<string, TeamHistory> {
     const place = placeOf(row[2]);
     if (!place) continue;
     for (const name of [row[3], row[4]]) {
-      const k = `${tierOf(row[2], name)}|${name}`;
+      const k = `${tierOf(row[2], name)}|${plainName(name)}`;
       const set = PLACES_BY_NAME.get(k) ?? new Set<string>();
       set.add(place);
       PLACES_BY_NAME.set(k, set);
@@ -166,10 +212,10 @@ function historyOf(name: string, competition: string, kickoffMs: number, own: Ra
   let cutoffMs = base ? lastTs(base) * 1000 + HOUR_MS : -Infinity;
   // Sin lectura de fichas útil: la tabla de la temporada hace de base (Nivel B), si se leyó antes del partido.
   let fromTable = false;
-  if (games.length < 3 && TABLE_READ_MS < kickoffMs) {
-    const row = tableRow(competition, name);
-    if (row && row.gp >= 3) {
-      const readSec = Math.round(TABLE_READ_MS / 1000);
+  const row = games.length < 3 ? tableRow(competition, name) : null;
+  if (row && row.readMs < kickoffMs) {
+    if (row.gp >= 3) {
+      const readSec = Math.round(row.readMs / 1000);
       games = Array.from({ length: row.gp }, (_, i): RawGame => [
         readSec - i * 7 * 24 * 3600,
         competition,
@@ -177,7 +223,7 @@ function historyOf(name: string, competition: string, kickoffMs: number, own: Ra
         row.gf / row.gp,
         row.ga / row.gp,
       ]);
-      cutoffMs = TABLE_READ_MS;
+      cutoffMs = row.readMs;
       fromTable = true;
     }
   }
