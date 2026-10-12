@@ -11,6 +11,13 @@ const HEADERS = { "User-Agent": "MeridianoCorte/1.0" };
 const INCOMPATIBLE = /kings league|futsal|fútbol sala|futbol sala|beach soccer|fútbol playa|futbol playa|fútbol 7|futbol 7/i;
 const YOUTH = /sub[-\s]?\d+|\bu1[7-9]\b|\bu2[0-3]\b|juvenil|reservas?/i;
 const BUDGET_MS = 40 * 60 * 1000;
+/** Partidos por corte a los que se les lee la pestaña Cuotas para el consenso (además del Combo). */
+const ODDS_CAP = 60;
+/** Las cuotas del consenso no pueden comerse más de este tiempo del corte. */
+const ODDS_BUDGET_MS = 18 * 60 * 1000;
+/** Competiciones grandes sin Nivel A ni tabla que igual merecen consenso. */
+const BIG_COMPETITION =
+  /^(GERMANY: Bundesliga|ENGLAND: Premier League|SPAIN: LaLiga|FRANCE: Ligue 1|ITALY: Serie A|EUROPE: (Champions League|Europa League|Conference League)|SOUTH AMERICA: Copa (Libertadores|Sudamericana)|COLOMBIA: Primera A)(?: - .*)?$/i;
 
 const data = (name) => new URL(name, ROOT);
 const readJson = (name) => JSON.parse(readFileSync(data(name), "utf8"));
@@ -341,6 +348,42 @@ async function readOdds(page) {
   return { books };
 }
 
+/** Guarda las cuotas leídas en data/combo-odds.json, el archivo del que sale el consenso de la app. */
+function storeOdds(results, started) {
+  const file = readJsonOptional("combo-odds.json", { matches: [] });
+  file.source = "www.flashscore.co pestaña Cuotas, fila a fila. Casa = alt del logo. Sin alt no entra. Lo escribe el corte diario.";
+  // Siete días: alcanza para la Consulta reciente sin inflar el archivo que carga la app.
+  const keep = Date.now() - 7 * 24 * 3600 * 1000;
+  const byId = new Map((file.matches ?? []).filter((item) => Date.parse(item.readAtBogota ?? "") >= keep).map((item) => [item.id, item]));
+  let stored = 0;
+  for (const result of results ?? []) {
+    if (!result?.id || !Array.isArray(result.books) || result.books.length === 0) continue;
+    const pick = (market) => result.books.filter((book) => book.market === market);
+    const cells = (book, withLine) => [
+      ...(withLine ? [{ text: String(book.line ?? ""), withdrawn: false }] : []),
+      ...book.odds.map((price) => ({ text: Number(price).toFixed(2), withdrawn: Boolean(book.struck) })),
+    ];
+    byId.set(result.id, {
+      id: result.id,
+      readAtBogota: result.at ?? started,
+      markets: {
+        "1X2": pick("1x2").filter((book) => book.odds.length === 3).map((book) => ({ house: book.book, cells: cells(book, false) })),
+        overUnder: pick("mas-menos").filter((book) => book.line && (book.book === "Wplay.co" || book.line === "2.5")).map((book) => ({ house: book.book, cells: cells(book, true) })),
+        btts: pick("ambos").map((book) => ({ house: book.book, cells: cells(book, false) })),
+      },
+    });
+    stored += 1;
+  }
+  file.matches = [...byId.values()];
+  writeJson("combo-odds.json", file);
+  return stored;
+}
+
+/** Casas con 1X2 vigente en una lectura (para el registro de cobertura). */
+function liveHouses(result) {
+  return new Set((result?.books ?? []).filter((book) => book.market === "1x2" && !book.struck && book.odds.length === 3).map((book) => book.book)).size;
+}
+
 function usable(row) {
   if (!row || row.struck || !row.odds || row.odds.some((price) => !(price > 1))) return false;
   const margin = row.odds.reduce((sum, price) => sum + 1 / price, 0) - 1;
@@ -520,6 +563,37 @@ async function main() {
     else discardedOdds += 1;
   }
 
+  // Cuotas de varias casas ANTES de calcular: así la predicción guardada ya lleva el consenso (80 % mercado, 20 % modelo).
+  const oddsTargets = (await step("cuotas-objetivo", async () => {
+    const { leagueForCompetition } = await import("../src/lib/football/dixon.ts");
+    const { tableRow } = await import("../src/lib/football/standings.ts");
+    const list = [];
+    for (const row of today) {
+      if (row.klass !== "sched" || row.suspended) continue;
+      if (INCOMPATIBLE.test(row.league) || YOUTH.test(`${row.league} ${row.home} ${row.away}`)) continue;
+      const clock = clockOf(row);
+      if (!clock) continue;
+      const kickoff = `${todayName}T${clock}:00-05:00`;
+      if (!(Date.parse(kickoff) - Date.now() > 10 * 60 * 1000)) continue;
+      const competition = byId.get(row.id)?.[2] ?? row.league;
+      const strong =
+        leagueForCompetition(competition) ||
+        (tableRow(competition, row.home) && tableRow(competition, row.away)) ||
+        BIG_COMPETITION.test(competition);
+      if (strong) list.push({ id: row.id, home: row.home, away: row.away, kickoff });
+    }
+    return list.sort((a, b) => a.kickoff.localeCompare(b.kickoff)).slice(0, ODDS_CAP);
+  })) ?? [];
+  const oddsStartedMs = Date.now();
+  const consensusRead = (await step("cuotas-consenso", () => browserPages(oddsTargets.map((row) => ({
+    ...row,
+    kind: "cuotas",
+    url: `https://www.flashscore.co/partido/${row.id}/`,
+    read: async (page) => readOdds(page),
+  })), () => Date.now() - oddsStartedMs >= ODDS_BUDGET_MS || overBudget()))) ?? [];
+  const consensusStored = storeOdds(consensusRead, started);
+  const readById = new Map(consensusRead.filter((row) => row.books).map((row) => [row.id, row]));
+
   const now = Date.now();
   const predictions = readJson("predictions.json");
   const sheetsSoFar = readJsonOptional("sheets-history.json", { byId: {} }).byId ?? {};
@@ -596,7 +670,8 @@ async function main() {
   predictions.records.push(...fresh);
   writeJson("predictions.json", predictions);
 
-  const oddsRead = await step("cuotas-combo", () => browserPages(combo.map((row) => ({
+  const comboPending = combo.filter((row) => !readById.has(row.matchId));
+  const comboRead = await step("cuotas-combo", () => browserPages(comboPending.map((row) => ({
     id: row.matchId,
     home: row.home,
     away: row.away,
@@ -605,6 +680,11 @@ async function main() {
     url: `https://www.flashscore.co/partido/${row.matchId}/`,
     read: async (page) => readOdds(page),
   }))));
+  storeOdds(comboRead, started);
+  const oddsRead = [
+    ...combo.filter((row) => readById.has(row.matchId)).map((row) => ({ ...readById.get(row.matchId), kickoff: row.kickoff })),
+    ...(comboRead ?? []),
+  ];
 
   const registry = readJson("value-marks.json");
   const known = new Set(registry.marks.map((mark) => [mark.matchId, mark.market, mark.line ?? "", mark.house, mark.outcome].join("|")));
@@ -748,6 +828,10 @@ async function main() {
     closingOdds: closingRead,
     failures,
     reads: reads.length,
+    consensusTargets: oddsTargets.length,
+    consensusRead: consensusStored,
+    consensusWith3Houses: consensusRead.filter((row) => liveHouses(row) >= 3).length,
+    predictionsWithConsensus: fresh.filter((row) => row.consensus).length,
   };
   writeJson("cut-coverage.json", coverage);
   // Queda marcado como hecho solo si se leyó la agenda del día.
