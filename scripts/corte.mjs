@@ -412,6 +412,15 @@ function marksFromOdds(match, rows, at) {
 }
 
 async function main() {
+  // Un mismo corte (noche o mediodía) se hace una sola vez por día. Si GitHub o el disparador externo
+  // lanzan otro igual ese día, termina sin tocar nada. FORZAR=si lo repite a propósito.
+  const mode = process.env.CORTE === "mediodia" ? "mediodia" : "noche";
+  const last = readJsonOptional("cut-coverage.json", {});
+  const done = readJsonOptional("cut-done.json", {});
+  if (process.env.FORZAR !== "si" && done[mode] === bogotaDay(0)) {
+    console.log(`El corte de ${mode} del ${done[mode]} ya se hizo. No se repite.`);
+    return;
+  }
   const cutStartedMs = Date.now();
   const overBudget = () => Date.now() - cutStartedMs >= BUDGET_MS;
   const started = bogotaStamp();
@@ -431,6 +440,14 @@ async function main() {
 
   const agenda = readJson("agenda.json");
   const byId = new Map(agenda.matches.map((row) => [row[0], row]));
+  // Conflictos de cortes anteriores que no se aplicaron: manda la lectura de la página de resultados de ayer.
+  for (const item of last.scoreConflicts ?? []) {
+    const stored = byId.get(item.id);
+    if (!stored || item.source !== "ayer" || item.applied || !Array.isArray(item.read)) continue;
+    stored[5] = "finalizado";
+    stored[6] = item.read[0];
+    stored[7] = item.read[1];
+  }
   let updatedToday = 0;
   let addedToday = 0;
   let addedTomorrow = 0;
@@ -439,8 +456,9 @@ async function main() {
 
   const setFinal = (stored, score, source) => {
     if (stored[5] === "finalizado" && stored[6] != null && (stored[6] !== score[0] || stored[7] !== score[1])) {
-      conflicts.push({ id: stored[0], stored: [stored[6], stored[7]], read: score, source });
-      return false;
+      conflicts.push({ id: stored[0], stored: [stored[6], stored[7]], read: score, source, applied: source === "ayer" });
+      // La página de resultados de ayer es la versión cerrada; la de hoy pudo leerse con el partido aún vivo.
+      if (source !== "ayer") return false;
     }
     stored[5] = "finalizado";
     stored[6] = score[0];
@@ -732,6 +750,8 @@ async function main() {
     reads: reads.length,
   };
   writeJson("cut-coverage.json", coverage);
+  // Queda marcado como hecho solo si se leyó la agenda del día.
+  if (today.length > 0) writeJson("cut-done.json", { ...readJsonOptional("cut-done.json", {}), [noon ? "mediodia" : "noche"]: todayName });
   console.log(JSON.stringify(coverage, null, 2));
 }
 

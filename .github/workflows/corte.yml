@@ -5,7 +5,18 @@ on:
     # 05:15 UTC = 00:15 en Bogotá. 17:00 UTC = 12:00 en Bogotá.
     - cron: "15 5 * * *"
     - cron: "0 17 * * *"
+  # Lanzamiento a mano o desde el disparador externo (cron-job.org), que llega a la hora exacta.
   workflow_dispatch:
+    inputs:
+      corte:
+        description: "Qué corte: noche o mediodia"
+        type: choice
+        options: [noche, mediodia]
+        default: noche
+      forzar:
+        description: "Repetirlo aunque ya se haya hecho hoy"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -27,8 +38,9 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - run: npm run corte
         env:
-          # 17:00 UTC es el corte de las 12:00 en Bogotá. El otro horario, y un lanzamiento manual, es el de la noche.
-          CORTE: ${{ github.event.schedule == '0 17 * * *' && 'mediodia' || 'noche' }}
+          # A mano o externo: el que se elija. Programado: 17:00 UTC es el de las 12:00; el otro, el de la noche.
+          CORTE: ${{ github.event_name == 'workflow_dispatch' && inputs.corte || (github.event.schedule == '0 17 * * *' && 'mediodia' || 'noche') }}
+          FORZAR: ${{ inputs.forzar && 'si' || 'no' }}
       - name: Guardar /data
         if: always()
         run: |
