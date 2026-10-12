@@ -1,7 +1,7 @@
 import { agendaOnDay, type AgendaMatch } from "./agenda";
 import { getFixture } from "./fixtures";
 import { getAnalysis } from "./model";
-import { INCOMPATIBLE, hasRecentPair, levelCFor } from "./recent";
+import { INCOMPATIBLE, levelCFor } from "./recent";
 import type { RecentAnalysis } from "./recent-math";
 import { agendaToday, agendaTomorrow } from "./today";
 
@@ -94,7 +94,7 @@ function buildTicket(day: string, limit: number): CombinadaTicket {
     if (Date.parse(match.kickoff) <= now) return false;
     if (INCOMPATIBLE.test(match.competition) || YOUTH.test(`${match.competition} ${match.home} ${match.away}`)) return false;
     if (match.fixtureId && getFixture(match.fixtureId)) return true;
-    return hasRecentPair(match.id);
+    return levelCFor(match.id, match.kickoff, match.competition) != null;
   });
   const byKick = (a: AgendaMatch, b: AgendaMatch) => a.kickoff.localeCompare(b.kickoff);
   const withSheet = pool.filter((match) => match.fixtureId && getFixture(match.fixtureId)).sort(byKick);
