@@ -1,5 +1,6 @@
 import { MISSING, type MatchReading, type Way } from "@/lib/football/dto";
 import { formatOdds, formatPct } from "@/lib/football/format";
+import { betSlip, MARKETS, useBetSlip } from "@/lib/store/bet-slip";
 
 const SIDE = { home: "local", draw: "empate", away: "visita" } as const;
 
@@ -115,10 +116,57 @@ export function MatchReadingCard({
     </>
   );
   const className = "block rounded-xl bg-surface p-4 shadow-[var(--shadow-border)]";
-  if (!match.href) return <article className={className}>{body}</article>;
   return (
-    <a href={match.href} className={className}>
-      {body}
-    </a>
+    <article className={className}>
+      {match.href ? (
+        <a href={match.href} className="block">
+          {body}
+        </a>
+      ) : (
+        body
+      )}
+      <AddToBet match={match} />
+    </article>
+  );
+}
+
+/** Agregar el partido a "Mi apuesta" sin salir de la ficha. Solo partidos por jugar con probabilidad. */
+export function AddToBet({ match }: { match: MatchReading }) {
+  const slip = useBetSlip();
+  const kick = Date.parse(match.kickoff);
+  const open = match.status === "por-jugar" && (!Number.isFinite(kick) || kick > Date.now());
+  if (!open || !match.published) return null;
+  const chosen = slip.find((leg) => leg.id === match.id);
+  const label = `${match.home} — ${match.away}`;
+  return (
+    <div className="mt-3 border-t border-border pt-3">
+      <p className="text-[10px] uppercase tracking-wide text-subtle">Agregar a mi apuesta</p>
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        {MARKETS.slice(0, 5).map((market) => {
+          const active = chosen?.market === market.key;
+          return (
+            <button
+              key={market.key}
+              type="button"
+              title={market.label}
+              aria-pressed={active}
+              onClick={() => (active ? betSlip.remove(match.id) : betSlip.put(match.id, market.key, label))}
+              className={
+                active
+                  ? "h-9 min-w-11 rounded-full bg-accent px-3 text-sm font-medium text-accent-fg"
+                  : "h-9 min-w-11 rounded-full bg-elevated px-3 text-sm text-muted ring-1 ring-border hover:text-fg"
+              }
+            >
+              {market.short}
+            </button>
+          );
+        })}
+        {slip.length ? (
+          <a href="/apuesta" className="ml-auto text-xs text-fg underline">
+            Ver mi apuesta ({slip.length})
+          </a>
+        ) : null}
+      </div>
+    </div>
   );
 }

@@ -6,6 +6,7 @@ import type { MatchReading } from "@/lib/football/dto";
 import { loadDay } from "@/lib/football/pages";
 import { matchesSearch, searchText } from "@/lib/football/search";
 import { useAgendaToday } from "@/lib/football/use-today";
+import { betSlip, MARKETS, useBetSlip, type Market } from "@/lib/store/bet-slip";
 
 export const Route = createFileRoute("/apuesta")({ component: BetCheckPage });
 
@@ -13,19 +14,9 @@ export const Route = createFileRoute("/apuesta")({ component: BetCheckPage });
  * Revisar una apuesta antes de hacerla: para cada selección, la probabilidad
  * publicada de Meridiano, la cuota justa y si la casa paga más o menos de lo que
  * vale. Para una combinada, la probabilidad de acertarla completa y lo que
- * devuelve en promedio. No guarda nada y no recomienda apostar.
+ * devuelve en promedio. Las selecciones se agregan desde la ficha de cada partido
+ * o desde el buscador y quedan solo en este navegador. No recomienda apostar.
  * ------------------------------------------------------------------------- */
-
-type Market = "home" | "draw" | "away" | "1X" | "X2" | "12";
-
-const MARKETS: { key: Market; label: string }[] = [
-  { key: "home", label: "Local" },
-  { key: "draw", label: "Empate" },
-  { key: "away", label: "Visita" },
-  { key: "1X", label: "Local o empate" },
-  { key: "X2", label: "Empate o visita" },
-  { key: "12", label: "Local o visita" },
-];
 
 interface Leg {
   match: MatchReading;
@@ -58,7 +49,7 @@ function BetCheckPage() {
   const [matches, setMatches] = useState<MatchReading[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
-  const [legs, setLegs] = useState<Leg[]>([]);
+  const slip = useBetSlip();
   const [stakeText, setStakeText] = useState("10000");
 
   useEffect(() => {
@@ -79,6 +70,13 @@ function BetCheckPage() {
     };
   }, [today]);
 
+  const byId = useMemo(() => new Map(matches.map((match) => [match.id, match])), [matches]);
+  const legs: Leg[] = slip.flatMap((item) => {
+    const match = byId.get(item.id);
+    return match ? [{ match, market: item.market, odds: item.odds }] : [];
+  });
+  const missing = loading ? [] : slip.filter((item) => !byId.has(item.id));
+
   const found = useMemo(() => {
     const q = query.trim();
     if (q.length < 2) return [];
@@ -87,7 +85,7 @@ function BetCheckPage() {
       .filter((match) => !chosen.has(match.id))
       .filter((match) => matchesSearch(q, searchText([match.home, match.away, match.competition, match.homeEs, match.awayEs])))
       .slice(0, 8);
-  }, [query, matches, legs]);
+  }, [query, matches, legs]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const rows = legs.map((leg) => {
     const p = probability(leg.match, leg.market);
@@ -101,8 +99,7 @@ function BetCheckPage() {
   const jointEv = jointP != null && jointOdds != null ? jointP * jointOdds - 1 : null;
   const stake = Number(stakeText.replace(/\D/g, "")) || 0;
 
-  const update = (index: number, change: Partial<Leg>) =>
-    setLegs((current) => current.map((leg, i) => (i === index ? { ...leg, ...change } : leg)));
+  const update = (index: number, change: { market?: Market; odds?: string }) => betSlip.update(legs[index].match.id, change);
 
   return (
     <div className="space-y-6">
@@ -112,7 +109,8 @@ function BetCheckPage() {
         <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted">
           Agrega los partidos de tu boleta, elige lo que apostaste y escribe la cuota de la casa. Meridiano te dice
           cuántas veces se cumple cada selección, si la casa la paga por encima o por debajo de lo que vale y qué
-          pasa al juntarlas en una combinada. No guarda nada y no es una recomendación.
+          pasa al juntarlas en una combinada. También puedes agregarlos desde la ficha de cada partido con los
+          botones 1 · X · 2. Tu apuesta queda solo en este navegador. No es una recomendación.
         </p>
       </header>
 
@@ -133,7 +131,7 @@ function BetCheckPage() {
                   type="button"
                   className="w-full rounded-lg bg-elevated px-3 py-2 text-left text-sm hover:ring-1 hover:ring-border"
                   onClick={() => {
-                    setLegs((current) => [...current, { match, market: "home", odds: "" }]);
+                    betSlip.put(match.id, "home", `${match.home} — ${match.away}`);
                     setQuery("");
                   }}
                 >
@@ -149,9 +147,27 @@ function BetCheckPage() {
         ) : null}
       </section>
 
+      {missing.length ? (
+        <section className="rounded-xl bg-surface p-4 text-sm text-muted shadow-[var(--shadow-border)]">
+          {missing.map((item) => (
+            <p key={item.id} className="flex items-center justify-between gap-3">
+              <span>{item.label}: ya empezó o salió de la agenda de hoy y mañana.</span>
+              <button type="button" className="text-xs underline" onClick={() => betSlip.remove(item.id)}>
+                Quitar
+              </button>
+            </p>
+          ))}
+        </section>
+      ) : null}
+
       {rows.length ? (
         <section className="space-y-3">
-          <h2 className="font-display text-xl">2 · Tus selecciones</h2>
+          <div className="flex items-center justify-between">
+            <h2 className="font-display text-xl">2 · Tus selecciones</h2>
+            <button type="button" className="text-xs text-muted underline" onClick={() => betSlip.clear()}>
+              Vaciar
+            </button>
+          </div>
           {rows.map((row, index) => {
             // Margen de ±3 %: dentro de eso la cuota es más o menos justa (misma regla que la marca de valor).
             const bad = row.ev != null && row.ev < -0.03;
@@ -168,7 +184,7 @@ function BetCheckPage() {
                   <button
                     type="button"
                     className="text-xs text-muted underline"
-                    onClick={() => setLegs((current) => current.filter((_, i) => i !== index))}
+                    onClick={() => betSlip.remove(row.leg.match.id)}
                   >
                     Quitar
                   </button>
