@@ -17,6 +17,8 @@ export interface ValueMark {
 
 export interface MatchReading {
   id: string;
+  /** Una casa ofrece el partido: el corte leyó su cuota (Wplay o varias casas). */
+  withOdds?: boolean;
   href: string;
   home: string;
   away: string;

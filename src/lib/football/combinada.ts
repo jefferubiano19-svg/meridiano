@@ -1,6 +1,7 @@
 import { agendaOnDay, type AgendaMatch } from "./agenda";
 import { getFixture } from "./fixtures";
 import { getAnalysis } from "./model";
+import { hasMarketOdds } from "./publish";
 import { INCOMPATIBLE, levelCFor } from "./recent";
 import type { RecentAnalysis } from "./recent-math";
 import { agendaToday, agendaTomorrow } from "./today";
@@ -96,7 +97,9 @@ function buildTicket(day: string, limit: number): CombinadaTicket {
     if (match.fixtureId && getFixture(match.fixtureId)) return true;
     return levelCFor(match.id, match.kickoff, match.competition) != null;
   });
-  const byKick = (a: AgendaMatch, b: AgendaMatch) => a.kickoff.localeCompare(b.kickoff);
+  // Primero los partidos que una casa ofrece (el corte leyó su cuota); los demás solo si faltan.
+  const offered = (match: AgendaMatch) => (hasMarketOdds(match.id) ? 0 : 1);
+  const byKick = (a: AgendaMatch, b: AgendaMatch) => offered(a) - offered(b) || a.kickoff.localeCompare(b.kickoff);
   const withSheet = pool.filter((match) => match.fixtureId && getFixture(match.fixtureId)).sort(byKick);
   const rest = pool
     .filter((match) => !(match.fixtureId && getFixture(match.fixtureId)))
@@ -116,7 +119,7 @@ function buildTicket(day: string, limit: number): CombinadaTicket {
     seen.add(match.competition);
     picked.push(match);
   }
-  picked.sort(byKick);
+  picked.sort((a, b) => a.kickoff.localeCompare(b.kickoff));
   const legs = picked.flatMap((match) => {
     const leg = toLeg(match);
     return leg ? [leg] : [];

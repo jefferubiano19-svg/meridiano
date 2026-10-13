@@ -10,7 +10,7 @@ import { LEAGUES, LEAGUE_BY_ID } from "./leagues";
 import { getAnalysis } from "./model";
 import { estimateNamed } from "./named";
 import { nationModel } from "./nations";
-import { marketOnly, publication } from "./publish";
+import { hasMarketOdds, marketOnly, publication } from "./publish";
 import { levelCFor, recentFor } from "./recent";
 import { sheetFor } from "./sheets";
 import historyFile from "../../../data/sheets-history.json";
@@ -137,6 +137,7 @@ function seal(seed: Seed): MatchReading {
   const best = pub && open && gap <= 0.1 && !pub.review ? pub.values[0] : undefined;
   const reading: MatchReading = {
     id: seed.id,
+    withOdds: Boolean(pub?.market) || hasMarketOdds(seed.id),
     href: seed.href,
     home: seed.home,
     away: seed.away,

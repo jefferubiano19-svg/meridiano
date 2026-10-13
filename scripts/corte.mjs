@@ -406,8 +406,22 @@ async function readStandings(page) {
     }
     return out;
   });
+  // Diagnóstico: qué vio el lector en la página (para corregirlo si una tabla sale vacía).
+  const debug = await page
+    .evaluate(() => {
+      const first = document.querySelector(".ui-table__row");
+      return {
+        title: document.title,
+        tableRows: document.querySelectorAll(".ui-table__row").length,
+        anyTable: document.querySelectorAll("[class*='table']").length,
+        firstRow: first ? (first.innerText || first.textContent || "").replace(/\s+/g, " ").slice(0, 160) : null,
+        firstRowHtml: first ? first.outerHTML.slice(0, 600) : null,
+      };
+    })
+    .catch((error) => ({ error: String(error) }));
   const seen = new Set();
   return {
+    debug,
     rows: rows.filter((row) => {
       if (seen.has(row.team) || row.gp !== row.w + row.d + row.l) return false;
       seen.add(row.team);
@@ -544,11 +558,15 @@ async function main() {
   const todayHtml = await step("agenda-hoy", () => readPage("https://m.flashscore.co/?d=0&s=1"));
   const tomorrowHtml = await step("agenda-manana", () => readPage("https://m.flashscore.co/?d=1&s=1"));
   const oddsHtml = await step("cuotas-wplay", () => readPage("https://m.flashscore.co/?d=0&s=5"));
+  const oddsTomorrowHtml = await step("cuotas-wplay-manana", () => readPage("https://m.flashscore.co/?d=1&s=5"));
   const yesterdayHtml = await step("resultados-ayer", () => readPage("https://m.flashscore.co/?d=-1&s=3"));
+  // Hace 2 días: recupera resultados que un corte atrasado o saltado no alcanzó a leer.
+  const twoDaysHtml = await step("resultados-anteayer", () => readPage("https://m.flashscore.co/?d=-2&s=3"));
   const today = todayHtml ? parseLite(todayHtml) : [];
   const tomorrow = tomorrowHtml ? parseLite(tomorrowHtml) : [];
   const oddsRows = oddsHtml ? parseLite(oddsHtml) : [];
   const yesterday = yesterdayHtml ? parseLite(yesterdayHtml) : [];
+  const twoDays = twoDaysHtml ? parseLite(twoDaysHtml) : [];
 
   const agenda = readJson("agenda.json");
   // Lite a veces nombra el país en español ("INGLATERRA: ..."). Todo se guarda con el prefijo en inglés.
@@ -561,7 +579,7 @@ async function main() {
       renamed += 1;
     }
   }
-  for (const list of [today, tomorrow, oddsRows, yesterday]) for (const row of list) row.league = canonicalCompetition(row.league);
+  for (const list of [today, tomorrow, oddsRows, yesterday, twoDays]) for (const row of list) row.league = canonicalCompetition(row.league);
   const byId = new Map(agenda.matches.map((row) => [row[0], row]));
   // Conflictos de cortes anteriores que no se aplicaron: manda la lectura de la página de resultados de ayer.
   for (const item of last.scoreConflicts ?? []) {
@@ -625,6 +643,18 @@ async function main() {
     if (!stored) continue;
     if (setFinal(stored, score, "ayer")) updatedYesterday += 1;
   }
+  // Anteayer: solo completa partidos que siguen sin resultado; no corrige marcadores ya guardados.
+  let recoveredTwoDays = 0;
+  for (const row of twoDays) {
+    const score = finalScore(row);
+    if (!score) continue;
+    const stored = byId.get(row.id);
+    if (!stored || stored[5] === "finalizado") continue;
+    stored[5] = "finalizado";
+    stored[6] = score[0];
+    stored[7] = score[1];
+    recoveredTwoDays += 1;
+  }
   for (const row of agenda.matches) {
     if ((row[6] != null || row[7] != null) && row[5] !== "finalizado") {
       row[6] = null;
@@ -645,6 +675,7 @@ async function main() {
 
   // Tablas de posiciones (solo el corte de la noche): base del Nivel B y nombres en español.
   let tablesRead = 0;
+  let tablesDebug = null;
   if (!noon) {
     const tables = (await step("tablas", () => browserPages(STANDINGS_PAGES.map(([competition, path]) => ({
       id: competition,
@@ -660,6 +691,13 @@ async function main() {
       byCompetition.set(table.competition, { competition: table.competition, page: table.url, readAtBogota: table.at ?? started, rows: table.rows });
       tablesRead += 1;
     }
+    tablesDebug = tables.map((table) => ({
+      competition: table.competition,
+      url: table.url ?? null,
+      failed: table.failed ?? null,
+      rowsKept: Array.isArray(table.rows) ? table.rows.length : 0,
+      ...(table.debug ?? {}),
+    }));
     file.source = "www.flashscore.co, tabla de cada liga en español. La escribe el corte de la noche.";
     file.leagues = [...byCompetition.values()];
     writeJson("standings-auto.json", file);
@@ -720,6 +758,12 @@ async function main() {
   wplayFile.byId = Object.fromEntries(
     Object.entries(wplayFile.byId ?? {}).filter(([, row]) => Date.parse(row?.readAt ?? "") >= keepWplay),
   );
+  // Mañana: solo para saber qué partidos ofrece la casa y mostrar el mercado; no entra a predicciones de hoy.
+  for (const row of oddsTomorrowHtml ? parseLite(oddsTomorrowHtml) : []) {
+    if (!row.odds || row.klass !== "sched") continue;
+    const margin = row.odds.reduce((sum, price) => sum + 1 / price, 0) - 1;
+    if (margin >= 0 && margin <= 0.15) wplayFile.byId[row.id] = { odds: row.odds, readAt: started };
+  }
   for (const [id, odds] of Object.entries(keptOdds)) wplayFile.byId[id] = { odds, readAt: started };
   wplayFile.source = "m.flashscore.co/?d=0&s=5 (cuotas 1X2 de Wplay de la versión Lite). La escribe el corte.";
   writeJson("wplay-odds.json", wplayFile);
@@ -938,6 +982,7 @@ async function main() {
     addedToday,
     addedTomorrow,
     updatedYesterday,
+    recoveredTwoDays,
     scoreConflicts: conflicts,
     yesterdayFinished: yesterdayFinished.length,
     yesterdaySheets: (sheets ?? []).filter((sheet) => !sheet.failed).length,
@@ -961,6 +1006,7 @@ async function main() {
     failures,
     reads: reads.length,
     tablesRead,
+    tablesDebug,
     competitionsRenamed: renamed,
     consensusTargets: oddsTargets.length,
     consensusRead: consensusStored,

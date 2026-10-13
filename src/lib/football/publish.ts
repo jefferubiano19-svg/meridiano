@@ -235,6 +235,12 @@ export function marketOnly(matchId: string): Publication | null {
   };
 }
 
+/** true si hay cuotas de mercado para el partido (3+ casas o Wplay): es decir, una casa lo ofrece. */
+export function hasMarketOdds(matchId: string): boolean {
+  if (WPLAY[matchId]) return true;
+  return booksOf(matchId).rows.length > 0;
+}
+
 export function fairOf(p: number): number {
   return Math.min(28.57, Math.max(1.09, 1 / Math.max(p, 0.035)));
 }

@@ -19,6 +19,7 @@ function Home() {
   const [failed, setFailed] = useState(false);
   const [query, setQuery] = useState("");
   const [onlyReview, setOnlyReview] = useState(false);
+  const [onlyOdds, setOnlyOdds] = useState(true);
   const [count, setCount] = useState(24);
 
   useEffect(() => {
@@ -37,10 +38,14 @@ function Home() {
     };
   }, [today]);
 
+  const withOddsCount = useMemo(() => (board?.matches ?? []).filter((match) => match.withOdds).length, [board]);
+  // Si el corte todavía no leyó cuotas de ningún partido, se muestran todos.
+  const oddsFilter = onlyOdds && withOddsCount > 0;
   const filtered = useMemo(() => {
     const rows = board?.matches ?? [];
     const q = query.trim();
     return rows.filter((match) => {
+      if (oddsFilter && !match.withOdds) return false;
       if (onlyReview && !match.revisar && !match.value) return false;
       if (!q) return true;
       return matchesSearch(
@@ -48,7 +53,7 @@ function Home() {
         searchText([match.home, match.away, match.competition, match.homeEs, match.awayEs]),
       );
     });
-  }, [board, query, onlyReview]);
+  }, [board, query, onlyReview, oddsFilter]);
 
   const shown = filtered.slice(0, count);
 
@@ -61,7 +66,8 @@ function Home() {
           </p>
           <h1 className="mt-1 font-display text-3xl leading-none tracking-tight">La ficha de cada partido</h1>
           <p className="mt-2 max-w-xl text-sm text-muted">
-            Primero los que faltan por jugar, por hora. Los ya jugados están en Consulta.
+            Primero los que faltan por jugar, por hora. «Con cuota en casas» deja solo los partidos que una casa de
+            apuestas ofrece. Los ya jugados están en Consulta.
           </p>
           <span className="mt-3 block h-0.5 w-28 rounded-full bg-[#b7c7b0]" />
         </div>
@@ -90,6 +96,15 @@ function Home() {
           aria-label="Buscar equipo o competición"
         />
         <div className="flex flex-wrap gap-2">
+          <FilterChip
+            active={oddsFilter}
+            onClick={() => {
+              setOnlyOdds(!onlyOdds);
+              setCount(24);
+            }}
+          >
+            {withOddsCount > 0 ? `Con cuota en casas (${withOddsCount})` : "Con cuota en casas (aún sin leer)"}
+          </FilterChip>
           <FilterChip
             active={!onlyReview}
             onClick={() => {
