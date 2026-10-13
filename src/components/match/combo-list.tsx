@@ -87,8 +87,9 @@ export function ComboList({ which }: { which: "hoy" | "manana" }) {
         </h1>
         <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted">
           Lista de hasta 20 partidos individuales de {which === "hoy" ? "hoy" : "ese día"}, cada uno con su
-          probabilidad. No es una apuesta combinada. El lado de cada fila es el más probable según la
-          probabilidad publicada (mercado y modelo juntos). Si falta, dice {MISSING}.
+          probabilidad. No es una apuesta combinada. Entran solo partidos que una casa ofrece y se
+          eligen los de favorito más probable. El lado de cada fila es el más probable según la probabilidad
+          publicada (mercado y modelo juntos). Si falta, dice {MISSING}.
         </p>
         {board ? (
           <div className="mt-4">
@@ -116,8 +117,11 @@ export function ComboList({ which }: { which: "hoy" | "manana" }) {
           <section className="rounded-xl bg-surface p-5 shadow-[var(--shadow-border)]">
             <h2 className="font-display text-xl">{board.matches.length} partidos, cada uno por separado</h2>
             <p className="mt-2 text-sm leading-relaxed text-muted">
-              En el día hay {board.pool} partidos por jugar con historial de los dos. Aquí se listan{" "}
-              {board.matches.length}. Cada probabilidad es de ese partido solo.
+              {board.withOdds
+                ? `En el día hay ${board.pool} partidos por jugar con cuota en casas de apuestas.`
+                : `Para este día todavía no hay cuotas leídas: se toman los ${board.pool} partidos por jugar con probabilidad.`}{" "}
+              Aquí se listan los {board.matches.length} con el favorito más probable, ordenados por hora. Cada
+              probabilidad es de ese partido solo.
             </p>
             <dl className="mt-5 grid gap-3 sm:grid-cols-2">
               <div className="rounded-lg bg-elevated px-3 py-3">

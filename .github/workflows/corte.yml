@@ -9,9 +9,9 @@ on:
   workflow_dispatch:
     inputs:
       corte:
-        description: "Qué corte: noche o mediodia"
+        description: "Qué corte: noche, mediodia o tarde"
         type: choice
-        options: [noche, mediodia]
+        options: [noche, mediodia, tarde]
         default: noche
       forzar:
         description: "Repetirlo aunque ya se haya hecho hoy"

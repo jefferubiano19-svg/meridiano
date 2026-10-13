@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ApuestaRouteImport } from './routes/apuesta'
 import { Route as BuscarRouteImport } from './routes/buscar'
 import { Route as CargarRouteImport } from './routes/cargar'
 import { Route as CombinadaRouteImport } from './routes/combinada'
@@ -26,6 +27,11 @@ import { Route as PartidoIdRouteImport } from './routes/partido.$id'
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApuestaRoute = ApuestaRouteImport.update({
+  id: '/apuesta',
+  path: '/apuesta',
   getParentRoute: () => rootRouteImport,
 } as any)
 const BuscarRoute = BuscarRouteImport.update({
@@ -91,6 +97,7 @@ const PartidoIdRoute = PartidoIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/apuesta': typeof ApuestaRoute
   '/buscar': typeof BuscarRoute
   '/cargar': typeof CargarRoute
   '/combinada': typeof CombinadaRoute
@@ -106,6 +113,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/apuesta': typeof ApuestaRoute
   '/buscar': typeof BuscarRoute
   '/cargar': typeof CargarRoute
   '/combinada': typeof CombinadaRoute
@@ -122,6 +130,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/apuesta': typeof ApuestaRoute
   '/buscar': typeof BuscarRoute
   '/cargar': typeof CargarRoute
   '/combinada': typeof CombinadaRoute
@@ -139,6 +148,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/apuesta'
     | '/buscar'
     | '/cargar'
     | '/combinada'
@@ -154,6 +164,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/apuesta'
     | '/buscar'
     | '/cargar'
     | '/combinada'
@@ -169,6 +180,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/apuesta'
     | '/buscar'
     | '/cargar'
     | '/combinada'
@@ -185,6 +197,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ApuestaRoute: typeof ApuestaRoute
   BuscarRoute: typeof BuscarRoute
   CargarRoute: typeof CargarRoute
   CombinadaRoute: typeof CombinadaRoute
@@ -205,6 +218,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/apuesta': {
+      id: '/apuesta'
+      path: '/apuesta'
+      fullPath: '/apuesta'
+      preLoaderRoute: typeof ApuestaRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/buscar': {
@@ -306,6 +326,7 @@ const LigasRouteWithChildren = LigasRoute._addFileChildren(LigasRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ApuestaRoute: ApuestaRoute,
   BuscarRoute: BuscarRoute,
   CargarRoute: CargarRoute,
   CombinadaRoute: CombinadaRoute,

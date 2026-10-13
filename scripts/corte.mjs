@@ -11,13 +11,15 @@ const HEADERS = { "User-Agent": "MeridianoCorte/1.0" };
 const INCOMPATIBLE = /kings league|futsal|fútbol sala|futbol sala|beach soccer|fútbol playa|futbol playa|fútbol 7|futbol 7/i;
 const YOUTH = /sub[-\s]?\d+|\bu1[7-9]\b|\bu2[0-3]\b|juvenil|reservas?/i;
 /** Tiempo total del corte. GitHub Actions es gratis en repositorios públicos; el job tiene 150 min. */
-const BUDGET_MS = 110 * 60 * 1000;
+const BUDGET_MS = 120 * 60 * 1000;
 /** Hora de inicio del corte en curso (para el registro si el corte se cae). */
 let CUT_STARTED = null;
+/** Turno: noche (00:15), mediodia (12:00) o tarde (17:00, opcional). */
+const CUT_MODE = ["mediodia", "tarde"].includes(process.env.CORTE) ? process.env.CORTE : "noche";
 /** Partidos por corte a los que se les lee la pestaña Cuotas para el consenso (además del Combo). */
-const ODDS_CAP = 300;
+const ODDS_CAP = 450;
 /** Las cuotas del consenso no pueden comerse más de este tiempo del corte. */
-const ODDS_BUDGET_MS = 50 * 60 * 1000;
+const ODDS_BUDGET_MS = 75 * 60 * 1000;
 /** Una cuota solo cuenta si se lee al menos este tiempo antes del inicio. */
 const PREMATCH_MS = 10 * 60 * 1000;
 /** Tablas de posiciones que lee el corte de la noche: competición de la agenda → página de la liga en Flashscore. */
@@ -358,7 +360,15 @@ async function readOddsTable(page) {
   });
 }
 
-async function readOdds(page) {
+const ALL_MARKETS = [
+  { label: "1X2", id: "1x2" },
+  { label: "Más de/Menos de", id: "mas-menos" },
+  { label: "Ambos equipos marcarán", id: "ambos" },
+];
+/** Solo 1X2: es lo que decide el ganador y se lee en un tercio del tiempo (sin esperar pestañas que no existen). */
+const ONLY_1X2 = [ALL_MARKETS[0]];
+
+async function readOdds(page, markets = ALL_MARKETS) {
   const tab = page.locator("a,button").filter({ hasText: /^Cuotas$/ }).first();
   try {
     await tab.waitFor({ state: "visible", timeout: 8000 });
@@ -368,11 +378,7 @@ async function readOdds(page) {
   }
   await page.waitForTimeout(600);
   const books = [];
-  for (const market of [
-    { label: "1X2", id: "1x2" },
-    { label: "Más de/Menos de", id: "mas-menos" },
-    { label: "Ambos equipos marcarán", id: "ambos" },
-  ]) {
+  for (const market of markets) {
     await clickTab(page, market.label);
     for (const row of await readOddsTable(page)) books.push({ ...row, market: market.id });
   }
@@ -445,13 +451,17 @@ function storeOdds(results, started) {
       ...(withLine ? [{ text: String(book.line ?? ""), withdrawn: false }] : []),
       ...book.odds.map((price) => ({ text: Number(price).toFixed(2), withdrawn: Boolean(book.struck) })),
     ];
+    const previous = byId.get(result.id)?.markets ?? {};
+    const overUnder = pick("mas-menos").filter((book) => book.line && (book.book === "Wplay.co" || book.line === "2.5")).map((book) => ({ house: book.book, cells: cells(book, true) }));
+    const btts = pick("ambos").map((book) => ({ house: book.book, cells: cells(book, false) }));
     byId.set(result.id, {
       id: result.id,
       readAtBogota: result.at ?? started,
       markets: {
         "1X2": pick("1x2").filter((book) => book.odds.length === 3).map((book) => ({ house: book.book, cells: cells(book, false) })),
-        overUnder: pick("mas-menos").filter((book) => book.line && (book.book === "Wplay.co" || book.line === "2.5")).map((book) => ({ house: book.book, cells: cells(book, true) })),
-        btts: pick("ambos").map((book) => ({ house: book.book, cells: cells(book, false) })),
+        // Una lectura solo de 1X2 no borra las líneas de goles que ya se tenían.
+        overUnder: overUnder.length ? overUnder : (previous.overUnder ?? []),
+        btts: btts.length ? btts : (previous.btts ?? []),
       },
     });
     stored += 1;
@@ -539,7 +549,7 @@ function marksFromOdds(match, rows, at) {
 async function main() {
   // Un mismo corte (noche o mediodía) se hace una sola vez por día. Si GitHub o el disparador externo
   // lanzan otro igual ese día, termina sin tocar nada. FORZAR=si lo repite a propósito.
-  const mode = process.env.CORTE === "mediodia" ? "mediodia" : "noche";
+  const mode = CUT_MODE;
   const last = readJsonOptional("cut-coverage.json", {});
   const done = readJsonOptional("cut-done.json", {});
   if (process.env.FORZAR !== "si" && done[mode] === bogotaDay(0)) {
@@ -550,7 +560,8 @@ async function main() {
   const overBudget = () => Date.now() - cutStartedMs >= BUDGET_MS;
   const started = bogotaStamp();
   CUT_STARTED = started;
-  const noon = process.env.CORTE === "mediodia";
+  // Mediodía y tarde se comportan igual (sin tablas); la tarde existe para leer cuotas más cerca de los partidos de la noche.
+  const noon = mode !== "noche";
   const todayName = bogotaDay(0);
   const tomorrowName = bogotaDay(1);
   const yesterdayName = bogotaDay(-1);
@@ -734,7 +745,15 @@ async function main() {
         (tableRow(competition, row.home) && tableRow(competition, row.away)) ||
         BIG_COMPETITION.test(competition);
       // Todos los partidos de hoy por empezar. Primero los de liga fuerte, luego los que traen cuota en la Lite.
-      list.push({ id: row.id, home: row.home, away: row.away, kickoff, rank: strong ? 0 : keptOdds[row.id] ? 1 : 2 });
+      list.push({ id: row.id, home: row.home, away: row.away, kickoff, rank: strong ? 0 : keptOdds[row.id] ? 1 : 2, full: Boolean(strong) });
+    }
+    // Mañana: los partidos que una casa ya ofrece (cuota en la Lite), solo 1X2, después de todos los de hoy.
+    for (const row of oddsTomorrowHtml ? parseLite(oddsTomorrowHtml) : []) {
+      if (row.klass !== "sched" || !row.odds) continue;
+      if (INCOMPATIBLE.test(row.league) || YOUTH.test(`${row.league} ${row.home} ${row.away}`)) continue;
+      const clock = clockOf(row);
+      if (!clock) continue;
+      list.push({ id: row.id, home: row.home, away: row.away, kickoff: `${tomorrowName}T${clock}:00-05:00`, rank: 3, full: false });
     }
     // Por rango y luego por hora: lo que empieza antes se lee antes (las cuotas cuentan hasta 10 min antes del inicio).
     return list
@@ -742,12 +761,13 @@ async function main() {
       .slice(0, ODDS_CAP)
       .map(({ rank, ...row }) => row);
   })) ?? [];
+  const tomorrowTargets = oddsTargets.filter((row) => row.kickoff.startsWith(tomorrowName)).length;
   const oddsStartedMs = Date.now();
   const consensusRead = (await step("cuotas-consenso", () => browserPages(oddsTargets.map((row) => ({
     ...row,
     kind: "cuotas",
     url: `https://www.flashscore.co/partido/${row.id}/`,
-    read: async (page) => readOdds(page),
+    read: async (page) => readOdds(page, row.full ? ALL_MARKETS : ONLY_1X2),
   })), () => Date.now() - oddsStartedMs >= ODDS_BUDGET_MS || overBudget()))) ?? [];
   const consensusStored = storeOdds(consensusRead, started);
   const readById = new Map(consensusRead.filter((row) => row.books).map((row) => [row.id, row]));
@@ -975,7 +995,7 @@ async function main() {
     startedAtBogota: started,
     finishedAtBogota: bogotaStamp(),
     noonCut: noon,
-    corte: noon ? "mediodia" : "noche",
+    corte: mode,
     agendaToday: today.length,
     agendaTomorrow: tomorrow.length,
     updatedToday,
@@ -1009,6 +1029,8 @@ async function main() {
     tablesDebug,
     competitionsRenamed: renamed,
     consensusTargets: oddsTargets.length,
+    consensusTomorrowTargets: tomorrowTargets,
+    consensusTomorrowRead: consensusRead.filter((row) => row.books && String(row.kickoff ?? "").startsWith(tomorrowName)).length,
     consensusRead: consensusStored,
     consensusWith3Houses: consensusRead.filter((row) => liveHouses(row) >= 3).length,
     predictionsWithConsensus: fresh.filter((row) => row.consensus).length,
@@ -1020,7 +1042,7 @@ async function main() {
   writeJson("cut-coverage.json", coverage);
   await finishCut(coverage, last);
   // Queda marcado como hecho solo si se leyó la agenda del día.
-  if (today.length > 0) writeJson("cut-done.json", { ...readJsonOptional("cut-done.json", {}), [noon ? "mediodia" : "noche"]: todayName });
+  if (today.length > 0) writeJson("cut-done.json", { ...readJsonOptional("cut-done.json", {}), [mode]: todayName });
   console.log(JSON.stringify(coverage, null, 2));
 }
 
@@ -1159,7 +1181,7 @@ if (process.argv[2] === "repair") {
     failures.push({ step: "corte", error: error instanceof Error ? error.message : String(error) });
     const fatal = {
       cut: bogotaDay(0),
-      corte: process.env.CORTE === "mediodia" ? "mediodia" : "noche",
+      corte: CUT_MODE,
       startedAtBogota: CUT_STARTED,
       finishedAtBogota: bogotaStamp(),
       failures,

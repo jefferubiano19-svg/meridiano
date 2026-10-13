@@ -316,7 +316,7 @@ export function comboBoard(which: "hoy" | "manana"): ComboBoard {
     matches.length > 0 && matches.every((match) => match.pickProbability != null)
       ? matches.reduce((product, match) => product * (match.pickProbability as number), 1)
       : null;
-  return { day, pool: ticket.today, joint, matches };
+  return { day, pool: ticket.today, withOdds: ticket.withOdds, joint, matches };
 }
 
 export function ficha(id: string): MatchReading | null {

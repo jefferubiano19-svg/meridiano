@@ -30,8 +30,10 @@ export interface CombinadaTicket {
   probability: number;
   bookOdds: number | null;
   fairOdds: number;
-  /** Partidos de hoy que siguen sin empezar y tienen historial de los dos. */
+  /** Partidos del día por jugar entre los que se eligió (con cuota, si hay alguna leída). */
   today: number;
+  /** true si la lista se armó solo con partidos que tienen cuota en casas. */
+  withOdds: boolean;
   shortfall: number;
 }
 
@@ -99,33 +101,19 @@ function buildTicket(day: string, limit: number): CombinadaTicket {
     if (match.fixtureId && getFixture(match.fixtureId)) return true;
     return publishedFor(match.id, match.kickoff, match.competition) != null;
   });
-  // Primero los partidos que una casa ofrece (el corte leyó su cuota); los demás solo si faltan.
-  const offered = (match: AgendaMatch) => (hasMarketOdds(match.id) ? 0 : 1);
-  const byKick = (a: AgendaMatch, b: AgendaMatch) => offered(a) - offered(b) || a.kickoff.localeCompare(b.kickoff);
-  const withSheet = pool.filter((match) => match.fixtureId && getFixture(match.fixtureId)).sort(byKick);
-  const rest = pool
-    .filter((match) => !(match.fixtureId && getFixture(match.fixtureId)))
-    .sort((a, b) => byKick(a, b) || a.competition.localeCompare(b.competition, "es"));
-
-  const picked: AgendaMatch[] = [];
-  const seen = new Set<string>();
-  for (const match of withSheet) {
-    if (picked.length >= limit) break;
-    picked.push(match);
-    seen.add(match.competition);
-  }
-  for (const match of rest) {
-    if (picked.length >= limit) break;
-    if (seen.has(match.competition)) continue;
-    if (!publishedFor(match.id, match.kickoff, match.competition)) continue;
-    seen.add(match.competition);
-    picked.push(match);
-  }
-  picked.sort((a, b) => a.kickoff.localeCompare(b.kickoff));
-  const legs = picked.flatMap((match) => {
+  // Criterio (13 oct 2026): solo partidos que una casa ofrece (el corte leyó su cuota) y, entre ellos,
+  // los 20 con el favorito más probable según la probabilidad publicada. Si para ese día todavía no hay
+  // ninguna cuota leída, se usan todos los partidos con probabilidad, con el mismo orden.
+  const all = pool.flatMap((match) => {
     const leg = toLeg(match);
     return leg ? [leg] : [];
   });
+  const offered = all.filter((leg) => hasMarketOdds(leg.id));
+  const usable = offered.length > 0 ? offered : all;
+  const legs = [...usable]
+    .sort((a, b) => b.probability - a.probability || a.kickoff.localeCompare(b.kickoff))
+    .slice(0, limit)
+    .sort((a, b) => a.kickoff.localeCompare(b.kickoff));
   const probability = legs.reduce((product, leg) => product * leg.probability, legs.length ? 1 : 0);
   const everyPrice = legs.length === limit && legs.every((leg) => leg.odds != null);
   const bookOdds = everyPrice ? legs.reduce((product, leg) => product * (leg.odds as number), 1) : null;
@@ -135,7 +123,8 @@ function buildTicket(day: string, limit: number): CombinadaTicket {
     probability,
     bookOdds,
     fairOdds: probability > 0 ? 1 / probability : Number.POSITIVE_INFINITY,
-    today: pool.length,
+    today: usable.length,
+    withOdds: offered.length > 0,
     shortfall: Math.max(0, limit - legs.length),
   };
 }

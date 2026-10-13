@@ -125,7 +125,7 @@ function stageOf(n: number): Review["evaluation"]["stage"] {
 /** Hora programada del corte (Bogotá) para su fecha: noche 00:15, mediodía 12:00. */
 function scheduledMs(row: CutRow): number | null {
   if (!row.cut) return null;
-  const clock = row.corte === "mediodia" ? "12:00" : "00:15";
+  const clock = row.corte === "mediodia" ? "12:00" : row.corte === "tarde" ? "17:00" : "00:15";
   const ms = Date.parse(`${row.cut}T${clock}:00-05:00`);
   return Number.isFinite(ms) ? ms : null;
 }

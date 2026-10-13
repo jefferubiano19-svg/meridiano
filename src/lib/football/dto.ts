@@ -55,6 +55,8 @@ export interface DayBoard {
 export interface ComboBoard {
   day: string;
   pool: number;
+  /** La lista usa solo partidos con cuota en casas. */
+  withOdds?: boolean;
   joint: number | null;
   matches: ComboMatch[];
 }
