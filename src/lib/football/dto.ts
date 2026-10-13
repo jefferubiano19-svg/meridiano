@@ -31,6 +31,8 @@ export interface MatchReading {
   published: Way | null;
   model: Way | null;
   consensus: Way | null;
+  /** Sin consenso de 3 casas: probabilidad sin margen de Wplay, si se usó en la publicada. */
+  wplay?: Way | null;
   level: string;
   confidence: string;
   revisar: boolean;
@@ -85,48 +87,27 @@ export interface SearchBoard {
   note: string;
 }
 
-export interface ModeloBin {
-  label: string;
-  n: number;
-  hit: number;
-  rate: number | null;
-}
-
 export interface ModeloBundle {
-  fetchedAt: string;
-  sources: string[];
+  /** Último corte registrado (data/cut-coverage.json). */
+  lastCut: {
+    corte: string | null;
+    startedAtBogota: string | null;
+    finishedAtBogota: string | null;
+    fatal: boolean;
+    predictionsSaved: number | null;
+    predictionsWithConsensus: number | null;
+    predictionsWithWplay: number | null;
+    tablesRead: number | null;
+    failures: number;
+    agendaToday: number | null;
+    agendaTomorrow: number | null;
+  };
+  /** Revisión automática que escribe el corte (data/review.json). Null si aún no hay. */
+  review: import("./review").Review | null;
   dixonRule: string;
   dixonAt: string | null;
   dixon: { league: string; published: boolean; rpsModel: number | null; rpsBaseline: number | null; rpsMarket: number | null; n: number | null }[];
-  report: {
-    rule: string;
-    playedInCut: number;
-    scored: number;
-    brier: number | null;
-    rps: number | null;
-    bins: ModeloBin[];
-  };
-  cut: {
-    readAtBogota: string;
-    today: number;
-    tomorrow: number;
-    yesterday: number;
-    oddsWith1x2: number;
-    oddsListed: number;
-  };
-  variant: { distanciaAnterior: number; distancia: number };
-  coveragePoints: { id: string; label: string; read: number; expected?: number | null; note: string }[];
-  evaluations: {
-    evaluated: number;
-    goal: number;
-    predictionRows: number;
-    comparable: number;
-    rpsModel: number | null;
-    rpsPublished: number | null;
-    rpsConsensus: number | null;
-    distance: number | null;
-    distanceRule: string;
-    valueMarks: number;
-    clvMean: number | null;
-  };
+  tables: { competition: string; readAtBogota: string | null; teams: number }[];
+  ratings: { asOf: string | null; teams: number; games: number };
+  nationEloAt: string | null;
 }

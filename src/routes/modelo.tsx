@@ -1,17 +1,137 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { ExportBar } from "@/components/export-bar";
 import type { ModeloBundle } from "@/lib/football/dto";
 import { loadModelo } from "@/lib/football/pages";
+import type { Light, Stat } from "@/lib/football/review";
 
 export const Route = createFileRoute("/modelo")({ component: ModelPage });
 
+const LIGHT_TEXT: Record<Light, string> = {
+  verde: "Bien",
+  amarillo: "Atención",
+  rojo: "Falla",
+  gris: "Sin muestra",
+};
+
+const LIGHT_CLASS: Record<Light, string> = {
+  verde: "text-value",
+  amarillo: "text-warn",
+  rojo: "text-danger",
+  gris: "text-subtle",
+};
+
+function fix(value: number | null | undefined, digits = 4): string {
+  return value == null || !Number.isFinite(value) ? "—" : value.toFixed(digits).replace(".", ",");
+}
+
+function signed(value: number | null | undefined, digits = 4): string {
+  if (value == null || !Number.isFinite(value)) return "—";
+  return `${value > 0 ? "+" : ""}${fix(value, digits)}`;
+}
+
+function pct(value: number | null | undefined): string {
+  return value == null || !Number.isFinite(value) ? "—" : `${Math.round(value * 100)} %`;
+}
+
+function interval(stat: Stat): string {
+  if (stat.mean == null) return "sin datos";
+  if (stat.low == null || stat.high == null) return `${signed(stat.mean)} (n ${stat.n})`;
+  return `${signed(stat.mean)} · IC 95 % ${signed(stat.low)} a ${signed(stat.high)} · n ${stat.n}`;
+}
+
+function corteName(value: string | null): string {
+  return value === "mediodia" ? "mediodía" : (value ?? "—");
+}
+
+function ci(stat: Stat): string {
+  return stat.low == null || stat.high == null ? "—" : `${signed(stat.low, 3)} a ${signed(stat.high, 3)}`;
+}
+
+function word(stat: Stat, minimum: number): string {
+  if (stat.n < minimum || stat.low == null || stat.high == null) return "Falta muestra";
+  if (stat.high < 0) return "Mejora";
+  if (stat.low > 0) return "Empeora";
+  return "Igual";
+}
+
+/** Lectura de una diferencia de RPS (negativa = mejora). */
+function verdict(stat: Stat, minimum: number): string {
+  if (stat.n < minimum || stat.low == null || stat.high == null) return `Sin conclusión: faltan partidos (mínimo ${minimum}).`;
+  if (stat.high < 0) return "Mejora: todo el intervalo está bajo cero.";
+  if (stat.low > 0) return "Empeora: todo el intervalo está sobre cero.";
+  return "Sin diferencia demostrable: el intervalo cruza el cero.";
+}
+
+function bogotaClock(iso: string | null): string {
+  if (!iso) return "—";
+  const ms = Date.parse(iso);
+  if (!Number.isFinite(ms)) return iso;
+  return new Date(ms).toLocaleString("es-CO", {
+    timeZone: "America/Bogota",
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function Section({ title, children, note }: { title: string; children: ReactNode; note?: ReactNode }) {
+  return (
+    <section className="rounded-xl bg-surface p-5 shadow-[var(--shadow-border)]">
+      <h2 className="font-display text-xl">{title}</h2>
+      {note ? <p className="mt-2 text-sm leading-relaxed text-muted">{note}</p> : null}
+      <div className="mt-4">{children}</div>
+    </section>
+  );
+}
+
+function LightCard({ label, light, detail }: { label: string; light: Light; detail: string }) {
+  return (
+    <div className="rounded-lg bg-elevated p-4">
+      <p className="text-[11px] uppercase tracking-[0.14em] text-subtle">{label}</p>
+      <p className={`mt-1 font-display text-lg ${LIGHT_CLASS[light]}`}>{LIGHT_TEXT[light]}</p>
+      <p className="mt-1 text-xs leading-relaxed text-muted">{detail}</p>
+    </div>
+  );
+}
+
+function Table({ head, rows }: { head: string[]; rows: (string | number)[][] }) {
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-left text-sm">
+        <thead className="text-[11px] uppercase tracking-wide text-subtle">
+          <tr>
+            {head.map((cell) => (
+              <th key={cell} className="whitespace-nowrap py-2 pr-4 font-normal">
+                {cell}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, index) => (
+            <tr key={index} className="border-t border-border">
+              {row.map((cell, column) => (
+                <td key={column} className={`whitespace-nowrap py-2 pr-4 ${column > 0 ? "tabular-nums" : ""}`}>
+                  {cell}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function ModelPage() {
-  const [query, setQuery] = useState("");
   const [bundle, setBundle] = useState<ModeloBundle | null>(null);
   const [failed, setFailed] = useState(false);
+  const [now, setNow] = useState<number | null>(null);
   useEffect(() => {
     let live = true;
+    setNow(Date.now());
     void loadModelo()
       .then((next) => {
         if (live) setBundle(next);
@@ -28,19 +148,52 @@ function ModelPage() {
     return <p className="text-sm text-muted">{failed ? "No se pudo cargar el modelo." : "Cargando el modelo…"}</p>;
   }
 
-  const { report, evaluations: ev, cut, variant } = bundle;
-  const sources = bundle.sources.filter((source) => source.toLowerCase().includes(query.trim().toLowerCase()));
+  const { lastCut, review } = bundle;
+  const finished = Date.parse(lastCut.finishedAtBogota ?? "");
+  const hours = now != null && Number.isFinite(finished) ? (now - finished) / 3600000 : null;
+  const ev = review?.evaluation;
+
+  // Una sola línea de estado para quien usa la app: lo peor entre cortes, datos y antigüedad.
+  const status = (() => {
+    if (lastCut.fatal) return { light: "rojo" as Light, text: "Atención: el último corte se cayó antes de terminar. Los datos pueden estar incompletos." };
+    if (hours != null && hours > 18) return { light: "rojo" as Light, text: `Atención: el último corte fue hace ${Math.floor(hours)} horas. Los datos de hoy pueden estar incompletos.` };
+    if (review?.cuts.light === "rojo") return { light: "rojo" as Light, text: "Atención: faltaron cortes esta semana." };
+    if (review?.anomalies.light === "rojo") return { light: "rojo" as Light, text: "Atención: hay datos dañados. Revisa el detalle técnico." };
+    if (review && review.cuts.done < review.cuts.expected) return { light: "amarillo" as Light, text: "Funciona, pero faltó algún corte esta semana." };
+    return { light: "verde" as Light, text: "Todo normal: los cortes están corriendo y los datos están al día." };
+  })();
+
+  const exportRows = (): string[][] => {
+    const rows: string[][] = [
+      ["Último corte", `${corteName(lastCut.corte)} · ${bogotaClock(lastCut.startedAtBogota)}`],
+      ["Predicciones del corte", String(lastCut.predictionsSaved ?? "—")],
+    ];
+    if (review && ev) {
+      rows.push(
+        ["Revisión", review.generatedAt],
+        ["Cortes", `${LIGHT_TEXT[review.cuts.light]} · ${review.cuts.done} de ${review.cuts.expected} · ${review.cuts.late} tarde`],
+        ["Etapa de evaluación", `${ev.stage} · ${ev.comparable} comparables de ${ev.goal}`],
+        ["RPS publicada", fix(ev.rpsPublished)],
+        ["RPS consenso", fix(ev.rpsConsensus)],
+        ["Distancia publicada − consenso", interval(ev.distance)],
+        ["Wplay como mercado (publicada − modelo)", interval(review.wplayMarket.diff)],
+        ...review.shadows.map((shadow) => [`Sombra ${shadow.label}`, interval(shadow.diff)]),
+        ...review.calibration.map((bin) => [`Calibración ${bin.label}`, `${bin.n} casos · esperado ${pct(bin.expected)} · real ${pct(bin.observed)}`]),
+        ...review.anomalies.items.map((item) => [`Anomalía: ${item.label}`, String(item.count)]),
+      );
+    }
+    return rows;
+  };
 
   return (
     <div className="space-y-8">
       <header>
         <p className="text-[11px] uppercase tracking-[0.18em] text-subtle">Transparencia</p>
         <h1 className="mt-2 font-display text-4xl tracking-tight">Cómo estima Meridiano</h1>
-        <p className="mt-3 max-w-2xl text-sm text-muted">
-          Las probabilidades las calcula código, no un modelo de lenguaje. Cada partido usa el nivel más alto
-          con datos: A es Dixon-Coles si football-data.co.uk pasó el control de RPS; B es la tabla ESPN y
-          el xG de FotMob; C es solo la forma reciente de goles. El mercado se lee con Shin y, si no
-          converge, con el proporcional. Una cuota con margen fuera de 0 a 15% se descarta.
+        <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted">
+          Las probabilidades las calcula código, sin modelo de lenguaje. Dos cortes al día (00:15 y 12:00, hora de
+          Bogotá) leen Flashscore, guardan una predicción por partido antes del inicio y, al otro día, la comparan con
+          el resultado. Esta página se arma con lo que escribió el último corte.
         </p>
         <div className="mt-4">
           <ExportBar
@@ -49,168 +202,220 @@ function ModelPage() {
             build={() => ({
               name: "Modelo",
               headers: ["Apartado", "Detalle"],
-              rows: [
-                ["Corte", bundle.fetchedAt],
-                ["Brier", String(report.brier ?? "")],
-                ["RPS", String(report.rps ?? "")],
-                ["Finalizados", String(report.playedInCut)],
-                ["Con historial", String(report.scored)],
-                ["Regla", report.rule],
-                ...report.bins.map((bin) => [
-                  bin.label,
-                  `${bin.n} casos${bin.n ? ` · se cumplió ${bin.hit} (${Math.round((bin.rate ?? 0) * 100)}%)` : ""}`,
-                ]),
-                ...sources.map((source) => ["Fuente", source]),
-              ],
-              note: "Con la muestra de este corte no se puede decir que el modelo esté calibrado.",
+              rows: exportRows(),
+              note: "RPS: error de la probabilidad 1X2 (0 es perfecto; más bajo es mejor). IC 95 %: intervalo de confianza.",
             })}
           />
         </div>
       </header>
 
-      <section className="rounded-xl bg-surface p-5 shadow-[var(--shadow-border)]">
-        <h2 className="font-display text-xl">Parámetros que usa el código</h2>
-        <p className="mt-2 text-sm leading-relaxed text-muted">
-          Vigentes el 5 oct 2026. Si esta lista no coincide con el cálculo, manda el código. No se dice que
-          el modelo esté calibrado: la muestra publicada sigue bajo 500 partidos.
+      <Section title="Estado">
+        <p className={`text-sm ${status.light === "verde" ? "text-value" : status.light === "rojo" ? "text-danger" : "text-warn"}`}>
+          {status.text}
         </p>
-        <ul className="mt-4 space-y-2 text-sm text-muted">
-          <li>Nivel A: Dixon-Coles, vida media 120 días, ξ = ln(2)/120. Peso 0,5 de la fuerza de los cierres, elegido en 2025/26. Localía por liga ya medida. Sin temperatura. En los mismos 1.066 partidos, la distancia con signo (modelo − Shin) pasa de +{variant.distanciaAnterior.toFixed(3)} a +{variant.distancia.toFixed(3)}. Positiva: el mercado sigue siendo mejor. Una liga no entra ni sale hasta 300 partidos fuera de muestra. Ninguna llega: la Conference tiene 121.</li>
-          <li>Ascendidos con menos de 6 partidos en su liga: el ajuste con la división anterior no superó al respaldo (RPS 0,255 contra 0,213 en 76 partidos). Esos partidos quedan en Nivel B o C.</li>
-          <li>Selecciones: Elo de eloratings.net anterior al partido. La regresión es de la propia competición (Nations League, 702; amistosos, 2.372) y lleva temperatura 0,95, estimada antes de 2025. La localía va dentro de esa regresión. Si la sede publicada es neutral, la localía es 0. No se suma otro +100 de Elo encima. No se usa la tabla de liga.</li>
-          <li>Nivel B: tabla de temporada. Contracción de 6 partidos si hay xG. Con 4 partidos previos de cada uno, mitad temporada y mitad serie de 120 días. Tope de local ±15 %.</li>
-          <li>Nivel C: solo goles anteriores al inicio, vida media 120 días, contracción de 8 partidos hacia la media de la liga. 1,25 solo si la liga no tiene partidos previos. Localía de la liga, tope ±15 %. Si no hay media, local × 1,10 y visita × 0,91. Rho −0,08. Una tarjeta así no es una ficha completa.</li>
-          <li>Cada gol esperado queda entre 0,20 y 4,00. La matriz va de 0-0 a 10-10 y se muestra hasta 6-6. Cuota justa entre 1,09 y 28,57.</li>
-          <li>Probabilidad publicada: con al menos 3 casas vigentes, 80 % consenso y 20 % modelo, en log-odds. Sin consenso, el modelo. El 0,8 es fijo hasta estimarlo por liga. El modelo puro, el consenso y la publicada se guardan por separado.</li>
-          <li>Valor por modelo: apagado. Solo se activaría si el Nivel A baja el RPS del consenso con 300 partidos de esa liga y el CLV de 100 marcas es positivo. Si modelo y consenso se separan más de 10 puntos, es revisar, nunca valor.</li>
-          <li>Valor por casas: valor esperado del consenso, sin la casa juzgada, de 3 % o más, cuota vigente, al menos 3 casas restantes y más de 10 minutos para el inicio.</li>
-          <li>Congelamiento: no hay más ajustes de parámetros hasta 500 predicciones evaluadas. Hoy hay {ev.predictionRows} filas guardadas y {ev.evaluated} evaluadas de {ev.goal}. La recolección de datos no se congela.</li>
-          <li>Córners: solo contra una línea publicada. Sin línea, el mercado queda en blanco.</li>
-          <li>Kings League, fútbol sala, playa y fútbol 7: sin probabilidad. Descanso menor a 4 días: ataque −3 %. Bajas, rotación y técnico: 0 mientras no estén en el corte. H2H: 15 % solo en Nivel B o C, y solo con 3 enfrentamientos en tres años.</li>
-        </ul>
-      </section>
-
-      <section className="rounded-xl bg-surface p-5 shadow-[var(--shadow-border)]">
-        <h2 className="font-display text-xl">Registro del corte</h2>
-        <ul className="mt-4 space-y-2 text-sm text-muted">
-          <li>Agenda: Flashscore.co, contrastada con FotMob, 3 oct 2026, 16:19 Bogotá. 5.421 partidos. BeSoccer bloqueó la consulta.</li>
-          <li>Corte Lite, {cut.readAtBogota}, hora de Bogotá. Hoy {cut.today} partidos. Mañana {cut.tomorrow}. Ayer {cut.yesterday} en la página de resultados. Cuotas 1X2 de Wplay: {cut.oddsWith1x2} de {cut.oddsListed}. Ninguna salió del margen 0 a 15 %.</li>
-          <li>Fichas y forma: Flashscore, 3 oct 2026. 158 fichas de convocatoria. La forma de la agenda cubre casi todos los partidos y solo trae goles.</li>
-          <li>Tablas: ESPN, 3 oct 2026, 07:09 UTC. 357 equipos y 234 partidos con ficha de temporada. xG y córners a favor: FotMob, mismo corte.</li>
-          <li>Validación de www.flashscore.co: 5 oct 2026, superada en clasificaciones, estadísticas de ficha y cuotas. Feed de resultados: 10 de 10 marcadores. Cuotas por casa: 1X2 de Wplay idéntico a la Lite en 16 de 18 fichas.</li>
-          <li>football-data.co.uk: legible el 5 oct 2026, 38 ligas con cuotas de cierre. El Nivel A usa esos cierres. Understat no está en el corte.</li>
-          <li>Ampliación desde el corte del 6 oct: fichas de ayer, alineaciones del Combo, bajas de Transfermarkt y ClubElo. Se guardan con fuente y hora. No entran al cálculo hasta que el backtest lo apruebe.</li>
-          {bundle.coveragePoints.map((point) => (
-            <li key={point.id}>
-              {point.label}: {point.read} leídos{point.expected != null ? ` de ${point.expected}` : ""}. {point.note}
-            </li>
-          ))}
-          <li>Elo de selecciones: eloratings.net, 5 oct 2026. ClubElo respondió 502.</li>
-          <li>Registro de predicciones: {ev.predictionRows} filas, {ev.evaluated} evaluadas de {ev.goal}. Una fila no se edita. Marcas de valor: {ev.valueMarks}. CLV promedio: {ev.clvMean == null ? "sin cierre" : Number(ev.clvMean).toFixed(3)}.</li>
-          <li>Muestra del corte: {report.scored} partidos, Brier {report.brier ?? "—"}, RPS {report.rps ?? "—"}. Con menos de 500 no se dice que el modelo esté calibrado. Una tarjeta solo con goles previos es nivel C, no una ficha completa.</li>
-        </ul>
-      </section>
-
-      <section className="rounded-xl bg-surface p-5 shadow-[var(--shadow-border)]">
-        <h2 className="font-display text-xl">Evaluación en vivo</h2>
-        <ul className="mt-4 space-y-2 text-sm text-muted">
-          <li>Partidos evaluados: {ev.evaluated} de {ev.goal}. Con menos de 500 no se dice que el modelo esté calibrado.</li>
-          <li>
-            Distancia de la publicada al mercado, con signo:{" "}
-            {ev.distance == null ? "—" : `${ev.distance > 0 ? "+" : ""}${Number(ev.distance).toFixed(4)}`}
-            . {ev.distanceRule}
-          </li>
-          <li>Marcas de valor: {ev.valueMarks}.</li>
-          <li>CLV promedio: {ev.clvMean == null ? "sin cierre" : Number(ev.clvMean).toFixed(3)}.</li>
-          <li>
-            RPS en los mismos {ev.comparable} partidos: modelo{" "}
-            {ev.rpsModel == null ? "—" : Number(ev.rpsModel).toFixed(4)}, publicada{" "}
-            {ev.rpsPublished == null ? "—" : Number(ev.rpsPublished).toFixed(4)}, consenso{" "}
-            {ev.rpsConsensus == null ? "—" : Number(ev.rpsConsensus).toFixed(4)}.
-          </li>
-        </ul>
-      </section>
-
-      <section className="rounded-xl bg-surface p-5 shadow-[var(--shadow-border)]">
-        <h2 className="font-display text-xl">Calibración del corte</h2>
-        <p className="mt-2 text-sm leading-relaxed text-muted">
-          {report.rule} Partidos finalizados en el corte: {report.playedInCut}. Con historial previo
-          suficiente: {report.scored}. Brier medio {report.brier ?? "—"}. RPS medio {report.rps ?? "—"}.
-          Un Brier de 0 sería perfecto y uno cercano a 0,67 no mejora al azar. Con {report.scored}{" "}
-          partidos no se puede decir que el modelo esté calibrado.
+        <p className="mt-1 text-xs text-subtle">
+          Último corte: {corteName(lastCut.corte)}, {bogotaClock(lastCut.finishedAtBogota)}
+          {hours != null ? ` (hace ${hours < 1 ? "menos de 1 hora" : `${Math.floor(hours)} h`})` : ""}. Próximo: 00:15 o
+          12:00, hora de Bogotá.
         </p>
-        <div className="mt-4 overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="text-[11px] uppercase tracking-wide text-subtle">
-              <tr>
-                <th className="py-2 pr-4">Probabilidad del favorito</th>
-                <th className="py-2 pr-4">Casos</th>
-                <th className="py-2">Se cumplió</th>
-              </tr>
-            </thead>
-            <tbody>
-              {report.bins.map((bin) => (
-                <tr key={bin.label} className="border-t border-line">
-                  <td className="py-2 pr-4">{bin.label}</td>
-                  <td className="py-2 pr-4 tabular-nums">{bin.n}</td>
-                  <td className="py-2 tabular-nums">{bin.n ? `${bin.hit} (${Math.round((bin.rate ?? 0) * 100)}%)` : "—"}</td>
-                </tr>
+      </Section>
+
+      <Section title="Cómo se calcula">
+        <ul className="space-y-2 text-sm leading-relaxed text-muted">
+          <li>
+            Cada partido recibe la probabilidad del mejor modelo que tenga datos para los dos equipos:
+          </li>
+          <li>
+            <strong className="text-fg">Nivel A</strong>: modelo propio de cada una de 16 ligas principales, ajustado con
+            sus resultados y cuotas de cierre.
+          </li>
+          <li>
+            <strong className="text-fg">Nivel B</strong>: fuerza de ataque y defensa de cada equipo, calculada con todos
+            sus resultados recientes y teniendo en cuenta contra quién los logró. Se actualiza en cada corte.
+          </li>
+          <li>
+            <strong className="text-fg">Nivel C</strong>: respaldo con los goles recientes, cuando el equipo no tiene
+            suficientes datos para el Nivel B.
+          </li>
+          <li>
+            <strong className="text-fg">Selecciones</strong>: Elo de eloratings.net.
+          </li>
+          <li>
+            <strong className="text-fg">Nivel M</strong>: equipos sin datos pero con cuotas: se muestra la probabilidad
+            del mercado, sin el margen de la casa.
+          </li>
+          <li>
+            <strong className="text-fg">Probabilidad publicada</strong>: si hay cuotas, 80 % mercado (consenso de 3 o
+            más casas, o Wplay si no hay consenso) y 20 % modelo. Sin cuotas, solo el modelo.
+          </li>
+          <li>
+            Marca de valor: solo cuando una casa paga más que el consenso de las demás (3 % o más). El modelo solo nunca
+            marca valor.
+          </li>
+          <li>
+            No entran: bajas, rotaciones ni cambio de técnico (no hay fuente estable), clasificación global en
+            eliminatorias, Kings League, fútbol sala, playa y fútbol 7. Juveniles y reservas no van a la combinada.
+          </li>
+          <li>Ninguna probabilidad es una garantía.</li>
+        </ul>
+      </Section>
+
+      <details className="rounded-xl bg-surface p-5 shadow-[var(--shadow-border)]">
+        <summary className="cursor-pointer font-display text-xl">Detalle técnico</summary>
+        <p className="mt-2 text-sm text-muted">
+          Mediciones automáticas de cada corte. Sirven para detectar fallas; no cambian ninguna probabilidad.
+        </p>
+        <div className="mt-6 space-y-8">
+        {review && ev ? (
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <LightCard
+              label="Cortes (7 días)"
+              light={review.cuts.light}
+              detail={`${review.cuts.done} de ${review.cuts.expected} turnos hechos · ${review.cuts.late} con más de 15 min de retraso · ${review.cuts.fatal} caídos.`}
+            />
+            <LightCard
+              label="Precisión"
+              light={ev.light}
+              detail={`${ev.stage}: ${ev.comparable} partidos comparables con el mercado, meta ${ev.goal}.`}
+            />
+            <LightCard
+              label="Datos"
+              light={review.anomalies.light}
+              detail={`${review.anomalies.items.filter((item) => item.count > 0 && item.key !== "conflictos").length} tipos de anomalía con casos.`}
+            />
+            <LightCard
+              label="Valor (CLV)"
+              light={review.value.withClose >= 100 ? (review.value.clv.low != null && review.value.clv.low > 0 ? "verde" : "amarillo") : "gris"}
+              detail={`${review.value.marks} marcas, ${review.value.withClose} con cuota de cierre. ${review.value.stage}.`}
+            />
+          </div>
+        ) : null}
+      {review && ev ? (
+        <>
+          <Section
+            title="Precisión"
+            note={
+              <>
+                RPS mide el error de la probabilidad 1X2: 0 es perfecto, más bajo es mejor. La comparación justa es en
+                los mismos partidos que tienen consenso. Etapas: menos de 150 comparables, muestra insuficiente; 150 a
+                499, lectura preliminar; 500 o más, medición formal.
+              </>
+            }
+          >
+            <p className="text-sm text-muted">
+              Evaluados {ev.evaluated}. Comparables con consenso {ev.comparable} de {ev.goal}. RPS en esos partidos:
+              modelo {fix(ev.rpsModel)}, publicada {fix(ev.rpsPublished)}, consenso {fix(ev.rpsConsensus)}.
+            </p>
+            <p className="mt-2 text-sm text-muted">
+              Distancia publicada − consenso: {interval(ev.distance)}. {verdict(ev.distance, 150)}
+            </p>
+            <div className="mt-4">
+              <Table
+                head={["Nivel", "Evaluados", "RPS", "Con consenso", "Dist.", "IC 95 %"]}
+                rows={ev.byLevel.map((row) => [
+                  row.level,
+                  row.n,
+                  fix(row.rpsPublished, 3),
+                  row.comparable,
+                  signed(row.distance.mean, 3),
+                  ci(row.distance),
+                ])}
+              />
+            </div>
+          </Section>
+
+          <Section
+            title="Mercado y sombras"
+            note="Diferencia de RPS contra la publicada en los mismos partidos. Negativa: la variante acierta más."
+          >
+            <p className="text-sm text-muted">
+              Wplay como mercado (publicada contra modelo solo): {interval(review.wplayMarket.diff)}.{" "}
+              {verdict(review.wplayMarket.diff, 150)}
+            </p>
+            <div className="mt-4">
+              <Table
+                head={["Sombra", "Partidos", "Dif.", "IC 95 %", "Lectura"]}
+                rows={review.shadows.map((shadow) => [
+                  shadow.label,
+                  shadow.diff.n,
+                  signed(shadow.diff.mean, 3),
+                  ci(shadow.diff),
+                  word(shadow.diff, 500),
+                ])}
+              />
+            </div>
+          </Section>
+
+          <Section
+            title="Calibración"
+            note="Probabilidad publicada del favorito contra la frecuencia con que ganó. Calibrado: las dos columnas parecidas."
+          >
+            <Table
+              head={["Favorito", "Casos", "Esperado", "Real"]}
+              rows={review.calibration.map((bin) => [bin.label, bin.n, pct(bin.expected), pct(bin.observed)])}
+            />
+          </Section>
+
+          <Section title="Cortes de los últimos 7 días">
+            <Table
+              head={["Inicio", "Corte", "Retraso", "Predicciones", "Con consenso", "Fallos"]}
+              rows={[...review.cuts.list]
+                .reverse()
+                .map((row) => [
+                  bogotaClock(row.when),
+                  corteName(row.corte),
+                  row.delayMin == null ? "—" : `${row.delayMin} min`,
+                  row.predictions ?? "—",
+                  row.withConsensus ?? "—",
+                  row.failures,
+                ])}
+            />
+          </Section>
+
+          <Section title="Anomalías de datos">
+            <ul className="space-y-2 text-sm text-muted">
+              {review.anomalies.items.map((item) => (
+                <li key={item.key}>
+                  <span className={item.count > 0 ? "text-warn" : "text-value"}>{item.count}</span> · {item.label}
+                  {item.examples.length ? <span className="block text-xs text-subtle">{item.examples.slice(0, 3).join(" · ")}</span> : null}
+                </li>
               ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
+            </ul>
+          </Section>
+        </>
+      ) : null}
 
-      <section className="rounded-xl bg-surface p-5 shadow-[var(--shadow-border)]">
-        <h2 className="font-display text-xl">Nivel A</h2>
-        <p className="mt-2 text-sm leading-relaxed text-muted">
-          {bundle.dixonRule} Corte {bundle.dixonAt ?? "sin publicar"}. Vida media 120 días. El parámetro de
-          regularización se eligió con la temporada 2025/26 y se midió, sin reajustarlo, en 2026/27 hasta
-          el 4 oct.
-        </p>
-        <ul className="mt-4 space-y-2 text-sm text-muted">
-          {bundle.dixon.length === 0 ? <li>El control de RPS todavía no tiene resultado.</li> : null}
-          {bundle.dixon.map((row) => (
-            <li key={row.league}>
-              {row.league}: {row.published ? "publicado" : "no publicado"}
-              {row.rpsModel != null
-                ? ` · RPS modelo ${row.rpsModel.toFixed(3)} · Nivel B ${row.rpsBaseline?.toFixed(3) ?? "—"} · cierre ${row.rpsMarket?.toFixed(3) ?? "—"} · n ${row.n}`
-                : ""}
-            </li>
-          ))}
-        </ul>
-      </section>
-
-      <section className="rounded-xl bg-surface p-5 shadow-[var(--shadow-border)]">
-        <h2 className="font-display text-xl">Fuentes de este corte</h2>
-        <p className="mt-1 text-sm text-muted">Descargado {bundle.fetchedAt}.</p>
-        <input
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder="Filtrar fuente"
-          aria-label="Filtrar fuente"
-          className="mt-3 h-11 w-full max-w-xs rounded-lg bg-elevated px-3 text-sm outline-none"
+      <Section title="Nivel A por liga" note={bundle.dixonRule}>
+        <Table
+          head={["Liga", "Estado", "RPS modelo", "RPS tabla", "RPS cierre", "Partidos"]}
+          rows={bundle.dixon.map((row) => [
+            row.league,
+            row.published ? "publicado" : "no publicado",
+            fix(row.rpsModel, 3),
+            fix(row.rpsBaseline, 3),
+            fix(row.rpsMarket, 3),
+            row.n ?? "—",
+          ])}
         />
-        <ul className="mt-4 space-y-2 text-sm text-muted">
-          {sources.map((source) => (
-            <li key={source}>{source}</li>
-          ))}
-        </ul>
-      </section>
+      </Section>
 
-      <section className="rounded-xl bg-surface p-5 shadow-[var(--shadow-border)]">
-        <h2 className="font-display text-xl">Qué no se publica si no está</h2>
-        <ul className="mt-4 space-y-2 text-sm text-muted">
-          <li>Bajas, cambio de técnico y rotación: no están en el corte. El ajuste queda en cero.</li>
-          <li>Elo de clubes: ClubElo respondió 502. En liga doméstica el Elo no entra al 1X2. No hay rating interno publicado.</li>
-          <li>Understat: sin corte. El peso del xG por partido en el Nivel A queda en cero.</li>
-          <li>Cuotas directas de Betano, BetPlay y Rushbet: el 4 oct el precio no vino en el HTML. No se citan.</li>
-          <li>Sede de un amistoso: si la página no dice que es neutral, no se anula la localía de la regresión. No se inventa la sede.</li>
-          <li>Clasificación en una eliminatoria: no hay marcador global. No se calcula.</li>
-          <li>Córners: solo el promedio de saques a favor de FotMob, y solo contra una línea publicada.</li>
-          <li>Un archivo cargado no verifica un dato. Si el partido no está en la agenda, o ya empezó, no hay probabilidad previa.</li>
+      <Section title="Fuentes">
+        <ul className="space-y-2 text-sm text-muted">
+          <li>Flashscore (www y versión Lite): agenda, resultados, tablas, cuotas por casa y fichas. Se respeta su robots.txt.</li>
+          <li>football-data.co.uk: resultados y cuotas de cierre para el ajuste del Nivel A.</li>
+          <li>eloratings.net: Elo de selecciones.</li>
+          <li>Archivo de la Liga BetPlay 2026 cargado por el usuario: solo para la sombra de temporada.</li>
+          {bundle.tables.length ? (
+            <li>
+              Tablas automáticas:{" "}
+              {bundle.tables.map((table) => `${table.competition} (${table.teams})`).join(" · ")}.
+            </li>
+          ) : null}
         </ul>
-      </section>
+      </Section>
+
+        </div>
+      </details>
     </div>
   );
 }

@@ -91,7 +91,8 @@ export function evaluateRegistry(input: {
     if (row[5] !== "finalizado" || row[6] == null || row[7] == null) continue;
     scores.set(row[0], [row[6], row[7]]);
   }
-  const byMatch = [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const byMatch: any[] = [];
   for (const [matchId, row] of latestByMatch(input.records)) {
     const score = scores.get(matchId);
     if (!score) continue;
@@ -126,6 +127,8 @@ export function evaluateRegistry(input: {
         season: shadow.season ? rps(shadow.season, actual) : null,
       },
       publishedRps: published ? rps(published, actual) : null,
+      modelRps: model ? rps(model, actual) : null,
+      marketSource: (row as { marketSource?: string | null }).marketSource ?? (consensus ? "consenso" : null),
     });
   }
   const same = byMatch.filter((row) => row.comparable);

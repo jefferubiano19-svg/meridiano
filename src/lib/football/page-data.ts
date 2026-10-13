@@ -10,17 +10,18 @@ import { LEAGUES, LEAGUE_BY_ID } from "./leagues";
 import { getAnalysis } from "./model";
 import { estimateNamed } from "./named";
 import { nationModel } from "./nations";
-import { publication } from "./publish";
+import { marketOnly, publication } from "./publish";
 import { levelCFor, recentFor } from "./recent";
 import { sheetFor } from "./sheets";
 import historyFile from "../../../data/sheets-history.json";
-import { DATA_FETCHED_AT, DATA_SOURCES, getTeam, teamsInLeague } from "./teams";
+import { getTeam, teamsInLeague } from "./teams";
 import type { Fixture, LeagueId, ThreeWay } from "./types";
-import reportFile from "../../../data/calibration-report.json";
-import cutFile from "../../../data/lite-cut.json";
-import variantFile from "../../../data/variant-effect.json";
 import coverageFile from "../../../data/cut-coverage.json";
-import evaluationsFile from "../../../data/evaluations.json";
+import reviewFile from "../../../data/review.json";
+import standingsAutoFile from "../../../data/standings-auto.json";
+import nationEloFile from "../../../data/nation-elo.json";
+import ratingsFile from "../../../data/ratings.json";
+import type { Review } from "./review";
 
 const BY_ID = new Map<string, AgendaMatch>();
 const BY_FIXTURE = new Map<string, AgendaMatch>();
@@ -127,7 +128,8 @@ interface Seed {
 
 function seal(seed: Seed): MatchReading {
   const model = way(seed.model);
-  const pub = model ? publication(seed.id, model, seed.total) : null;
+  // Sin modelo pero con cuotas: Nivel M, la publicada es el mercado solo.
+  const pub = model ? publication(seed.id, model, seed.total) : marketOnly(seed.id);
   const gap = pub?.gap ?? 0;
   const revisar = Boolean(pub && (gap > 0.1 || pub.review));
   const kick = Date.parse(seed.kickoff);
@@ -148,7 +150,8 @@ function seal(seed: Seed): MatchReading {
     published: pub ? way(pub.published) : null,
     model,
     consensus: pub ? way(pub.consensus) : null,
-    level: seed.level || MISSING,
+    wplay: pub?.marketSource === "wplay" ? way(pub.market) : null,
+    level: !model && pub ? "M" : seed.level || MISSING,
     confidence: section7(seed.id, pub?.books ?? 0),
     revisar,
     value: best
@@ -469,42 +472,26 @@ export function fixtureNames(ids: string[]): Record<string, string> {
 }
 
 export function modeloBundle(): ModeloBundle {
-  const report = reportFile as {
-    rule: string;
-    playedInCut: number;
-    scored: number;
-    brier: number | null;
-    rps: number | null;
-    bins: { label: string; n: number; hit: number; rate: number | null }[];
-  };
-  const cut = cutFile as {
-    readAtBogota: string;
-    today: number;
-    tomorrow: number;
-    yesterday: number;
-    oddsWith1x2: number;
-    oddsListed: number;
-  };
-  const variant = variantFile as { weighted: { distanciaAnterior: number; distancia: number } };
-  const coverage = coverageFile as {
-    points?: { id: string; label: string; read: number; expected?: number | null; note: string }[];
-  };
-  const evaluations = evaluationsFile as {
-    evaluated: number;
-    goal: number;
-    predictionRows: number;
-    comparable: number;
-    rpsModel: number | null;
-    rpsPublished: number | null;
-    rpsConsensus: number | null;
-    distance: number | null;
-    distanceRule: string;
-    valueMarks: number;
-    clvMean: number | null;
-  };
+  const cut = coverageFile as Record<string, unknown>;
+  const num = (value: unknown) => (typeof value === "number" && Number.isFinite(value) ? value : null);
+  const text = (value: unknown) => (typeof value === "string" ? value : null);
+  const review = reviewFile as unknown as Review | Record<string, never>;
+  const leagues = (standingsAutoFile as { leagues?: { competition: string; readAtBogota?: string; rows?: unknown[] }[] }).leagues ?? [];
   return {
-    fetchedAt: DATA_FETCHED_AT,
-    sources: DATA_SOURCES,
+    lastCut: {
+      corte: text(cut.corte),
+      startedAtBogota: text(cut.startedAtBogota),
+      finishedAtBogota: text(cut.finishedAtBogota),
+      fatal: cut.fatal === true,
+      predictionsSaved: num(cut.predictionsSaved),
+      predictionsWithConsensus: num(cut.predictionsWithConsensus),
+      predictionsWithWplay: num(cut.predictionsWithWplay),
+      tablesRead: num(cut.tablesRead),
+      failures: Array.isArray(cut.failures) ? cut.failures.length : 0,
+      agendaToday: num(cut.agendaToday),
+      agendaTomorrow: num(cut.agendaTomorrow),
+    },
+    review: "generatedAt" in review ? (review as Review) : null,
     dixonRule: DIXON_RULE,
     dixonAt: DIXON_FETCHED_AT,
     dixon: Object.entries(DIXON_REPORT).map(([league, row]) => ({
@@ -515,39 +502,15 @@ export function modeloBundle(): ModeloBundle {
       rpsMarket: row.holdout?.rpsMarket ?? null,
       n: row.holdout?.n ?? null,
     })),
-    report: {
-      rule: report.rule,
-      playedInCut: report.playedInCut,
-      scored: report.scored,
-      brier: report.brier,
-      rps: report.rps,
-      bins: report.bins,
-    },
-    cut: {
-      readAtBogota: cut.readAtBogota,
-      today: cut.today,
-      tomorrow: cut.tomorrow,
-      yesterday: cut.yesterday,
-      oddsWith1x2: cut.oddsWith1x2,
-      oddsListed: cut.oddsListed,
-    },
-    variant: {
-      distanciaAnterior: variant.weighted.distanciaAnterior,
-      distancia: variant.weighted.distancia,
-    },
-    coveragePoints: Array.isArray(coverage.points) ? coverage.points : [],
-    evaluations: {
-      evaluated: evaluations.evaluated,
-      goal: evaluations.goal,
-      predictionRows: evaluations.predictionRows,
-      comparable: evaluations.comparable,
-      rpsModel: evaluations.rpsModel,
-      rpsPublished: evaluations.rpsPublished,
-      rpsConsensus: evaluations.rpsConsensus,
-      distance: evaluations.distance,
-      distanceRule: evaluations.distanceRule,
-      valueMarks: evaluations.valueMarks,
-      clvMean: evaluations.clvMean,
-    },
+    tables: leagues.map((table) => ({
+      competition: table.competition,
+      readAtBogota: table.readAtBogota ?? null,
+      teams: Array.isArray(table.rows) ? table.rows.length : 0,
+    })),
+    nationEloAt: (nationEloFile as { readAtBogota?: string }).readAtBogota ?? null,
+    ratings: (() => {
+      const file = ratingsFile as { asOf?: string | null; teams?: Record<string, unknown>; games?: number };
+      return { asOf: file.asOf ?? null, teams: Object.keys(file.teams ?? {}).length, games: file.games ?? 0 };
+    })(),
   };
 }

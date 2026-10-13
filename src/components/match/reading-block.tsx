@@ -27,8 +27,12 @@ export function ReadingBlock({ match }: { match: MatchReading }) {
     <dl className="mt-3 grid gap-2 text-sm">
       <Row stack k="Probabilidad publicada" v={wayText(match.published)} />
       <Row stack k="Modelo puro" v={wayText(match.model)} />
-      <Row stack k="Consenso del mercado" v={wayText(match.consensus)} />
-      <Row k="Nivel" v={match.level || MISSING} />
+      {match.consensus || !match.wplay ? (
+        <Row stack k="Consenso del mercado" v={wayText(match.consensus)} />
+      ) : (
+        <Row stack k="Mercado (solo Wplay)" v={wayText(match.wplay)} />
+      )}
+      <Row k="Nivel" v={levelText(match.level)} />
       <Row k="Confianza" v={match.confidence || "baja"} />
       {match.revisar ? (
         <div className="flex flex-wrap items-center gap-2">
@@ -49,6 +53,19 @@ export function ReadingBlock({ match }: { match: MatchReading }) {
       )}
     </dl>
   );
+}
+
+const LEVELS: Record<string, string> = {
+  A: "A · Dixon-Coles de la liga",
+  B: "B · ratings globales",
+  C: "C · goles recientes",
+  "5.4": "Selecciones · Elo",
+  M: "M · solo mercado",
+};
+
+function levelText(level: string | null | undefined): string {
+  if (!level) return MISSING;
+  return LEVELS[level] ?? level;
 }
 
 function Row({ k, v, stack = false }: { k: string; v: string; stack?: boolean }) {

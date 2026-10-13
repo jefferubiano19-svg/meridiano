@@ -1,4 +1,5 @@
 import { Link, useRouterState } from "@tanstack/react-router";
+import { StaleBanner } from "./stale-banner";
 import {
   BookOpen,
   CalendarDays,
@@ -102,6 +103,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       </header>
 
       <main id="contenido" className="mx-auto w-full max-w-[1680px] px-5 pt-3 pb-24 md:pb-12">
+        <StaleBanner />
         {children}
       </main>
 

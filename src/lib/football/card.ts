@@ -1,18 +1,18 @@
 import { AGENDA, type AgendaMatch } from "./agenda";
 import { dixonLambda } from "./dixon";
-import { scoreboard, shin } from "./engine";
+import { lambdasFor, scoreboard, shin } from "./engine";
 import { getFixture } from "./fixtures";
 import { leagueRate } from "./league-rate";
 import { getAnalysis } from "./model";
 import { isNational, nationForMatch, nationModel } from "./nations";
-import { blendMarket, MARKET_WEIGHT, publication } from "./publish";
+import { blendMarket, marketOnly, MARKET_WEIGHT, publication } from "./publish";
 import { INCOMPATIBLE, levelCFor } from "./recent";
 import { analyzeLevelC } from "./recent-math";
 import { seasonShadow } from "./season";
 import type { ThreeWay } from "./types";
 
 /** Parámetros vigentes el 5 oct 2026. No cambian hasta 500 predicciones evaluadas. */
-export const ENGINE_VERSION = "2026-10-05";
+export const ENGINE_VERSION = "2026-10-13";
 
 const REGION = new Set([
   "WORLD",
@@ -36,14 +36,18 @@ export interface Way {
 }
 
 export interface BuiltCard {
-  level: "A" | "B" | "C" | "5.4";
+  /** A Dixon-Coles de liga, B ratings globales, C goles recientes, 5.4 selecciones, M solo mercado. */
+  level: "A" | "B" | "C" | "5.4" | "M";
   engine: string;
   lambdaHome: number;
   lambdaAway: number;
-  model: Way;
+  /** Null en Nivel M: no hay modelo, la publicada es el mercado. */
+  model: Way | null;
   consensus: Way | null;
   published: Way;
   marketWeight: number;
+  /** "consenso" (3+ casas), "wplay" (solo Wplay de la versión Lite) o null (solo modelo). */
+  marketSource: "consenso" | "wplay" | null;
   probabilities: Way & { over25: number; under25: number; bttsYes: number; bttsNo: number };
   shadow: {
     wplay: Way | null;
@@ -264,6 +268,34 @@ function fromLevelC(match: AgendaMatch) {
 }
 
 /** La misma tarjeta que publica la app. Las sombras no salen en la probabilidad publicada. */
+/** Nivel M: sin historial de los equipos pero con cuotas leídas antes del inicio. */
+function marketCard(matchId: string): BuiltCard | null {
+  const pub = marketOnly(matchId);
+  if (!pub) return null;
+  const published = way(pub.published);
+  const [lambdaHome, lambdaAway] = lambdasFor(pub.published);
+  const board = scoreboard(lambdaHome, lambdaAway);
+  return {
+    level: "M",
+    engine: ENGINE_VERSION,
+    lambdaHome,
+    lambdaAway,
+    model: null,
+    consensus: pub.consensus ? way(pub.consensus) : null,
+    published,
+    marketWeight: 1,
+    marketSource: pub.marketSource,
+    probabilities: {
+      ...published,
+      over25: board.pOver25,
+      under25: 1 - board.pOver25,
+      bttsYes: board.pBttsYes,
+      bttsNo: 1 - board.pBttsYes,
+    },
+    shadow: { wplay: null, xg: null, clubElo: null, season: null, note: "Nivel M: solo mercado, sin modelo." },
+  };
+}
+
 export function buildCard(
   match: { id: string; kickoff: string; competition: string; home: string; away: string; fixtureId?: string | null },
   extra: { wplay?: number[] | null; sheets?: Record<string, SheetHit> } = {},
@@ -283,7 +315,7 @@ export function buildCard(
     fixtureId: match.fixtureId ?? null,
   };
   const base = fromFixture(agendaMatch) ?? fromLevelC(agendaMatch);
-  if (!base) return null;
+  if (!base) return marketCard(match.id);
   const pub = publication(match.id, base.model, base.lambdaHome + base.lambdaAway);
   const published = way(pub.published);
   const wplay = extra.wplay;
@@ -304,7 +336,8 @@ export function buildCard(
     model: base.model,
     consensus: pub.consensus ? way(pub.consensus) : null,
     published,
-    marketWeight: pub.consensus ? MARKET_WEIGHT : 0,
+    marketWeight: pub.market ? MARKET_WEIGHT : 0,
+    marketSource: pub.marketSource,
     probabilities: {
       ...published,
       over25: base.over25,

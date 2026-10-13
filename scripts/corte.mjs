@@ -10,11 +10,16 @@ const GAP_MS = 3000;
 const HEADERS = { "User-Agent": "MeridianoCorte/1.0" };
 const INCOMPATIBLE = /kings league|futsal|fútbol sala|futbol sala|beach soccer|fútbol playa|futbol playa|fútbol 7|futbol 7/i;
 const YOUTH = /sub[-\s]?\d+|\bu1[7-9]\b|\bu2[0-3]\b|juvenil|reservas?/i;
-const BUDGET_MS = 40 * 60 * 1000;
+/** Tiempo total del corte. GitHub Actions es gratis en repositorios públicos; el job tiene 150 min. */
+const BUDGET_MS = 110 * 60 * 1000;
+/** Hora de inicio del corte en curso (para el registro si el corte se cae). */
+let CUT_STARTED = null;
 /** Partidos por corte a los que se les lee la pestaña Cuotas para el consenso (además del Combo). */
-const ODDS_CAP = 60;
+const ODDS_CAP = 300;
 /** Las cuotas del consenso no pueden comerse más de este tiempo del corte. */
-const ODDS_BUDGET_MS = 18 * 60 * 1000;
+const ODDS_BUDGET_MS = 50 * 60 * 1000;
+/** Una cuota solo cuenta si se lee al menos este tiempo antes del inicio. */
+const PREMATCH_MS = 10 * 60 * 1000;
 /** Tablas de posiciones que lee el corte de la noche: competición de la agenda → página de la liga en Flashscore. */
 const STANDINGS_PAGES = [
   ["GERMANY: Bundesliga", "alemania/bundesliga"],
@@ -262,6 +267,11 @@ async function browserPages(jobs, stop) {
   try {
     for (const job of jobs) {
       if (typeof stop === "function" && stop()) break;
+      // Cuotas: si el partido está por empezar, no se lee (serían cuotas en vivo).
+      if (job.kind === "cuotas" && job.kickoff && Date.parse(job.kickoff) - Date.now() < PREMATCH_MS) {
+        out.push({ ...job, failed: "empieza en menos de 10 minutos" });
+        continue;
+      }
       if (!(await allowed(job.url))) {
         out.push({ ...job, failed: "prohibido por robots.txt" });
         continue;
@@ -525,6 +535,7 @@ async function main() {
   const cutStartedMs = Date.now();
   const overBudget = () => Date.now() - cutStartedMs >= BUDGET_MS;
   const started = bogotaStamp();
+  CUT_STARTED = started;
   const noon = process.env.CORTE === "mediodia";
   const todayName = bogotaDay(0);
   const tomorrowName = bogotaDay(1);
@@ -654,6 +665,19 @@ async function main() {
     writeJson("standings-auto.json", file);
   }
 
+  // Nivel B: ratings globales con todos los resultados conocidos hasta ahora (agenda ya actualizada y tablas leídas).
+  let ratingsInfo = null;
+  await step("ratings", async () => {
+    const { ratingGames, useRatings } = await import("../src/lib/football/recent.ts");
+    const { fitRatings } = await import("../src/lib/football/ratings.ts");
+    const games = ratingGames();
+    const fit = fitRatings(games, Date.now());
+    fit.rule = "Ratings globales del Nivel B. Los calcula cada corte con los partidos anteriores a ese momento.";
+    writeJson("ratings.json", fit);
+    useRatings(fit);
+    ratingsInfo = { games: fit.games, teams: Object.keys(fit.teams).length };
+  });
+
   // Cuotas de varias casas ANTES de calcular: así la predicción guardada ya lleva el consenso (80 % mercado, 20 % modelo).
   const oddsTargets = (await step("cuotas-objetivo", async () => {
     const { leagueForCompetition } = await import("../src/lib/football/dixon.ts");
@@ -671,9 +695,14 @@ async function main() {
         leagueForCompetition(competition) ||
         (tableRow(competition, row.home) && tableRow(competition, row.away)) ||
         BIG_COMPETITION.test(competition);
-      if (strong) list.push({ id: row.id, home: row.home, away: row.away, kickoff });
+      // Todos los partidos de hoy por empezar. Primero los de liga fuerte, luego los que traen cuota en la Lite.
+      list.push({ id: row.id, home: row.home, away: row.away, kickoff, rank: strong ? 0 : keptOdds[row.id] ? 1 : 2 });
     }
-    return list.sort((a, b) => a.kickoff.localeCompare(b.kickoff)).slice(0, ODDS_CAP);
+    // Por rango y luego por hora: lo que empieza antes se lee antes (las cuotas cuentan hasta 10 min antes del inicio).
+    return list
+      .sort((a, b) => a.rank - b.rank || a.kickoff.localeCompare(b.kickoff))
+      .slice(0, ODDS_CAP)
+      .map(({ rank, ...row }) => row);
   })) ?? [];
   const oddsStartedMs = Date.now();
   const consensusRead = (await step("cuotas-consenso", () => browserPages(oddsTargets.map((row) => ({
@@ -684,6 +713,16 @@ async function main() {
   })), () => Date.now() - oddsStartedMs >= ODDS_BUDGET_MS || overBudget()))) ?? [];
   const consensusStored = storeOdds(consensusRead, started);
   const readById = new Map(consensusRead.filter((row) => row.books).map((row) => [row.id, row]));
+
+  // Cuotas 1X2 de Wplay (Lite) de partidos por empezar: la app las usa como mercado cuando no hay 3 casas.
+  const wplayFile = readJsonOptional("wplay-odds.json", { byId: {} });
+  const keepWplay = Date.now() - 3 * 24 * 3600 * 1000;
+  wplayFile.byId = Object.fromEntries(
+    Object.entries(wplayFile.byId ?? {}).filter(([, row]) => Date.parse(row?.readAt ?? "") >= keepWplay),
+  );
+  for (const [id, odds] of Object.entries(keptOdds)) wplayFile.byId[id] = { odds, readAt: started };
+  wplayFile.source = "m.flashscore.co/?d=0&s=5 (cuotas 1X2 de Wplay de la versión Lite). La escribe el corte.";
+  writeJson("wplay-odds.json", wplayFile);
 
   const now = Date.now();
   const predictions = readJson("predictions.json");
@@ -698,7 +737,8 @@ async function main() {
       if (!clock) continue;
       const kickoff = `${todayName}T${clock}:00-05:00`;
       const kickoffMs = Date.parse(kickoff);
-      if (!Number.isFinite(kickoffMs) || kickoffMs - now < 10 * 60 * 1000) continue;
+      // Elegible si faltaban 10+ minutos al empezar el corte: todos los datos que usa se leyeron antes del inicio.
+      if (!Number.isFinite(kickoffMs) || kickoffMs - cutStartedMs < PREMATCH_MS) continue;
       const stored = byId.get(row.id);
       let card = null;
       try {
@@ -739,11 +779,12 @@ async function main() {
         consensus: card.consensus,
         published: card.published,
         marketWeight: card.marketWeight,
+        marketSource: card.marketSource,
         probabilities: card.probabilities,
         pick: { key: sides[0][0], name: sides[0][1], probability: sides[0][2] },
         shadow: card.shadow,
         verifiedOdds: keptOdds[row.id] ? { source: "m.flashscore.co/?d=0&s=5", readAtBogota: started, wplay1x2: keptOdds[row.id] } : null,
-        history: "mismo motor que la app: niveles A/B/C, Elo de selecciones y mezcla 80/20",
+        history: "mismo motor que la app: niveles A/B/C/M, Elo de selecciones y mezcla 80/20",
         afterKickoff: false,
         locked: true,
       });
@@ -925,11 +966,61 @@ async function main() {
     consensusRead: consensusStored,
     consensusWith3Houses: consensusRead.filter((row) => liveHouses(row) >= 3).length,
     predictionsWithConsensus: fresh.filter((row) => row.consensus).length,
+    predictionsWithWplay: fresh.filter((row) => row.marketSource === "wplay").length,
+    predictionsByLevel: fresh.reduce((acc, row) => ({ ...acc, [row.level]: (acc[row.level] ?? 0) + 1 }), {}),
+    ratingsGames: ratingsInfo?.games ?? null,
+    ratingsTeams: ratingsInfo?.teams ?? null,
   };
   writeJson("cut-coverage.json", coverage);
+  await finishCut(coverage, last);
   // Queda marcado como hecho solo si se leyó la agenda del día.
   if (today.length > 0) writeJson("cut-done.json", { ...readJsonOptional("cut-done.json", {}), [noon ? "mediodia" : "noche"]: todayName });
   console.log(JSON.stringify(coverage, null, 2));
+}
+
+/** Agrega el corte al registro (últimos 90) y recalcula la revisión automática (data/review.json). */
+async function finishCut(coverage, previous = null) {
+  try {
+    const log = readJsonOptional("cut-log.json", { cuts: [] });
+    log.rule = "Una fila por corte terminado (noche 00:15, mediodía 12:00, hora de Bogotá). La escribe el corte. Se conservan los últimos 90.";
+    const rowOf = (coverage) => ({
+        cut: coverage.cut ?? null,
+        corte: coverage.corte ?? null,
+        startedAtBogota: coverage.startedAtBogota ?? null,
+        finishedAtBogota: coverage.finishedAtBogota ?? null,
+        fatal: coverage.fatal ?? null,
+        budgetHit: coverage.budgetHit ?? null,
+        predictionsSaved: coverage.predictionsSaved ?? null,
+        predictionsWithConsensus: coverage.predictionsWithConsensus ?? null,
+        predictionsWithWplay: coverage.predictionsWithWplay ?? null,
+        consensusTargets: coverage.consensusTargets ?? null,
+        consensusWith3Houses: coverage.consensusWith3Houses ?? null,
+        tablesRead: coverage.tablesRead ?? null,
+        updatedYesterday: coverage.updatedYesterday ?? null,
+        failures: Array.isArray(coverage.failures) ? coverage.failures.length : 0,
+        scoreConflicts: Array.isArray(coverage.scoreConflicts) ? coverage.scoreConflicts.length : (coverage.scoreConflicts ?? 0),
+    });
+    const cuts = log.cuts ?? [];
+    const known = new Set(cuts.map((row) => row.startedAtBogota));
+    // El corte anterior pudo correr con código viejo que no escribía este registro: se agrega si falta.
+    if (previous?.startedAtBogota && !known.has(previous.startedAtBogota)) cuts.push(rowOf(previous));
+    cuts.push(rowOf(coverage));
+    log.cuts = cuts.slice(-90);
+    writeJson("cut-log.json", log);
+    const { buildReview } = await import("../src/lib/football/review.ts");
+    const review = buildReview({
+      now: Date.now(),
+      cuts: log.cuts,
+      predictions: readJsonOptional("predictions.json", { records: [] }).records ?? [],
+      evaluations: readJsonOptional("evaluations.json", {}),
+      marks: readJsonOptional("value-marks.json", { marks: [] }).marks ?? [],
+      agenda: readJsonOptional("agenda.json", { matches: [] }).matches ?? [],
+      standings: readJsonOptional("standings-auto.json", { leagues: [] }).leagues ?? [],
+    });
+    writeJson("review.json", review);
+  } catch (error) {
+    console.error("revisión automática:", error);
+  }
 }
 
 function sheetHasData(sheet) {
@@ -1018,18 +1109,22 @@ if (process.argv[2] === "repair") {
     process.exitCode = 1;
   });
 } else {
-  main().catch((error) => {
+  main().catch(async (error) => {
     failures.push({ step: "corte", error: error instanceof Error ? error.message : String(error) });
+    const fatal = {
+      cut: bogotaDay(0),
+      corte: process.env.CORTE === "mediodia" ? "mediodia" : "noche",
+      startedAtBogota: CUT_STARTED,
+      finishedAtBogota: bogotaStamp(),
+      failures,
+      fatal: true,
+    };
     try {
-      writeJson("cut-coverage.json", {
-        cut: bogotaDay(0),
-        finishedAtBogota: bogotaStamp(),
-        failures,
-        fatal: true,
-      });
+      writeJson("cut-coverage.json", fatal);
     } catch {
       /* el registro no se pudo escribir */
     }
+    await finishCut(fatal);
     console.error(error);
     process.exitCode = 1;
   });

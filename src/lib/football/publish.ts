@@ -1,4 +1,5 @@
 import oddsFile from "../../../data/combo-odds.json";
+import wplayFile from "../../../data/wplay-odds.json";
 import { shin } from "./engine";
 import { nationForMatch } from "./nations";
 import type { RecentAnalysis } from "./recent-math";
@@ -35,6 +36,19 @@ export interface Publication {
   gap: number;
   values: { house: string; side: "home" | "draw" | "away"; odds: number; ev: number }[];
   review: string | null;
+  /** De dónde sale la parte de mercado de la publicada: consenso de 3+ casas, solo Wplay, o ninguna. */
+  marketSource: "consenso" | "wplay" | null;
+  /** Probabilidad sin margen del mercado usado (consenso o Wplay). */
+  market: ThreeWay | null;
+}
+
+const WPLAY = (wplayFile as unknown as { byId?: Record<string, { odds: number[]; readAt: string }> }).byId ?? {};
+
+/** Cuotas 1X2 de Wplay (versión Lite) sin margen, si el corte las leyó antes del inicio. */
+function wplayFair(matchId: string): ThreeWay | null {
+  const row = WPLAY[matchId];
+  if (!row || !Array.isArray(row.odds) || row.odds.length < 3) return null;
+  return shin(row.odds[0], row.odds[1], row.odds[2]);
 }
 
 function logit(p: number): number {
@@ -155,11 +169,20 @@ function marketTotal(matchId: string): number | null {
   return best;
 }
 
-/** Probabilidad publicada. Sin 3 casas vigentes, queda el modelo. */
+/**
+ * Probabilidad publicada.
+ * Con 3+ casas vigentes: 80 % consenso y 20 % modelo. Sin consenso pero con la cuota de Wplay leída
+ * antes del inicio: 80 % Wplay sin margen y 20 % modelo (la sombra "wplay" bajó el RPS de la publicada
+ * en 543 partidos evaluados: −0,0154, IC 95 % −0,024 a −0,007; regla de la sección 9.2).
+ * Sin ninguno de los dos, queda el modelo.
+ */
 export function publication(matchId: string, model: ThreeWay, modelTotal?: number | null): Publication {
   const { rows, readAt } = booksOf(matchId);
   const consensus = consensusOf(rows);
-  const published = consensus ? blend(model, consensus) : model;
+  const wplay = consensus ? null : wplayFair(matchId);
+  const market = consensus ?? wplay;
+  const published = market ? blend(model, market) : model;
+  // El aviso "revisar" solo se calcula contra el consenso de 3+ casas, como antes.
   const gap = consensus
     ? Math.max(
         Math.abs(model.home - consensus.home),
@@ -177,11 +200,38 @@ export function publication(matchId: string, model: ThreeWay, modelTotal?: numbe
     consensus,
     published,
     books: rows.length,
-    readAt,
-    weight: consensus ? MARKET_WEIGHT : 0,
+    readAt: consensus ? readAt : wplay ? (WPLAY[matchId]?.readAt ?? null) : readAt,
+    weight: market ? MARKET_WEIGHT : 0,
+    marketSource: consensus ? "consenso" : wplay ? "wplay" : null,
+    market,
     gap,
     values: bookValues(rows),
     review,
+  };
+}
+
+/**
+ * Partido sin modelo (equipos sin historial) pero con cuotas: se publica el mercado solo (Nivel M).
+ * Es la mejor probabilidad disponible para ese partido; no hay modelo que mezclar.
+ */
+export function marketOnly(matchId: string): Publication | null {
+  const { rows, readAt } = booksOf(matchId);
+  const consensus = consensusOf(rows);
+  const wplay = consensus ? null : wplayFair(matchId);
+  const market = consensus ?? wplay;
+  if (!market) return null;
+  return {
+    model: market,
+    consensus,
+    published: market,
+    books: rows.length,
+    readAt: consensus ? readAt : (WPLAY[matchId]?.readAt ?? null),
+    weight: 1,
+    marketSource: consensus ? "consenso" : "wplay",
+    market,
+    gap: 0,
+    values: bookValues(rows),
+    review: null,
   };
 }
 

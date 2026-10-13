@@ -27,6 +27,35 @@ export function clampLambda(value: number): number {
 }
 
 /** Matriz 0-0 a 6-6 más la cola hasta 8, para que el 1X2 sume 1. */
+/**
+ * Goles esperados (local, visita) que reproducen una probabilidad 1X2 dada con el mismo marcador de
+ * Poisson y rho. Sirve para sacar goles y ambos marcan de un partido que solo tiene mercado.
+ */
+export function lambdasFor(target: ThreeWay, rho = -0.08): [number, number] {
+  let lh = 1.4;
+  let la = 1.1;
+  const err = (h: number, a: number) => {
+    const p = scoreboard(h, a, rho).p1x2;
+    return [p.home - target.home, p.away - target.away];
+  };
+  for (let step = 0; step < 30; step += 1) {
+    const [e1, e2] = err(lh, la);
+    if (Math.abs(e1) + Math.abs(e2) < 1e-6) break;
+    const d = 1e-4;
+    const [a1, a2] = err(lh + d, la);
+    const [b1, b2] = err(lh, la + d);
+    const j11 = (a1 - e1) / d;
+    const j21 = (a2 - e2) / d;
+    const j12 = (b1 - e1) / d;
+    const j22 = (b2 - e2) / d;
+    const det = j11 * j22 - j12 * j21;
+    if (!Number.isFinite(det) || Math.abs(det) < 1e-12) break;
+    lh = Math.min(4, Math.max(0.2, lh - (j22 * e1 - j12 * e2) / det));
+    la = Math.min(4, Math.max(0.2, la - (-j21 * e1 + j11 * e2) / det));
+  }
+  return [lh, la];
+}
+
 export function scoreboard(lambdaHome: number, lambdaAway: number, rho = -0.08): {
   p1x2: ThreeWay;
   pOver25: number;

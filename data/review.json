@@ -1,0 +1,332 @@
+{
+  "generatedAt": "2026-10-12T23:47:06.283Z",
+  "window": {
+    "from": "2026-10-05",
+    "to": "2026-10-12"
+  },
+  "cuts": {
+    "light": "amarillo",
+    "expected": 4,
+    "done": 4,
+    "late": 4,
+    "fatal": 0,
+    "list": [
+      {
+        "when": "2026-10-10T20:44:54-05:00",
+        "corte": "noche",
+        "delayMin": 1230,
+        "predictions": 14,
+        "withConsensus": null,
+        "failures": 0
+      },
+      {
+        "when": "2026-10-11T02:23:59-05:00",
+        "corte": "noche",
+        "delayMin": 129,
+        "predictions": 797,
+        "withConsensus": null,
+        "failures": 0
+      },
+      {
+        "when": "2026-10-11T06:24:00-05:00",
+        "corte": "noche",
+        "delayMin": 369,
+        "predictions": 630,
+        "withConsensus": null,
+        "failures": 0
+      },
+      {
+        "when": "2026-10-11T15:43:56-05:00",
+        "corte": "mediodia",
+        "delayMin": 224,
+        "predictions": 36,
+        "withConsensus": null,
+        "failures": 0
+      },
+      {
+        "when": "2026-10-12T00:15:42-05:00",
+        "corte": "noche",
+        "delayMin": 1,
+        "predictions": 113,
+        "withConsensus": 14,
+        "failures": 0
+      },
+      {
+        "when": "2026-10-12T12:00:42-05:00",
+        "corte": "mediodia",
+        "delayMin": 1,
+        "predictions": 49,
+        "withConsensus": 8,
+        "failures": 0
+      }
+    ]
+  },
+  "coverage": {
+    "week": {
+      "total": 1835,
+      "byLevel": {
+        "C": 1694,
+        "B": 30,
+        "A": 111
+      },
+      "withConsensus": 22
+    },
+    "previous": {
+      "total": 47,
+      "byLevel": {
+        "C": 3,
+        "B": 33,
+        "5.4": 11
+      },
+      "withConsensus": 25
+    }
+  },
+  "evaluation": {
+    "light": "gris",
+    "stage": "muestra insuficiente",
+    "evaluated": 991,
+    "comparable": 18,
+    "goal": 500,
+    "rpsModel": 0.20624701075577262,
+    "rpsPublished": 0.19324530468299242,
+    "rpsConsensus": 0.19166982894962323,
+    "distance": {
+      "n": 18,
+      "mean": 0.0015754757333692267,
+      "low": -0.00410878973886669,
+      "high": 0.007259741205605142
+    },
+    "byLevel": [
+      {
+        "level": "5.4",
+        "n": 11,
+        "rpsPublished": 0.21357578313343406,
+        "comparable": 10,
+        "distance": {
+          "n": 10,
+          "mean": 0.002386919503075068,
+          "low": -0.0038808240510990128,
+          "high": 0.00865466305724915
+        }
+      },
+      {
+        "level": "A",
+        "n": 51,
+        "rpsPublished": 0.193551819304543,
+        "comparable": 3,
+        "distance": {
+          "n": 3,
+          "mean": 0.008197451868235459,
+          "low": -0.0040738527770669605,
+          "high": 0.020468756513537877
+        }
+      },
+      {
+        "level": "B",
+        "n": 19,
+        "rpsPublished": 0.1939123970057495,
+        "comparable": 5,
+        "distance": {
+          "n": 5,
+          "mean": -0.004020597486962196,
+          "low": -0.01871042557936718,
+          "high": 0.010669230605442788
+        }
+      },
+      {
+        "level": "C",
+        "n": 910,
+        "rpsPublished": 0.22142852650939351,
+        "comparable": 0,
+        "distance": {
+          "n": 0,
+          "mean": null,
+          "low": null,
+          "high": null
+        }
+      }
+    ]
+  },
+  "value": {
+    "marks": 1,
+    "withClose": 0,
+    "clv": {
+      "n": 0,
+      "mean": null,
+      "low": null,
+      "high": null
+    },
+    "stage": "sin conclusión (menos de 100 marcas con cierre)"
+  },
+  "shadows": [
+    {
+      "key": "wplay",
+      "label": "Wplay (hasta 12 oct)",
+      "n": 543,
+      "diff": {
+        "n": 543,
+        "mean": -0.015415877480019378,
+        "low": -0.024062754365982514,
+        "high": -0.006769000594056242
+      }
+    },
+    {
+      "key": "xg",
+      "label": "xG",
+      "n": 0,
+      "diff": {
+        "n": 0,
+        "mean": null,
+        "low": null,
+        "high": null
+      }
+    },
+    {
+      "key": "clubElo",
+      "label": "Elo clubes",
+      "n": 0,
+      "diff": {
+        "n": 0,
+        "mean": null,
+        "low": null,
+        "high": null
+      }
+    },
+    {
+      "key": "season",
+      "label": "Temporada BetPlay",
+      "n": 0,
+      "diff": {
+        "n": 0,
+        "mean": null,
+        "low": null,
+        "high": null
+      }
+    }
+  ],
+  "wplayMarket": {
+    "n": 0,
+    "rpsPublished": null,
+    "rpsModel": null,
+    "diff": {
+      "n": 0,
+      "mean": null,
+      "low": null,
+      "high": null
+    }
+  },
+  "calibration": [
+    {
+      "label": "30–40 %",
+      "n": 247,
+      "expected": 0.37661162360849454,
+      "observed": 0.38866396761133604
+    },
+    {
+      "label": "40–50 %",
+      "n": 448,
+      "expected": 0.4417649254436572,
+      "observed": 0.453125
+    },
+    {
+      "label": "50–60 %",
+      "n": 130,
+      "expected": 0.5382157765022753,
+      "observed": 0.6076923076923076
+    },
+    {
+      "label": "60–70 %",
+      "n": 16,
+      "expected": 0.6439184500735776,
+      "observed": 0.75
+    },
+    {
+      "label": "70–80 %",
+      "n": 1,
+      "expected": 0.7265578439207612,
+      "observed": 1
+    },
+    {
+      "label": "80–90 %",
+      "n": 0,
+      "expected": null,
+      "observed": null
+    },
+    {
+      "label": "90–100 %",
+      "n": 0,
+      "expected": null,
+      "observed": null
+    }
+  ],
+  "anomalies": {
+    "light": "amarillo",
+    "items": [
+      {
+        "key": "prefijo",
+        "label": "Competiciones con el país en español",
+        "count": 352,
+        "examples": [
+          "OSwMEiGN MUNDIAL: Amistosos de Clubs",
+          "pEWvRPBL ALEMANIA: Regionalliga Nord",
+          "AqMokCqI MUNDIAL: Amistosos Internacionales",
+          "40ENHnhJ MUNDIAL: Amistosos de Clubs",
+          "lIDivGB5 PAÍSES BAJOS: Derde Divisie"
+        ]
+      },
+      {
+        "key": "por-jugar-viejo",
+        "label": "Partidos 'por-jugar' que empezaron hace más de 48 horas",
+        "count": 153,
+        "examples": [
+          "2HgMrpHM 2026-10-04T05:00 CP San Cristóbal - Grama",
+          "YJzna513 2026-10-04T05:00 Cerdanyola - Martinenc",
+          "vHwfcqWF 2026-10-04T05:00 L'Hospitalet - Mollerussa",
+          "6Dr0y29d 2026-10-04T05:00 Montañesa - FC L'escala",
+          "8v2Gym2M 2026-10-04T09:00 Levante B - Crevillente"
+        ]
+      },
+      {
+        "key": "id-repetido",
+        "label": "Ids repetidos en la agenda",
+        "count": 0,
+        "examples": []
+      },
+      {
+        "key": "despues-inicio",
+        "label": "Predicciones guardadas después del inicio",
+        "count": 0,
+        "examples": []
+      },
+      {
+        "key": "suma",
+        "label": "Probabilidades publicadas que no suman 1",
+        "count": 0,
+        "examples": []
+      },
+      {
+        "key": "goles",
+        "label": "Goles esperados fuera de 0,20 a 4,00",
+        "count": 0,
+        "examples": []
+      },
+      {
+        "key": "tablas",
+        "label": "Filas de tablas con PJ ≠ G + E + P",
+        "count": 0,
+        "examples": []
+      },
+      {
+        "key": "conflictos",
+        "label": "Marcadores corregidos por la página de resultados de ayer",
+        "count": 4,
+        "examples": [
+          "2026-10-11T02:23:59-05:00: 1",
+          "2026-10-11T06:24:00-05:00: 1",
+          "2026-10-11T15:43:56-05:00: 2",
+          "2026-10-12T12:00:42-05:00: 1"
+        ]
+      }
+    ]
+  }
+}

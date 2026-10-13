@@ -4,7 +4,9 @@ import { levelAForAgenda } from "./dixon";
 import { canonicalCompetition } from "./places";
 import { tableRow } from "./standings";
 import { leagueRate } from "./league-rate";
-import { analyzeCounts, analyzeLevelC, type RecentAnalysis } from "./recent-math";
+import { analyzeCounts, analyzeLevelC, fromLambdas, type RecentAnalysis } from "./recent-math";
+import ratingsData from "../../../data/ratings.json";
+import { ratingLambdas, type RatingGame, type RatingsFile } from "./ratings";
 
 export type { RecentAnalysis };
 
@@ -140,16 +142,93 @@ function plainName(name: string): string {
   return EXONYMS[plain] ?? plain;
 }
 
-function teamKeyFor(rawName: string, competition: string): string | null {
-  const name = plainName(rawName);
+/** Siglas de forma jurídica que Flashscore pone o quita según el idioma: "Club Brugge KV" y "Club Brujas" son el mismo. */
+const LEGAL_TOKENS = new Set(["fc", "cf", "sc", "ac", "afc", "kv", "ksv", "krc", "sk", "fk", "bk", "cd", "ud", "sd", "sv", "ssc", "jk", "nk", "if", "ik"]);
+
+/** Nombre canónico del equipo: sin tildes, sin país entre paréntesis, con exónimo y sin siglas jurídicas. */
+function canonName(name: string): string {
+  const plain = plainName(name);
+  const words = plain.split(" ").filter((word) => !LEGAL_TOKENS.has(word));
+  const stripped = words.length ? words.join(" ") : plain;
+  return EXONYMS[stripped] ?? stripped;
+}
+
+function teamKeyFor(rawName: string, competition: string, fallbackPlace: string | null = null): string | null {
+  const name = canonName(rawName);
   const tier = tierOf(competition, rawName);
   let place = placeOf(competition);
   if (!place) {
     const places = PLACES_BY_NAME.get(`${tier}|${name}`);
-    if (!places || places.size !== 1) return null;
-    place = [...places][0];
+    if (places && places.size === 1) place = [...places][0];
+    else if (fallbackPlace) place = fallbackPlace;
+    else return null;
   }
   return `${place}|${tier}|${name}`;
+}
+
+/**
+ * Todos los resultados conocidos para los ratings globales (Nivel B): los de la agenda (con sede)
+ * y los de las fichas leídas de cada equipo (sin sede). Un mismo partido no entra dos veces.
+ */
+export function ratingGames(): RatingGame[] {
+  buildTeams();
+  const seen = new Map<string, RatingGame>();
+  const add = (game: RatingGame) => {
+    const id = `${Math.floor(game.ts / 3600000)}|${[game.home, game.away].sort().join("|")}`;
+    const prev = seen.get(id);
+    if (prev && prev.venue) return;
+    seen.set(id, game);
+  };
+  for (const row of AGENDA_ROWS) {
+    if (row[5] !== "finalizado" || typeof row[6] !== "number" || typeof row[7] !== "number") continue;
+    const ts = Date.parse(row[1]);
+    const home = teamKeyFor(row[3], row[2]);
+    const away = teamKeyFor(row[4], row[2]);
+    if (!Number.isFinite(ts) || !home || !away) continue;
+    add({ ts, home, away, hg: row[6], ag: row[7], venue: 1, comp: canonicalCompetition(row[2]) });
+  }
+  for (const row of AGENDA_ROWS) {
+    const read = BY_ID[row[0]];
+    if (!read) continue;
+    for (const [sideRead, name] of [[read.h, row[3]], [read.a, row[4]]] as const) {
+      if (!sideRead) continue;
+      const team = teamKeyFor(name, row[2]);
+      if (!team) continue;
+      const place = team.split("|")[0];
+      for (const [ts, competition, opponent, gf, ga] of sideRead.games) {
+        if (ts == null || !opponent) continue;
+        const other = teamKeyFor(opponent, competition || row[2], place);
+        if (!other || other === team) continue;
+        add({ ts: ts > 1e12 ? ts : ts * 1000, home: team, away: other, hg: gf, ag: ga, venue: 0, comp: canonicalCompetition(competition || "") });
+      }
+    }
+  }
+  return [...seen.values()];
+}
+
+let RATINGS = ratingsData as unknown as RatingsFile;
+
+/** El corte calcula los ratings y los pasa aquí antes de guardar predicciones (el JSON importado sería el anterior). */
+export function useRatings(file: RatingsFile): void {
+  RATINGS = file;
+  SIDE_CACHE.clear();
+}
+
+/** Nivel B: ratings globales, si el corte ya los calculó y los dos equipos tienen partidos. */
+function levelBFor(match: AgendaRow, kickoffMs: number, competition: string): RecentAnalysis | null {
+  if (!RATINGS?.teams || !RATINGS.asOf) return null;
+  // Solo ratings calculados antes del partido.
+  if (!(Date.parse(RATINGS.asOf) < kickoffMs)) return null;
+  const lambdas = ratingLambdas(
+    RATINGS,
+    teamKeyFor(match[3], match[2]),
+    teamKeyFor(match[4], match[2]),
+    canonicalCompetition(competition || match[2]),
+    /neutral/i.test(competition || match[2]),
+  );
+  if (!lambdas) return null;
+  const analysis = fromLambdas(lambdas[0], lambdas[1]);
+  return analysis ? { ...analysis, level: "B" } : null;
 }
 
 function buildTeams(): Map<string, TeamHistory> {
@@ -159,7 +238,7 @@ function buildTeams(): Map<string, TeamHistory> {
     const place = placeOf(row[2]);
     if (!place) continue;
     for (const name of [row[3], row[4]]) {
-      const k = `${tierOf(row[2], name)}|${plainName(name)}`;
+      const k = `${tierOf(row[2], name)}|${canonName(name)}`;
       const set = PLACES_BY_NAME.get(k) ?? new Set<string>();
       set.add(place);
       PLACES_BY_NAME.set(k, set);
@@ -304,10 +383,12 @@ export function levelCFor(id: string, kickoff: string, competition = ""): Recent
   if (match) {
     const levelA = levelAForAgenda(match[3], match[4], competition || match[2], kickoffMs);
     if (levelA) return levelA;
+    const levelB = levelBFor(match, kickoffMs, competition);
+    if (levelB) return levelB;
   }
   const recent = recentFor(id);
   if (!recent?.home || !recent?.away) return null;
   const analysis = levelC(recent.home, recent.away, kickoffMs, competition);
   if (!analysis) return null;
-  return { ...analysis, level: recent.home.fromTable || recent.away.fromTable ? "B" : "C" };
+  return { ...analysis, level: "C" };
 }

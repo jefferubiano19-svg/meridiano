@@ -158,6 +158,11 @@ export function analyzeLevelC(
   return finish(Math.min(4, Math.max(0.2, lambdaHome)), Math.min(4, Math.max(0.2, lambdaAway)));
 }
 
+/** Tarjeta completa (1X2, goles, marcador) a partir de dos goles esperados, con el mismo tope 0,20–4,00. */
+export function fromLambdas(lambdaHome: number, lambdaAway: number): RecentAnalysis | null {
+  return finish(Math.min(4, Math.max(0.2, lambdaHome)), Math.min(4, Math.max(0.2, lambdaAway)));
+}
+
 export function analyzeCounts(
   homeN: number,
   homeGf: number,
