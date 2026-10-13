@@ -254,16 +254,27 @@ function fromFixture(match: AgendaMatch): {
 }
 
 function fromLevelC(match: AgendaMatch) {
+  // Selecciones primero: no dependen del historial de clubes.
+  const nation = nationForMatch(match.id) ?? nationModel(match.home, match.away, match.competition);
+  if (nation) {
+    return {
+      level: "5.4" as const,
+      lambdaHome: nation.lambdaHome,
+      lambdaAway: nation.lambdaAway,
+      model: way(nation.p1x2),
+      over25: nation.pOver25,
+      bttsYes: nation.pBttsYes,
+    };
+  }
   const raw = levelCFor(match.id, match.kickoff, match.competition);
   if (!raw) return null;
-  const nation = nationForMatch(match.id) ?? nationModel(match.home, match.away, match.competition);
   return {
-    level: nation ? ("5.4" as const) : (raw.level ?? "C") as "A" | "B" | "C",
-    lambdaHome: nation?.lambdaHome ?? raw.lambdaHome,
-    lambdaAway: nation?.lambdaAway ?? raw.lambdaAway,
-    model: way(nation?.p1x2 ?? raw.p1x2),
-    over25: nation?.pOver25 ?? raw.pOver25,
-    bttsYes: nation?.pBttsYes ?? raw.pBttsYes,
+    level: (raw.level ?? "C") as "A" | "B" | "C",
+    lambdaHome: raw.lambdaHome,
+    lambdaAway: raw.lambdaAway,
+    model: way(raw.p1x2),
+    over25: raw.pOver25,
+    bttsYes: raw.pBttsYes,
   };
 }
 

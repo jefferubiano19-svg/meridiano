@@ -245,6 +245,11 @@ function ModelPage() {
             del mercado, sin el margen de la casa.
           </li>
           <li>
+            <strong className="text-fg">Torneos internacionales de clubes</strong> (Champions, Libertadores, AFC…):
+            el modelo no sabe cuánto vale una liga frente a otra, así que no se usa. Se muestra solo el mercado cuando el
+            corte lee las cuotas; antes de eso, no hay probabilidad.
+          </li>
+          <li>
             <strong className="text-fg">Probabilidad publicada</strong>: si hay cuotas, 80 % mercado (consenso de 3 o
             más casas, o Wplay si no hay consenso) y 20 % modelo. Sin cuotas, solo el modelo.
           </li>

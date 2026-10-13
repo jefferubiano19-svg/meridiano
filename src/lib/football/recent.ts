@@ -374,6 +374,20 @@ export function analyzeRecent(home: SideRead, away: SideRead, kickoff?: string, 
  * Modelo de la tarjeta de un partido de la agenda.
  * Nivel A si la liga y los dos equipos están en el Dixon-Coles; si no, Nivel C.
  */
+/**
+ * Partido internacional entre clubes de países distintos (Champions, Libertadores, AFC…).
+ * Los niveles B y C no saben cuánto vale una liga frente a otra: un líder de Tailandia y uno de
+ * Japón quedan parecidos. Ahí el modelo puede errar por 30 puntos o más, así que no se usa:
+ * con cuotas se publica el mercado (Nivel M); sin cuotas, no hay probabilidad.
+ */
+function crossCountry(match: AgendaRow, competition: string): boolean {
+  if (placeOf(competition || match[2])) return false;
+  const home = teamKeyFor(match[3], match[2]);
+  const away = teamKeyFor(match[4], match[2]);
+  if (!home || !away) return true;
+  return home.split("|")[0] !== away.split("|")[0];
+}
+
 export function levelCFor(id: string, kickoff: string, competition = ""): RecentAnalysis | null {
   if (INCOMPATIBLE.test(competition)) return null;
   const kickoffMs = Date.parse(kickoff);
@@ -381,6 +395,7 @@ export function levelCFor(id: string, kickoff: string, competition = ""): Recent
   buildTeams();
   const match = ROW_BY_ID?.get(id);
   if (match) {
+    if (crossCountry(match, competition)) return null;
     const levelA = levelAForAgenda(match[3], match[4], competition || match[2], kickoffMs);
     if (levelA) return levelA;
     const levelB = levelBFor(match, kickoffMs, competition);
