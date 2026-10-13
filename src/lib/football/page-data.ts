@@ -296,8 +296,16 @@ function withPick(leg: CombinadaLeg): ComboMatch {
     homeScore: null,
     awayScore: null,
   });
-  const pickProbability = base.published ? base.published[leg.key] : null;
-  return { ...base, pick: leg.pick, pickKey: leg.key, pickProbability };
+  // El lado se elige con la probabilidad publicada (la que incluye el mercado), no con el modelo solo.
+  if (base.published) {
+    const sides = [
+      { key: "home" as const, name: leg.home, p: base.published.home },
+      { key: "draw" as const, name: "Empate", p: base.published.draw },
+      { key: "away" as const, name: leg.away, p: base.published.away },
+    ].sort((a, b) => b.p - a.p);
+    return { ...base, pick: sides[0].name, pickKey: sides[0].key, pickProbability: sides[0].p };
+  }
+  return { ...base, pick: leg.pick, pickKey: leg.key, pickProbability: null };
 }
 
 export function comboBoard(which: "hoy" | "manana"): ComboBoard {

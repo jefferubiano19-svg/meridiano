@@ -1,7 +1,8 @@
 import type { AgendaMatch } from "@/lib/football/agenda";
 import { getFixture } from "@/lib/football/fixtures";
 import { getAnalysis } from "@/lib/football/model";
-import { levelCFor } from "@/lib/football/recent";
+import { presentAnalysis } from "@/lib/football/publish";
+import { publishedFor } from "@/lib/football/published";
 import type { ThreeWay } from "@/lib/football/types";
 
 export interface SettledCall {
@@ -81,7 +82,7 @@ function settleAgenda(match: AgendaMatch): HitRead | null {
   if (match.fixtureId) {
     const fixture = getFixture(match.fixtureId);
     if (fixture) {
-      const analysis = getAnalysis(fixture);
+      const analysis = presentAnalysis(match.id, getAnalysis(fixture), match.kickoff);
       return settle(match.homeScore, match.awayScore, {
         p1x2: analysis.p1x2,
         pOver25: analysis.pOver25,
@@ -90,7 +91,7 @@ function settleAgenda(match: AgendaMatch): HitRead | null {
       });
     }
   }
-  const recent = levelCFor(match.id, match.kickoff, match.competition);
+  const recent = publishedFor(match.id, match.kickoff, match.competition);
   if (!recent) return null;
   return settle(match.homeScore, match.awayScore, {
     p1x2: recent.p1x2,

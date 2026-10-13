@@ -10,7 +10,8 @@ import type { PartidoHit } from "@/lib/football/lookup";
 import { getAnalysis } from "@/lib/football/model";
 import type { NamedFicha } from "@/lib/football/named";
 import { presentAnalysis, presentRecent } from "@/lib/football/publish";
-import { levelCFor, recentFor, type SideRead } from "@/lib/football/recent";
+import { publishedFor } from "@/lib/football/published";
+import { recentFor, type SideRead } from "@/lib/football/recent";
 import type { RecentAnalysis } from "@/lib/football/recent-math";
 import { sheetFor, type TeamRecord } from "@/lib/football/sheets";
 import { getTeam } from "@/lib/football/teams";
@@ -400,8 +401,9 @@ export function agendaFichaRow(match: AgendaMatch, titlePrefix = ""): Cell[] {
     const fixture = getFixture(match.fixtureId);
     if (fixture) return analysisRow(fixture, presentAnalysis(match.id, getAnalysis(fixture), match.kickoff), titlePrefix);
   }
-  const raw = levelCFor(match.id, match.kickoff, match.competition);
-  const analysis = raw ? presentRecent(match.id, raw) : null;
+  const shown = publishedFor(match.id, match.kickoff, match.competition);
+  const raw = shown;
+  const analysis = shown as unknown as ReturnType<typeof presentRecent> | null;
   if (!analysis) {
     return blankNumbers(
       rowFrom({

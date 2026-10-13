@@ -4,7 +4,8 @@ import { RateCard } from "@/components/match/rate-card";
 import { AGENDA, agendaDay, type AgendaMatch } from "@/lib/football/agenda";
 import { getFixture } from "@/lib/football/fixtures";
 import { getAnalysis } from "@/lib/football/model";
-import { levelCFor, recentFor } from "@/lib/football/recent";
+import { recentFor } from "@/lib/football/recent";
+import { publishedFor } from "@/lib/football/published";
 import { hitsForAgenda, type HitRead } from "@/lib/football/hits";
 import { agendaToday } from "@/lib/football/today";
 
@@ -142,8 +143,9 @@ function PlayedCard({ match }: { match: AgendaMatch }) {
   const recent = recentFor(match.id);
   const hits: HitRead | null = hitsForAgenda(match);
   const started = match.status === "finalizado" || match.status === "en-juego";
-  const analysis = levelCFor(match.id, match.kickoff, match.competition);
-  const level = analysis?.level ?? "C";
+  const shown = publishedFor(match.id, match.kickoff, match.competition);
+  const analysis = shown as unknown as Parameters<typeof RateCard>[0]["analysis"];
+  const level = shown?.level ?? "C";
   return (
     <RateCard
       href={`/agenda/${match.id}`}

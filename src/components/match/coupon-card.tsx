@@ -3,8 +3,9 @@ import { RateCard } from "@/components/match/rate-card";
 import type { CombinadaLeg } from "@/lib/football/combinada";
 import { getFixture } from "@/lib/football/fixtures";
 import { getAnalysis } from "@/lib/football/model";
-import { presentAnalysis, presentRecent } from "@/lib/football/publish";
-import { levelCFor, recentFor } from "@/lib/football/recent";
+import { presentAnalysis } from "@/lib/football/publish";
+import { publishedFor } from "@/lib/football/published";
+import { recentFor } from "@/lib/football/recent";
 
 function clock(iso: string): string {
   return new Intl.DateTimeFormat("es", {
@@ -33,12 +34,11 @@ export function CouponCard({ leg, index }: { leg: CombinadaLeg; index: number })
           home={leg.home}
           away={leg.away}
           analysis={(() => {
-            const model = levelCFor(leg.id, leg.kickoff, leg.competition);
-            return model ? presentRecent(leg.id, model) : null;
+            return publishedFor(leg.id, leg.kickoff, leg.competition) as unknown as Parameters<typeof RateCard>[0]["analysis"];
           })()}
           note={(() => {
             const recent = recentFor(leg.id);
-            const level = levelCFor(leg.id, leg.kickoff, leg.competition)?.level ?? "C";
+            const level = publishedFor(leg.id, leg.kickoff, leg.competition)?.level ?? "C";
             const base = `Pata ${leg.pick}. Tarjeta de nivel ${level}. El detalle abre al pulsar la tarjeta.`;
             return recent?.home && recent.away
               ? `${base} ${recent.home.n} partidos del local y ${recent.away.n} de la visita.`

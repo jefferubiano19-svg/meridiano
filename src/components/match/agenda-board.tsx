@@ -5,9 +5,10 @@ import { RateCard } from "@/components/match/rate-card";
 import { getFixture } from "@/lib/football/fixtures";
 import { flashscoreStatusLabel } from "@/lib/football/flashscore";
 import { getAnalysis } from "@/lib/football/model";
-import { presentAnalysis, presentRecent, publication } from "@/lib/football/publish";
+import { presentAnalysis, publication } from "@/lib/football/publish";
 import { nationForMatch } from "@/lib/football/nations";
-import { INCOMPATIBLE, levelCFor, recentFor } from "@/lib/football/recent";
+import { INCOMPATIBLE, recentFor } from "@/lib/football/recent";
+import { publishedFor } from "@/lib/football/published";
 import { useAgendaToday } from "@/lib/football/use-today";
 import { cn } from "@/lib/utils";
 
@@ -202,16 +203,12 @@ function AgendaCard({ match }: { match: AgendaMatch }) {
     }
   }
   const blocked = INCOMPATIBLE.test(match.competition);
-  const raw = blocked || started ? null : levelCFor(match.id, match.kickoff, match.competition);
-  const nation = raw ? nationForMatch(match.id) : null;
-  const analysis = raw ? presentRecent(match.id, raw) : null;
-  const pub = raw
-    ? publication(
-        match.id,
-        nation?.p1x2 ?? raw.p1x2,
-        (nation?.lambdaHome ?? raw.lambdaHome) + (nation?.lambdaAway ?? raw.lambdaAway),
-      )
-    : null;
+  // Probabilidad publicada (mercado + modelo) de la única fuente; el modelo solo no se muestra aquí.
+  const shown = blocked || started ? null : publishedFor(match.id, match.kickoff, match.competition);
+  const raw = shown && shown.level !== "M" ? shown : null;
+  const nation = shown?.level === "5.4" ? nationForMatch(match.id) : null;
+  const analysis = shown as unknown as Parameters<typeof RateCard>[0]["analysis"];
+  const pub = shown && shown.modelPure ? publication(match.id, shown.modelPure, shown.lambdaHome + shown.lambdaAway) : null;
   const recent = recentFor(match.id);
   const score =
     match.homeScore == null || match.awayScore == null ? "Por jugar" : `${match.homeScore}–${match.awayScore}`;
@@ -221,6 +218,8 @@ function AgendaCard({ match }: { match: AgendaMatch }) {
       ? "El partido ya empezó. Sin probabilidad previa."
       : nation
         ? `Sección 5.4. Elo ${nation.eloHome} contra ${nation.eloAway}, regresión de ${nation.fit}.${pub?.review ? ` ${pub.review}` : ""}`
+        : shown?.level === "M"
+          ? "Nivel M: sin modelo para este partido. Probabilidad del mercado sin el margen de la casa."
         : analysis && recent?.home && recent.away
           ? `Tarjeta de nivel ${raw?.level ?? "C"}${raw?.level === "A" ? ": Dixon-Coles de la liga." : ". No es una ficha completa."} ${recent.home.n} partidos del local y ${recent.away.n} de la visita, anteriores al inicio.${pub?.review ? ` ${pub.review}` : ""}`
           : "NO DISPONIBLE. No hay partidos previos publicados de los dos.";

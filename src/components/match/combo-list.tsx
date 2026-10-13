@@ -87,8 +87,8 @@ export function ComboList({ which }: { which: "hoy" | "manana" }) {
         </h1>
         <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted">
           Lista de hasta 20 partidos individuales de {which === "hoy" ? "hoy" : "ese día"}, cada uno con su
-          probabilidad. No es una apuesta combinada. La probabilidad de cada fila es la publicada para el
-          lado más probable del modelo. Si falta, dice {MISSING}.
+          probabilidad. No es una apuesta combinada. El lado de cada fila es el más probable según la
+          probabilidad publicada (mercado y modelo juntos). Si falta, dice {MISSING}.
         </p>
         {board ? (
           <div className="mt-4">

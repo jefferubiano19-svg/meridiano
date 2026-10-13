@@ -56,7 +56,9 @@ function sameName(a: string, b: string): boolean {
 
 async function enrich(report: UploadReport): Promise<UploadReport> {
   if (report.fichas.length === 0) return report;
-  const { levelCFor } = await import("./recent");
+  const { publishedFor } = await import("./published");
+  const levelCFor = (id: string, kickoff: string, competition?: string) =>
+    publishedFor(id, kickoff, competition ?? "") as unknown as RecentAnalysis | null;
   const { readingById } = await import("./page-data");
   const { readFileSync } = await import("node:fs");
   const dir = `${process.cwd()}/data`;

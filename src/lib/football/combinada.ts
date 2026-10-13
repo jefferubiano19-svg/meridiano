@@ -1,8 +1,9 @@
 import { agendaOnDay, type AgendaMatch } from "./agenda";
 import { getFixture } from "./fixtures";
 import { getAnalysis } from "./model";
-import { hasMarketOdds } from "./publish";
-import { INCOMPATIBLE, levelCFor } from "./recent";
+import { hasMarketOdds, presentAnalysis } from "./publish";
+import { publishedFor } from "./published";
+import { INCOMPATIBLE } from "./recent";
 import type { RecentAnalysis } from "./recent-math";
 import { agendaToday, agendaTomorrow } from "./today";
 
@@ -46,7 +47,8 @@ function pick(matchId: string, home: string, away: string, analysis: RecentAnaly
 function toLeg(match: AgendaMatch): CombinadaLeg | null {
   const fixture = match.fixtureId ? getFixture(match.fixtureId) : undefined;
   if (fixture) {
-    const analysis = getAnalysis(fixture);
+    // Probabilidad publicada (mercado + modelo), no el modelo solo.
+    const analysis = presentAnalysis(match.id, getAnalysis(fixture), match.kickoff);
     const sides = [
       { key: "home" as const, name: match.home, probability: analysis.p1x2.home, fair: analysis.fair.home, odds: analysis.quoted.home },
       { key: "draw" as const, name: "Empate", probability: analysis.p1x2.draw, fair: analysis.fair.draw, odds: analysis.quoted.draw },
@@ -68,9 +70,9 @@ function toLeg(match: AgendaMatch): CombinadaLeg | null {
       games: 0,
     };
   }
-  const analysis = levelCFor(match.id, match.kickoff, match.competition);
+  const analysis = publishedFor(match.id, match.kickoff, match.competition);
   if (!analysis) return null;
-  const side = pick(match.id, match.home, match.away, analysis);
+  const side = pick(match.id, match.home, match.away, analysis as unknown as RecentAnalysis);
   return {
     id: match.id,
     fixtureId: match.fixtureId,
@@ -95,7 +97,7 @@ function buildTicket(day: string, limit: number): CombinadaTicket {
     if (Date.parse(match.kickoff) <= now) return false;
     if (INCOMPATIBLE.test(match.competition) || YOUTH.test(`${match.competition} ${match.home} ${match.away}`)) return false;
     if (match.fixtureId && getFixture(match.fixtureId)) return true;
-    return levelCFor(match.id, match.kickoff, match.competition) != null;
+    return publishedFor(match.id, match.kickoff, match.competition) != null;
   });
   // Primero los partidos que una casa ofrece (el corte leyó su cuota); los demás solo si faltan.
   const offered = (match: AgendaMatch) => (hasMarketOdds(match.id) ? 0 : 1);
@@ -115,7 +117,7 @@ function buildTicket(day: string, limit: number): CombinadaTicket {
   for (const match of rest) {
     if (picked.length >= limit) break;
     if (seen.has(match.competition)) continue;
-    if (!levelCFor(match.id, match.kickoff, match.competition)) continue;
+    if (!publishedFor(match.id, match.kickoff, match.competition)) continue;
     seen.add(match.competition);
     picked.push(match);
   }

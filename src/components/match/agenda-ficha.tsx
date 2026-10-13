@@ -7,7 +7,8 @@ import { settle } from "@/lib/football/hits";
 import { AGENDA } from "@/lib/football/agenda";
 import { formatPct } from "@/lib/football/format";
 import { flashscoreStatusLabel } from "@/lib/football/flashscore";
-import { analyzeRecent, levelCFor, recentFor, type SideRead } from "@/lib/football/recent";
+import { analyzeRecent, recentFor, type SideRead } from "@/lib/football/recent";
+import { publishedFor } from "@/lib/football/published";
 import { findBook, BOOK_FETCHED_AT } from "@/lib/football/books";
 
 function when(ts: number | null): string {
@@ -37,8 +38,9 @@ export function AgendaFicha({ id, pick, page }: { id: string; pick?: string; pag
   const recent = recentFor(match.id);
   const home = recent?.home ?? null;
   const away = recent?.away ?? null;
+  // Probabilidad publicada (mercado + modelo); el respaldo de goles solo si no hay nada más.
   const analysis =
-    levelCFor(match.id, match.kickoff, match.competition) ??
+    (publishedFor(match.id, match.kickoff, match.competition) as unknown as ReturnType<typeof analyzeRecent>) ??
     (home && away ? analyzeRecent(home, away, match.kickoff, match.competition) : null);
   const book = findBook(match.home, match.away);
   const started = match.status === "finalizado" || match.status === "en-juego";
