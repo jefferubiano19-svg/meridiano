@@ -368,7 +368,14 @@ const ALL_MARKETS = [
 /** Solo 1X2: es lo que decide el ganador y se lee en un tercio del tiempo (sin esperar pestañas que no existen). */
 const ONLY_1X2 = [ALL_MARKETS[0]];
 
-async function readOdds(page, markets = ALL_MARKETS) {
+/*
+ * Revisión del 13 oct 2026 con los datos guardados: de 937 filas de "ambos marcan", 933 eran en realidad
+ * la tabla 1X2 (la pestaña no abría), y "más/menos goles" nunca guardó una sola fila. Hasta verificar esos
+ * lectores con la página real, el corte solo lee 1X2: es lo único confirmado y lo que decide al ganador.
+ */
+const READ_MARKETS = ONLY_1X2;
+
+async function readOdds(page, markets = READ_MARKETS) {
   const tab = page.locator("a,button").filter({ hasText: /^Cuotas$/ }).first();
   try {
     await tab.waitFor({ state: "visible", timeout: 8000 });
@@ -378,9 +385,16 @@ async function readOdds(page, markets = ALL_MARKETS) {
   }
   await page.waitForTimeout(600);
   const books = [];
+  let first = null;
   for (const market of markets) {
-    await clickTab(page, market.label);
-    for (const row of await readOddsTable(page)) books.push({ ...row, market: market.id });
+    const opened = await clickTab(page, market.label);
+    // Si la pestaña no abrió, la tabla visible sigue siendo la anterior: no se lee (evita guardar 1X2 como "ambos marcan").
+    if (!opened && market.id !== "1x2") continue;
+    const rows = (await readOddsTable(page)).filter((row) => row.odds.length === (market.id === "1x2" ? 3 : 2));
+    const signature = JSON.stringify(rows.map((row) => [row.book, row.odds]));
+    if (market.id === "1x2") first = signature;
+    else if (signature === first) continue;
+    for (const row of rows) books.push({ ...row, market: market.id });
   }
   return { books };
 }
@@ -443,6 +457,10 @@ function storeOdds(results, started) {
   // Siete días: alcanza para la Consulta reciente sin inflar el archivo que carga la app.
   const keep = Date.now() - 7 * 24 * 3600 * 1000;
   const byId = new Map((file.matches ?? []).filter((item) => Date.parse(item.readAtBogota ?? "") >= keep).map((item) => [item.id, item]));
+  // Fuera las filas de "ambos marcan" que no tienen exactamente 2 cuotas (eran copias del 1X2).
+  for (const item of byId.values()) {
+    if (item?.markets?.btts) item.markets.btts = item.markets.btts.filter((row) => Array.isArray(row.cells) && row.cells.length === 2);
+  }
   let stored = 0;
   for (const result of results ?? []) {
     if (!result?.id || !Array.isArray(result.books) || result.books.length === 0) continue;
@@ -502,7 +520,9 @@ function marksFromOdds(match, rows, at) {
     }
   }
   const groups = new Map();
+  const expected = { "1x2": 3, "mas-menos": 2, ambos: 2 };
   for (const row of live) {
+    if (row.odds.length !== expected[row.market]) continue;
     const key = row.market === "mas-menos" ? `${row.market}|${row.line}` : `${row.market}|${row.odds.length}`;
     const list = groups.get(key) ?? [];
     list.push(row);
@@ -543,7 +563,57 @@ function marksFromOdds(match, rows, at) {
       });
     }
   }
-  return marks;
+  return saneMarks(marks);
+}
+
+/** Valor esperado máximo creíble entre casas. Más que esto, en la práctica, es un error de lectura o una cuota vieja. */
+const MAX_EV = 0.15;
+
+/**
+ * Filtro de cordura de las marcas de valor (no inventar valor):
+ *  - fuera las de valor esperado mayor a 15 %;
+ *  - fuera todas las de un mercado si las casas marcan resultados distintos a la vez
+ *    (unas dicen que paga de más el local y otras la visita: datos contradictorios).
+ */
+function saneMarks(marks) {
+  const byGroup = new Map();
+  for (const mark of marks) {
+    const key = [mark.matchId, mark.market ?? "1x2", mark.line ?? ""].join("|");
+    const list = byGroup.get(key) ?? [];
+    list.push(mark);
+    byGroup.set(key, list);
+  }
+  const kept = [];
+  for (const list of byGroup.values()) {
+    const outcomes = new Set(list.map((mark) => mark.outcomeIndex ?? mark.outcome ?? mark.side));
+    if (outcomes.size > 1) continue;
+    for (const mark of list) if (!(mark.ev > MAX_EV)) kept.push(mark);
+  }
+  return kept;
+}
+
+/** Limpia el registro con las mismas reglas (idempotente) y anula cierres tomados en la misma lectura de la marca. */
+function cleanRegistry(registry) {
+  const before = registry.marks.length;
+  const valid = registry.marks.filter((mark) => {
+    if (mark.market === "ambos" && Number(mark.outcomeIndex) > 1) return false;
+    return true;
+  });
+  const legacy = valid.filter((mark) => !mark.market);
+  const current = saneMarks(valid.filter((mark) => mark.market));
+  let reopened = 0;
+  for (const mark of current) {
+    if (mark.closingOdds == null) continue;
+    const gap = Date.parse(mark.closedAt ?? "") - Date.parse(mark.readAt ?? "");
+    if (!(gap >= 60 * 60 * 1000)) {
+      mark.closingOdds = null;
+      mark.clv = null;
+      delete mark.closedAt;
+      reopened += 1;
+    }
+  }
+  registry.marks = [...legacy, ...current];
+  return { removed: before - registry.marks.length, reopened };
 }
 
 async function main() {
@@ -767,7 +837,7 @@ async function main() {
     ...row,
     kind: "cuotas",
     url: `https://www.flashscore.co/partido/${row.id}/`,
-    read: async (page) => readOdds(page, row.full ? ALL_MARKETS : ONLY_1X2),
+    read: async (page) => readOdds(page, READ_MARKETS),
   })), () => Date.now() - oddsStartedMs >= ODDS_BUDGET_MS || overBudget()))) ?? [];
   const consensusStored = storeOdds(consensusRead, started);
   const readById = new Map(consensusRead.filter((row) => row.books).map((row) => [row.id, row]));
@@ -883,6 +953,7 @@ async function main() {
   ];
 
   const registry = readJson("value-marks.json");
+  const marksCleaned = cleanRegistry(registry);
   const known = new Set(registry.marks.map((mark) => [mark.matchId, mark.market, mark.line ?? "", mark.house, mark.outcome].join("|")));
   const newMarks = [];
   for (const row of oddsRead ?? []) {
@@ -912,6 +983,8 @@ async function main() {
       for (const mark of registry.marks) {
         if (mark.matchId !== row.id || mark.closingOdds != null) continue;
         if (!(Date.parse(mark.kickoff) > Date.now())) continue;
+        // Un cierre leído en el mismo corte que la marca no es un cierre: CLV 0 por construcción.
+        if (!(Date.parse(started) - Date.parse(mark.readAt ?? "") >= 60 * 60 * 1000)) continue;
         const same = row.books.find((book) => book.book === mark.house && book.market === (mark.market ?? "1x2") && (book.line ?? null) === (mark.line ?? null) && !book.struck);
         const index = Number.isInteger(mark.outcomeIndex) ? mark.outcomeIndex : mark.outcome === "X" || mark.side === "draw" ? 1 : mark.outcome === "2" || mark.outcome === "menos" || mark.outcome === "no" || mark.side === "away" ? (mark.market === "1x2" || !mark.market ? 2 : 1) : 0;
         const price = same?.odds?.[index];
@@ -1022,6 +1095,8 @@ async function main() {
     clvMean: evaluation?.clvMean ?? null,
     combo: combo.length,
     valueMarks: newMarks.length,
+    valueMarksRemoved: marksCleaned.removed,
+    valueMarksReopened: marksCleaned.reopened,
     closingOdds: closingRead,
     failures,
     reads: reads.length,

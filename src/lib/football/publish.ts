@@ -122,10 +122,13 @@ function bookValues(rows: BookPrice[]): Publication["values"] {
     ];
     for (const side of sides) {
       const ev = side.p * side.odds - 1;
-      if (ev >= 0.03) marks.push({ house: row.house, side: side.side, odds: side.odds, ev });
+      // Más de 15 % sobre el consenso de las demás casas, en la práctica, es un error de lectura o una cuota vieja.
+      if (ev >= 0.03 && ev <= 0.15) marks.push({ house: row.house, side: side.side, odds: side.odds, ev });
     }
   }
-  return marks;
+  // Si las casas marcan resultados distintos a la vez, los datos se contradicen: no hay marca.
+  if (new Set(marks.map((mark) => mark.side)).size > 1) return [];
+  return marks.sort((a, b) => b.ev - a.ev);
 }
 
 function poissonOver(line: number, total: number): number {
