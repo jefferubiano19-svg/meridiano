@@ -1,5 +1,6 @@
 import oddsFile from "../../../data/combo-odds.json";
 import wplayFile from "../../../data/wplay-odds.json";
+import { cleanWplay, type WplayRow } from "./wplay-clean";
 import { shin } from "./engine";
 import { nationForMatch } from "./nations";
 import type { RecentAnalysis } from "./recent-math";
@@ -42,7 +43,8 @@ export interface Publication {
   market: ThreeWay | null;
 }
 
-const WPLAY = (wplayFile as unknown as { byId?: Record<string, { odds: number[]; readAt: string }> }).byId ?? {};
+// Sin las filas copiadas de otro partido por el lector viejo (ver wplay-clean.ts).
+const WPLAY = cleanWplay((wplayFile as unknown as { byId?: Record<string, WplayRow> }).byId ?? {}).kept;
 
 /** Cuotas 1X2 de Wplay (versión Lite) sin margen, si el corte las leyó antes del inicio. */
 function wplayFair(matchId: string): ThreeWay | null {

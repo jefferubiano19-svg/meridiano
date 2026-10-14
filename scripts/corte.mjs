@@ -173,15 +173,21 @@ function parseLite(html) {
     const name = league.slice(0, end).split("<")[0].replace(/\s+/g, " ").trim();
     const body = league.slice(end);
     const match = /<span(?: class="live")?>([\s\S]*?)<\/span>\s*([\s\S]*?)<a href="\/partido\/([A-Za-z0-9]+)\/[^"]*" class="([^"]*)">([\s\S]*?)<\/a>/g;
-    let row = match.exec(body);
-    while (row) {
+    // Primero todas las filas con su posición: la caja de cuotas de un partido solo se busca
+    // entre ese partido y el siguiente. Antes se buscaba en los 2.500 caracteres siguientes y,
+    // si el partido no traía cuotas, se quedaba con las del partido de abajo (error del 13 oct 2026).
+    const found = [];
+    for (let hit = match.exec(body); hit; hit = match.exec(body)) found.push(hit);
+    for (let index = 0; index < found.length; index += 1) {
+      const row = found[index];
+      const nextStart = index + 1 < found.length ? found[index + 1].index : body.length;
       const clock = row[1].replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
       const teams = row[2].replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
       if (teams.includes(" - ")) {
         const [home, away] = teams.split(" - ").map((side) => side.trim());
         const score = row[5].replace(/<[^>]+>/g, "").replace(/&nbsp;/g, " ").replace(/\u00a0/g, " ").trim();
         const odds = [];
-        const tail = body.slice(row.index + row[0].length, row.index + row[0].length + 2500);
+        const tail = body.slice(row.index + row[0].length, nextStart);
         const box = tail.match(/class="mobi-odds">\s*\[([\s\S]*?)\]/);
         if (box) {
           for (const number of box[1].matchAll(/>([0-9]+(?:\.[0-9]+)?)</g)) odds.push(Number(number[1]));
@@ -198,7 +204,6 @@ function parseLite(html) {
           odds: odds.length >= 3 ? odds.slice(0, 3) : null,
         });
       }
-      row = match.exec(body);
     }
   }
   return rows;
@@ -845,16 +850,27 @@ async function main() {
   // Cuotas 1X2 de Wplay (Lite) de partidos por empezar: la app las usa como mercado cuando no hay 3 casas.
   const wplayFile = readJsonOptional("wplay-odds.json", { byId: {} });
   const keepWplay = Date.now() - 3 * 24 * 3600 * 1000;
-  wplayFile.byId = Object.fromEntries(
-    Object.entries(wplayFile.byId ?? {}).filter(([, row]) => Date.parse(row?.readAt ?? "") >= keepWplay),
+  const { cleanWplay, WPLAY_READER_VERSION } = await import("../src/lib/football/wplay-clean.ts");
+  // Fuera las filas viejas copiadas de otro partido por el lector anterior (ver wplay-clean.ts).
+  const wplayCleaned = cleanWplay(
+    Object.fromEntries(Object.entries(wplayFile.byId ?? {}).filter(([, row]) => Date.parse(row?.readAt ?? "") >= keepWplay)),
   );
+  wplayFile.byId = wplayCleaned.kept;
+  // Un partido que en esta lectura sale sin cuota pierde la que tenía guardada (la casa la retiró o era copiada).
+  let wplayWithdrawn = 0;
+  for (const row of [...oddsRows, ...(oddsTomorrowHtml ? parseLite(oddsTomorrowHtml) : [])]) {
+    if (!row.odds && wplayFile.byId[row.id]) {
+      delete wplayFile.byId[row.id];
+      wplayWithdrawn += 1;
+    }
+  }
   // Mañana: solo para saber qué partidos ofrece la casa y mostrar el mercado; no entra a predicciones de hoy.
   for (const row of oddsTomorrowHtml ? parseLite(oddsTomorrowHtml) : []) {
     if (!row.odds || row.klass !== "sched") continue;
     const margin = row.odds.reduce((sum, price) => sum + 1 / price, 0) - 1;
-    if (margin >= 0 && margin <= 0.15) wplayFile.byId[row.id] = { odds: row.odds, readAt: started };
+    if (margin >= 0 && margin <= 0.15) wplayFile.byId[row.id] = { odds: row.odds, readAt: started, v: WPLAY_READER_VERSION };
   }
-  for (const [id, odds] of Object.entries(keptOdds)) wplayFile.byId[id] = { odds, readAt: started };
+  for (const [id, odds] of Object.entries(keptOdds)) wplayFile.byId[id] = { odds, readAt: started, v: WPLAY_READER_VERSION };
   wplayFile.source = "m.flashscore.co/?d=0&s=5 (cuotas 1X2 de Wplay de la versión Lite). La escribe el corte.";
   writeJson("wplay-odds.json", wplayFile);
 
@@ -1085,6 +1101,8 @@ async function main() {
     budgetHit,
     sheetsHistory: Object.keys(historyFile.byId).length,
     oddsKept: Object.keys(keptOdds).length,
+    wplayCopiedDropped: wplayCleaned.dropped.length,
+    wplayWithdrawn,
     oddsDiscardedByTest: discardedOdds,
     predictionsSaved: fresh.length,
     history: "mismo motor que la app",

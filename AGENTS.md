@@ -23,7 +23,7 @@ Nunca se escriben secretos ni datos personales en el repositorio.
 3. Corrige marcadores con la página de resultados de ayer.
 4. Fichas de partidos finalizados (xG, córners, alineaciones) con el tiempo que sobre del presupuesto de 110 min (el job tiene 150).
 5. Noche: tablas de 17 ligas → `data/standings-auto.json`.
-6. Ratings del Nivel B → `data/ratings.json`. Cuotas de 5 casas (Betano, Wplay, Stake, Bwin, BetPlay) de hasta 450 partidos de hoy y de mañana que ya tienen cuota (máx. 75 min; ligas fuertes con 1X2, goles y ambos marcan; el resto solo 1X2; no se lee una cuota a menos de 10 min del inicio) → `data/combo-odds.json`. Cuotas 1X2 de Wplay de la Lite → `data/wplay-odds.json` (3 días).
+6. Ratings del Nivel B → `data/ratings.json`. Cuotas de 5 casas (Betano, Wplay, Stake, Bwin, BetPlay) de hasta 450 partidos de hoy y de mañana que ya tienen cuota (máx. 75 min; ligas fuertes con 1X2, goles y ambos marcan; el resto solo 1X2; no se lee una cuota a menos de 10 min del inicio) → `data/combo-odds.json`. Cuotas 1X2 de Wplay de la Lite → `data/wplay-odds.json` (3 días). El lector busca la caja de cuotas solo entre un partido y el siguiente; filas nuevas llevan `v: 2`. Las viejas copiadas de otro partido (misma hora de lectura y mismas 3 cuotas) se descartan (`wplay-clean.ts`), y un partido que sale sin cuota pierde la guardada.
 7. Predicciones de partidos por empezar → `data/predictions.json` (una fila no se edita).
 8. Evaluación de lo finalizado → `data/evaluations.json`; marcas de valor y CLV.
 9. Registro: `data/cut-coverage.json` (último corte), `data/cut-log.json` (últimos 90) y revisión automática `data/review.json` (`src/lib/football/review.ts`).
