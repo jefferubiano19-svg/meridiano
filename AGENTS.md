@@ -52,6 +52,12 @@ Marca de valor: 3+ casas y EV ≥ 3 % contra el consenso sin la casa juzgada. El
 Una sombra se publica solo con ≥ 500 partidos comparados y el IC 95 % de la diferencia de RPS entero bajo cero.
 Congelamiento de parámetros hasta 500 partidos comparables con el consenso.
 
+## Agenda
+
+Filtros: «Con cuota en casas», «revisar o valor», «Nivel» (A, B, C, M, selecciones) y la vista «Mejores ligas»:
+los 20 partidos del día de las competiciones de `top-leagues.ts` (continentales UEFA/CONMEBOL por jerarquía oficial;
+ligas por el ranking de Opta de julio 2026, con fuente y advertencia en el archivo). Actualizar la lista cuando Opta publique otro ranking.
+
 ## Revisión automática
 
 `review.ts` calcula, en cada corte: semáforo de cortes (7 días), cobertura por nivel, evaluación con IC 95 %
