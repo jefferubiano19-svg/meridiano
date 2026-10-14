@@ -410,8 +410,13 @@ async function readStandings(page) {
   const rows = await page.evaluate(() => {
     const out = [];
     for (const row of document.querySelectorAll(".ui-table__row")) {
-      const link = row.querySelector(".tableCellParticipant__name, [class*='participantName'], a[href*='/equipo/']");
-      const team = (link?.textContent || "").trim();
+      // El primer enlace /equipo/ de la fila es el escudo (sin texto): por eso las tablas salían vacías
+      // (corte del 14 oct 2026: 17 tablas con 18-20 filas visibles y 0 guardadas). Se toma el primer
+      // candidato con texto y, si ninguno lo tiene, el atributo title del enlace del escudo.
+      const links = [...row.querySelectorAll(".tableCellParticipant__name, [class*='participantName'], a[href*='/equipo/']")];
+      const named = links.map((el) => (el.textContent || "").trim()).find(Boolean);
+      const titled = links.map((el) => (el.getAttribute("title") || "").trim()).find(Boolean);
+      const team = named || titled || "";
       if (!team) continue;
       // Primero celda por celda; si la página no usa celdas reconocibles, el texto visible de la fila.
       const cells = [...row.querySelectorAll("[class*='table__cell']")]

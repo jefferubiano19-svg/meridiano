@@ -32,6 +32,7 @@ interface PredictionRow {
   lambdaAway?: number;
   published?: Way | null;
   consensus?: Way | null;
+  verifiedOdds?: { readAtBogota?: string; wplay1x2?: unknown } | null;
 }
 
 interface ByMatch {
@@ -95,7 +96,7 @@ export interface Review {
   value: { marks: number; withClose: number; clv: Stat; stage: string };
   shadows: { key: string; label: string; n: number; diff: Stat }[];
   /** Partidos publicados con Wplay como mercado (sin 3 casas): publicada contra modelo solo. */
-  wplayMarket: { n: number; rpsPublished: number | null; rpsModel: number | null; diff: Stat };
+  wplayMarket: { n: number; rpsPublished: number | null; rpsModel: number | null; diff: Stat; excludedCopied: number };
   calibration: { label: string; n: number; expected: number | null; observed: number | null }[];
   anomalies: { light: Light; items: { key: string; label: string; count: number; examples: string[] }[] };
 }
@@ -244,8 +245,23 @@ export function buildReview(input: ReviewInput): Review {
     };
   });
 
-  const wplayRows = byMatch.filter((row) => row.marketSource === "wplay" && row.publishedRps != null && row.modelRps != null);
+  // Fuera las predicciones cuyas cuotas de Wplay eran copiadas de otro partido (lector anterior al 14 oct 2026):
+  // misma hora de lectura y mismas 3 cuotas en partidos distintos. Medirlas sería medir un error de lectura.
+  const oddsGroups = new Map<string, Set<string>>();
+  for (const row of input.predictions) {
+    const odds = row.verifiedOdds?.wplay1x2;
+    if (!Array.isArray(odds) || !odds.every((value) => typeof value === "number")) continue;
+    const key = `${row.verifiedOdds?.readAtBogota ?? ""}|${odds.join("/")}`;
+    const set = oddsGroups.get(key) ?? new Set<string>();
+    set.add(row.matchId);
+    oddsGroups.set(key, set);
+  }
+  const copied = new Set<string>();
+  for (const set of oddsGroups.values()) if (set.size > 1) for (const id of set) copied.add(id);
+  const wplayAll = byMatch.filter((row) => row.marketSource === "wplay" && row.publishedRps != null && row.modelRps != null);
+  const wplayRows = wplayAll.filter((row) => !copied.has(row.matchId));
   const wplayMarket = {
+    excludedCopied: wplayAll.length - wplayRows.length,
     n: wplayRows.length,
     rpsPublished: mean(wplayRows.map((row) => row.publishedRps as number)),
     rpsModel: mean(wplayRows.map((row) => row.modelRps as number)),

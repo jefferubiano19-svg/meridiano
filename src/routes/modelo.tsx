@@ -336,6 +336,9 @@ function ModelPage() {
             <p className="text-sm text-muted">
               Wplay como mercado (publicada contra modelo solo): {interval(review.wplayMarket.diff)}.{" "}
               {verdict(review.wplayMarket.diff, 150)}
+              {(review.wplayMarket as { excludedCopied?: number }).excludedCopied
+                ? ` Se excluyen ${(review.wplayMarket as { excludedCopied?: number }).excludedCopied} partidos cuyas cuotas de Wplay eran de otro partido (error de lectura corregido el 14 oct).`
+                : ""}
             </p>
             <div className="mt-4">
               <Table
