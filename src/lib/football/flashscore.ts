@@ -7,6 +7,7 @@ export type FlashscoreStatus =
   | "finalizado"
   | "aplazado"
   | "cancelado"
+  | "sin-resultado"
   | "otro";
 
 export interface FlashscoreMatch {
@@ -63,5 +64,6 @@ export function flashscoreStatusLabel(status: string): string {
   if (status === "finalizado") return "Finalizado";
   if (status === "aplazado") return "Aplazado";
   if (status === "cancelado") return "Cancelado";
+  if (status === "sin-resultado") return "Sin resultado publicado";
   return "Sin estado";
 }

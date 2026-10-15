@@ -6,8 +6,24 @@ import { nationForMatch } from "./nations";
 import type { RecentAnalysis } from "./recent-math";
 import type { MatchAnalysis, ThreeWay } from "./types";
 
-/** Fijo hasta que el backtest elija otro. Sección 7.2. */
+/**
+ * Peso del mercado cuando solo hay una casa (Wplay): 80 % Wplay sin margen y 20 % modelo.
+ * Evidencia: 427 partidos limpios, la mezcla baja el RPS frente al modelo (−0,0165, IC 95 % −0,025 a −0,008);
+ * el mejor peso medido fue 0,76.
+ */
 export const MARKET_WEIGHT = 0.8;
+
+/**
+ * Peso del consenso de 3+ casas: 1 (se publica el consenso solo; el modelo queda como referencia y para «revisar»).
+ * Evidencia del 15 oct 2026, 257 partidos jugados con consenso y modelo guardados antes del inicio:
+ *  - RPS por peso: 0,8 → 0,1963; 0,9 → 0,1944; 1,0 → 0,1929 (mejora en cada paso).
+ *  - Consenso solo contra la mezcla 0,8: −0,0034 (IC 95 % −0,0054 a −0,0014).
+ *  - Mitad más antigua para elegir, mitad más reciente para probar: la más antigua elige 1,0 y en la más reciente
+ *    1,0 también gana (0,1747 contra 0,1808).
+ *  - Gana en todos los niveles (A 40, B 207, selecciones 10) y acierta más al favorito (54,1 % contra 52,9 %).
+ * La revisión sigue midiendo la mezcla 0,8 como sombra (review.ts, «modelBlend») por si el modelo llega a aportar.
+ */
+export const CONSENSUS_WEIGHT = 1;
 
 type OddsCell = { text: string; withdrawn: boolean };
 type OddsRow = { house: string; cells: OddsCell[] };
@@ -100,16 +116,13 @@ function consensusOf(rows: BookPrice[]): ThreeWay | null {
   });
 }
 
-export function blendMarket(model: ThreeWay, consensus: ThreeWay): ThreeWay {
+export function blendMarket(model: ThreeWay, consensus: ThreeWay, weight = MARKET_WEIGHT): ThreeWay {
+  if (weight >= 1) return normalize(consensus);
   return normalize({
-    home: expit(MARKET_WEIGHT * logit(consensus.home) + (1 - MARKET_WEIGHT) * logit(model.home)),
-    draw: expit(MARKET_WEIGHT * logit(consensus.draw) + (1 - MARKET_WEIGHT) * logit(model.draw)),
-    away: expit(MARKET_WEIGHT * logit(consensus.away) + (1 - MARKET_WEIGHT) * logit(model.away)),
+    home: expit(weight * logit(consensus.home) + (1 - weight) * logit(model.home)),
+    draw: expit(weight * logit(consensus.draw) + (1 - weight) * logit(model.draw)),
+    away: expit(weight * logit(consensus.away) + (1 - weight) * logit(model.away)),
   });
-}
-
-function blend(model: ThreeWay, consensus: ThreeWay): ThreeWay {
-  return blendMarket(model, consensus);
 }
 
 function bookValues(rows: BookPrice[]): Publication["values"] {
@@ -176,7 +189,7 @@ function marketTotal(matchId: string): number | null {
 
 /**
  * Probabilidad publicada.
- * Con 3+ casas vigentes: 80 % consenso y 20 % modelo. Sin consenso pero con la cuota de Wplay leída
+ * Con 3+ casas vigentes: el consenso (CONSENSUS_WEIGHT = 1, desde el 15 oct 2026). Sin consenso pero con la cuota de Wplay leída
  * antes del inicio: 80 % Wplay sin margen y 20 % modelo (la sombra "wplay" bajó el RPS de la publicada
  * en 543 partidos evaluados: −0,0154, IC 95 % −0,024 a −0,007; regla de la sección 9.2).
  * Sin ninguno de los dos, queda el modelo.
@@ -186,7 +199,8 @@ export function publication(matchId: string, model: ThreeWay, modelTotal?: numbe
   const consensus = consensusOf(rows);
   const wplay = consensus ? null : wplayFair(matchId);
   const market = consensus ?? wplay;
-  const published = market ? blend(model, market) : model;
+  const weight = consensus ? CONSENSUS_WEIGHT : wplay ? MARKET_WEIGHT : 0;
+  const published = market ? blendMarket(model, market, weight) : model;
   // El aviso "revisar" solo se calcula contra el consenso de 3+ casas, como antes.
   const gap = consensus
     ? Math.max(
@@ -206,7 +220,7 @@ export function publication(matchId: string, model: ThreeWay, modelTotal?: numbe
     published,
     books: rows.length,
     readAt: consensus ? readAt : wplay ? (WPLAY[matchId]?.readAt ?? null) : readAt,
-    weight: market ? MARKET_WEIGHT : 0,
+    weight,
     marketSource: consensus ? "consenso" : wplay ? "wplay" : null,
     market,
     gap,

@@ -746,6 +746,20 @@ async function main() {
     stored[7] = score[1];
     recoveredTwoDays += 1;
   }
+  // Sin resultado publicado: partidos de hace 3 días o más que siguen "por-jugar" después de que las páginas
+  // de resultados de ayer y anteayer los tuvieron a su alcance (aplazados, suspendidos o sin dato en Flashscore).
+  // No se inventa el resultado: quedan como "sin-resultado", fuera de las listas y de la evaluación.
+  // Si una lectura posterior trae el marcador, la recuperación de anteayer lo completa.
+  let markedNoResult = 0;
+  if (yesterdayHtml && twoDaysHtml) {
+    const lastChecked = bogotaDay(-2);
+    for (const row of agenda.matches) {
+      if (row[5] === "por-jugar" && String(row[1]).slice(0, 10) < lastChecked) {
+        row[5] = "sin-resultado";
+        markedNoResult += 1;
+      }
+    }
+  }
   for (const row of agenda.matches) {
     if ((row[6] != null || row[7] != null) && row[5] !== "finalizado") {
       row[6] = null;
@@ -1097,6 +1111,7 @@ async function main() {
     addedTomorrow,
     updatedYesterday,
     recoveredTwoDays,
+    markedNoResult,
     scoreConflicts: conflicts,
     yesterdayFinished: yesterdayFinished.length,
     yesterdaySheets: (sheets ?? []).filter((sheet) => !sheet.failed).length,

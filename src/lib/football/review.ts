@@ -32,6 +32,7 @@ interface PredictionRow {
   lambdaAway?: number;
   published?: Way | null;
   consensus?: Way | null;
+  model?: Way | null;
   verifiedOdds?: { readAtBogota?: string; wplay1x2?: unknown } | null;
 }
 
@@ -97,6 +98,8 @@ export interface Review {
   shadows: { key: string; label: string; n: number; diff: Stat }[];
   /** Partidos publicados con Wplay como mercado (sin 3 casas): publicada contra modelo solo. */
   wplayMarket: { n: number; rpsPublished: number | null; rpsModel: number | null; diff: Stat; excludedCopied: number };
+  /** Sombra: mezcla 80 % consenso + 20 % modelo contra el consenso solo, en los mismos partidos. Negativa: el modelo aporta. */
+  modelBlend: { n: number; diff: Stat };
   calibration: { label: string; n: number; expected: number | null; observed: number | null }[];
   anomalies: { light: Light; items: { key: string; label: string; count: number; examples: string[] }[] };
 }
@@ -268,6 +271,35 @@ export function buildReview(input: ReviewInput): Review {
     diff: stat(wplayRows.map((row) => (row.publishedRps as number) - (row.modelRps as number))),
   };
 
+  // 5b. Sombra del modelo: ¿la mezcla 0,8 le gana al consenso solo? (desde el 15 oct se publica el consenso solo).
+  const outcomeRps = (p: Way, actual: string) => {
+    const o = [actual === "home" ? 1 : 0, actual === "draw" ? 1 : 0, actual === "away" ? 1 : 0];
+    const c1 = p.home - o[0];
+    const c2 = p.home + p.draw - o[0] - o[1];
+    return (c1 * c1 + c2 * c2) / 2;
+  };
+  const lg = (x: number) => {
+    const v = Math.min(0.99, Math.max(0.01, x));
+    return Math.log(v / (1 - v));
+  };
+  const ex = (x: number) => 1 / (1 + Math.exp(-x));
+  const mix = (model: Way, market: Way): Way => {
+    const raw = {
+      home: ex(0.8 * lg(market.home) + 0.2 * lg(model.home)),
+      draw: ex(0.8 * lg(market.draw) + 0.2 * lg(model.draw)),
+      away: ex(0.8 * lg(market.away) + 0.2 * lg(model.away)),
+    };
+    const sum = raw.home + raw.draw + raw.away;
+    return { home: raw.home / sum, draw: raw.draw / sum, away: raw.away / sum };
+  };
+  const blendDiffs: number[] = [];
+  for (const row of byMatch) {
+    const pred = row.rowId ? rowById.get(row.rowId) : undefined;
+    if (!pred?.model || !pred?.consensus) continue;
+    blendDiffs.push(outcomeRps(mix(pred.model, pred.consensus), row.actual) - outcomeRps(pred.consensus, row.actual));
+  }
+  const modelBlend = { n: blendDiffs.length, diff: stat(blendDiffs) };
+
   // 6. Calibración: probabilidad publicada del favorito contra lo que pasó.
   const bins = [0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9].map((low) => ({ low, high: low + 0.1, p: [] as number[], hit: 0 }));
   for (const row of byMatch) {
@@ -307,6 +339,13 @@ export function buildReview(input: ReviewInput): Review {
       .filter((row) => row[5] === "por-jugar" && Date.parse(row[1]) < now - 2 * DAY && Date.parse(row[1]) >= now - 9 * DAY)
       .map((row) => `${row[0]} ${row[1].slice(0, 16)} ${row[3]} - ${row[4]}`),
   );
+  push(
+    "sin-resultado",
+    "Partidos sin resultado publicado en Flashscore (aplazados o sin dato; informativo, no se evalúan)",
+    input.agenda
+      .filter((row) => row[5] === "sin-resultado" && Date.parse(row[1]) >= now - 9 * DAY)
+      .map((row) => `${row[0]} ${row[1].slice(0, 16)} ${row[3]} - ${row[4]}`),
+  );
   const ids = new Map<string, number>();
   for (const row of input.agenda) ids.set(row[0], (ids.get(row[0]) ?? 0) + 1);
   push("id-repetido", "Ids repetidos en la agenda", [...ids.entries()].filter(([, n]) => n > 1).map(([id]) => id));
@@ -344,7 +383,8 @@ export function buildReview(input: ReviewInput): Review {
     "Marcadores corregidos por la página de resultados de ayer",
     recent.flatMap((row) => (row.scoreConflicts ? [`${row.startedAtBogota}: ${row.scoreConflicts}`] : [])),
   );
-  const serious = items.filter((item) => item.key !== "conflictos" && item.count > 0).length;
+  // Informativos: correcciones de marcador (el sistema funcionando) y partidos sin resultado publicado.
+  const serious = items.filter((item) => !["conflictos", "sin-resultado"].includes(item.key) && item.count > 0).length;
   const anomaliesLight: Light = serious === 0 ? "verde" : items.some((item) => ["despues-inicio", "suma", "id-repetido"].includes(item.key) && item.count > 0) ? "rojo" : "amarillo";
 
   return {
@@ -372,6 +412,7 @@ export function buildReview(input: ReviewInput): Review {
     },
     shadows,
     wplayMarket,
+    modelBlend,
     calibration,
     anomalies: { light: anomaliesLight, items },
   };

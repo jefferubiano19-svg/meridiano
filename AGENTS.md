@@ -42,7 +42,7 @@ Reglas de lectura: respetar `robots.txt`, 3 s entre páginas, User-Agent propio.
 - Matriz de marcadores con rho de Dixon-Coles (`engine.ts`); goles esperados entre 0,20 y 4,00.
 
 **Publicada** (`publish.ts`), en log-odds:
-- 3+ casas vigentes: 80 % consenso (Shin, mediana) + 20 % modelo.
+- 3+ casas vigentes: consenso solo (Shin, mediana), `CONSENSUS_WEIGHT = 1` desde el 15 oct 2026 (257 partidos: 0,1929 contra 0,1963 de la mezcla 0,8; IC de la diferencia −0,0054 a −0,0014; gana en la mitad reciente y en todos los niveles). La mezcla 0,8 sigue medida como sombra en `review.json` (`modelBlend`).
 - Sin consenso, con Wplay leída antes del inicio: 80 % Wplay sin margen + 20 % modelo (desde el 13 oct 2026; evidencia: 543 partidos, RPS −0,0154, IC 95 % −0,024 a −0,007).
 - Sin mercado: modelo.
 

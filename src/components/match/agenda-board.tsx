@@ -79,6 +79,7 @@ export function AgendaBoard() {
       finalizado: 2,
       aplazado: 3,
       cancelado: 4,
+      "sin-resultado": 5,
     };
     return dayMatches
       .filter((match) => {
@@ -211,7 +212,11 @@ function AgendaCard({ match }: { match: AgendaMatch }) {
   const pub = shown && shown.modelPure ? publication(match.id, shown.modelPure, shown.lambdaHome + shown.lambdaAway) : null;
   const recent = recentFor(match.id);
   const score =
-    match.homeScore == null || match.awayScore == null ? "Por jugar" : `${match.homeScore}–${match.awayScore}`;
+    match.status === "sin-resultado"
+      ? "Sin resultado publicado"
+      : match.homeScore == null || match.awayScore == null
+        ? "Por jugar"
+        : `${match.homeScore}–${match.awayScore}`;
   const note = blocked
     ? "Formato no compatible con el modelo."
     : started

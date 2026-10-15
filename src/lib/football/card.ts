@@ -5,14 +5,14 @@ import { getFixture } from "./fixtures";
 import { leagueRate } from "./league-rate";
 import { getAnalysis } from "./model";
 import { isNational, nationForMatch, nationModel } from "./nations";
-import { blendMarket, marketOnly, MARKET_WEIGHT, publication } from "./publish";
+import { blendMarket, marketOnly, publication } from "./publish";
 import { INCOMPATIBLE, levelCFor } from "./recent";
 import { analyzeLevelC } from "./recent-math";
 import { seasonShadow } from "./season";
 import type { ThreeWay } from "./types";
 
 /** Parámetros vigentes el 5 oct 2026. No cambian hasta 500 predicciones evaluadas. */
-export const ENGINE_VERSION = "2026-10-13";
+export const ENGINE_VERSION = "2026-10-15";
 
 const REGION = new Set([
   "WORLD",
@@ -347,7 +347,7 @@ export function buildCard(
     model: base.model,
     consensus: pub.consensus ? way(pub.consensus) : null,
     published,
-    marketWeight: pub.market ? MARKET_WEIGHT : 0,
+    marketWeight: pub.weight,
     marketSource: pub.marketSource,
     probabilities: {
       ...published,

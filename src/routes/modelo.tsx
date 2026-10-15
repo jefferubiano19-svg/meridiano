@@ -250,8 +250,9 @@ function ModelPage() {
             corte lee las cuotas; antes de eso, no hay probabilidad.
           </li>
           <li>
-            <strong className="text-fg">Probabilidad publicada</strong>: si hay cuotas, 80 % mercado (consenso de 3 o
-            más casas, o Wplay si no hay consenso) y 20 % modelo. Sin cuotas, solo el modelo.
+            <strong className="text-fg">Probabilidad publicada</strong>: con 3 o más casas, el consenso de las casas sin
+            margen (en 257 partidos acertó más que mezclado con el modelo). Con solo Wplay, 80 % Wplay y 20 % modelo.
+            Sin cuotas, solo el modelo.
           </li>
           <li>
             Marca de valor: solo cuando una casa paga más que el consenso de las demás (3 % o más). El modelo solo nunca
@@ -334,6 +335,11 @@ function ModelPage() {
             note="Diferencia de RPS contra la publicada en los mismos partidos. Negativa: la variante acierta más."
           >
             <p className="text-sm text-muted">
+              {(review as { modelBlend?: { n: number; diff: Parameters<typeof interval>[0] } }).modelBlend
+                ? `Mezcla 80 % consenso + 20 % modelo contra el consenso solo: ${interval(
+                    (review as { modelBlend: { diff: Parameters<typeof interval>[0] } }).modelBlend.diff,
+                  )}. Positiva: el modelo resta precisión; por eso desde el 15 oct se publica el consenso solo. `
+                : ""}
               Wplay como mercado (publicada contra modelo solo): {interval(review.wplayMarket.diff)}.{" "}
               {verdict(review.wplayMarket.diff, 150)}
               {(review.wplayMarket as { excludedCopied?: number }).excludedCopied
