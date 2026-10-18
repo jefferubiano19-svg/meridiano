@@ -153,7 +153,7 @@ export function ComboList({ which }: { which: "hoy" | "manana" }) {
                 extra={
                   match.pickProbability == null
                     ? `Lado ${match.pick}: ${MISSING}`
-                    : `Lado ${match.pick}: ${formatPct(match.pickProbability, 1)} (${match.pickProbability.toPrecision(6)})`
+                    : `Lado ${match.pick}: ${formatPct(match.pickProbability, 1)} · cuota justa ${(1 / match.pickProbability).toFixed(2).replace(".", ",")}`
                 }
               />
             ))}
