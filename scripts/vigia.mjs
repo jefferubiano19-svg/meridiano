@@ -348,7 +348,9 @@ function realIo() {
       if (problems.length) {
         // Marca invisible con los problemas: solo se vuelve a escribir (y a mandar correo) si cambian.
         const key = `<!-- vigia:${problems.join(" | ").replace(/--/g, "-")} -->`;
-        const body = `${report}\n\n_Este aviso lo escribe el vigía (scripts/vigia.mjs). Se cierra solo cuando todo vuelve a estar bien._\n\n${key}`;
+        // La mención @dueño hace que GitHub mande correo (notificación «participando», activa por defecto).
+        const owner = REPO.split("/")[0];
+        const body = `@${owner} ${report}\n\n_Este aviso lo escribe el vigía (scripts/vigia.mjs). Se cierra solo cuando todo vuelve a estar bien._\n\n${key}`;
         if (!issue) {
           await gh("POST", `/repos/${REPO}/issues`, { title: ISSUE_TITLE, body });
           return "abrió el aviso";
