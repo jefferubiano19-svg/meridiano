@@ -109,11 +109,12 @@ export async function vigia(io) {
   const runsKnown = Array.isArray(runs);
   runs = runsKnown ? runs : [];
 
-  // B. Atascados.
+  // B. Atascados. Uno en cola detrás de otro que está corriendo no está atascado: espera su turno (concurrencia).
+  const running = runs.some((r) => r.status === "in_progress");
   for (const run of runs.filter((r) => ACTIVE.has(r.status))) {
     const age = (now - Date.parse(run.run_started_at ?? run.created_at)) / MIN;
     const queued = run.status !== "in_progress";
-    if ((queued && age > QUEUED_MAX_MIN) || (!queued && age > RUNNING_MAX_MIN)) {
+    if ((queued && !running && age > QUEUED_MAX_MIN) || (!queued && age > RUNNING_MAX_MIN)) {
       const ok = await guard("cancelar un corte atascado", async () => (await io.cancel(run.id), true), false);
       if (ok) {
         run.status = "completed";
