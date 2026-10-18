@@ -8,6 +8,12 @@ on:
     # Minuto 50 de cada hora (UTC). Cubre los turnos 00:15, 12:00 y 17:00 de Bogotá con 35-50 min de margen.
     - cron: "50 * * * *"
   workflow_dispatch:
+    inputs:
+      simular:
+        description: "Prueba: ninguno, aviso (abre un aviso de prueba) o lanzar (lanza un corte ya hecho)"
+        type: choice
+        options: [ninguno, aviso, lanzar]
+        default: ninguno
 
 permissions:
   contents: read
@@ -34,3 +40,4 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Para volver a publicar en Vercel si el corte falló en ese paso (el mismo secreto del corte).
           VERCEL_DEPLOY_HOOK: ${{ secrets.VERCEL_DEPLOY_HOOK }}
+          VIGIA_SIMULAR: ${{ inputs.simular }}

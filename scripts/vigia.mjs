@@ -87,6 +87,14 @@ export async function vigia(io) {
     }
   };
 
+  // Simulación a mano (Run workflow → simular), para probar en real el aviso y el lanzamiento.
+  if (io.simulate === "aviso") problems.push("Prueba del vigía: aviso de prueba. Se cierra solo en la vuelta siguiente; no hay que hacer nada.");
+  if (io.simulate === "lanzar") {
+    // El turno de la noche ya hecho: el corte arranca, el candado lo ve hecho y termina sin tocar nada.
+    const ok = await guard("lanzar el corte de prueba", async () => (await io.dispatch("noche"), true), false);
+    if (ok) actions.push("lanzó un corte de prueba (noche, ya hecho: debe terminar solo en pocos minutos)");
+  }
+
   // A. Flujo desactivado.
   const state = await guard("consultar el estado del flujo corte", () => io.workflowState(), "active");
   if (state && state !== "active") {
@@ -294,6 +302,7 @@ function realIo() {
   };
   return {
     now: process.env.VIGIA_NOW ? Date.parse(process.env.VIGIA_NOW) : Date.now(),
+    simulate: process.env.VIGIA_SIMULAR || "",
     async file(path) {
       if (DRY) return local(path);
       try {
