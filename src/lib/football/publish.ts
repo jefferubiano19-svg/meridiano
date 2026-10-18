@@ -276,8 +276,10 @@ function houseName(house: string): string {
 export function bestOdds(matchId: string): BestOdds | null {
   const { rows, readAt } = booksOf(matchId);
   const offers = rows.map((row) => ({ house: houseName(row.house), prices: [row.home, row.draw, row.away] }));
+  // La cuota de la Lista solo completa cuando la pestaña Cuotas trae menos de 2 casas: así, con 3+ casas,
+  // la mejor cuota sale de la misma lectura que el consenso (lo que usa «Valor del día»).
   const lite = WPLAY[matchId];
-  if (lite && !rows.some((row) => /wplay/i.test(row.house)) && lite.odds.every((price) => price > 1)) {
+  if (lite && offers.length < 2 && !rows.some((row) => /wplay/i.test(row.house)) && lite.odds.every((price) => price > 1)) {
     offers.push({ house: "Wplay", prices: lite.odds.slice(0, 3) });
   }
   if (offers.length < 2) return null;

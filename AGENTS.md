@@ -60,6 +60,11 @@ Marca de valor: 3+ casas y EV ≥ 3 % contra el consenso sin la casa juzgada. El
 **Mejor cuota** (`publish.ts` `bestOdds`): por resultado, la casa que más paga entre las leídas (pestaña Cuotas; Wplay de la
 Lista si no está en la pestaña) y el margen que queda. Solo informa; no cambia ninguna probabilidad. Se ve en la ficha y en Apuesta.
 
+**Valor del día** (`src/lib/football/valor.ts`, página `/valor`): con 3+ casas, la mejor cuota de cada resultado contra el
+consenso de esas mismas casas; se muestra si da entre +3 % y +15 % por apuesta, con la cuota mínima ((1 + 3 %) ÷ prob.).
+El corte guarda cada selección la primera vez que aparece en `data/valor-registro.json` (no se edita) y `review.ts`
+→ `pickResults` la mide igual que las marcas. La lectura de cierre cubre marcas y selecciones.
+
 **Cierre** (`.github/workflows/cierre.yml`, minuto 23 de cada hora): `CORTE=cierre` lee la tabla 1X2 de los partidos con
 marca de valor que empiezan en 10–130 min y la guarda en `data/cierres.json` (solo ese archivo). Si no hay marcas por
 cerrar, la vuelta termina sin instalar nada. `review.ts` → `valueResults`: retorno real de las marcas (IC 95 %), contra la

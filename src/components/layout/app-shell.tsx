@@ -12,6 +12,7 @@ import {
   Upload,
   Search,
   Calculator,
+  Gem,
 } from "lucide-react";
 import { type ReactNode } from "react";
 import { MeridianMark } from "@/components/brand/mark";
@@ -26,6 +27,7 @@ const NAV = [
   { to: "/ligas", label: "Ligas", icon: Trophy, date: "" },
   { to: "/combinada", label: "Partido hoy", icon: Tickets, date: "hoy" },
   { to: "/manana", label: "Partido", icon: SunMedium, date: "manana" },
+  { to: "/valor", label: "Valor del día", icon: Gem, date: "" },
   { to: "/consulta", label: "Consulta", icon: History, date: "" },
   { to: "/buscar", label: "Partido", icon: Search, date: "" },
   { to: "/apuesta", label: "Apuesta", icon: Calculator, date: "" },

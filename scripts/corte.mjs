@@ -1037,6 +1037,50 @@ async function main() {
   }
   writeJson("value-marks.json", registry);
 
+  // «Valor del día»: cada selección se guarda la primera vez que aparece (no se edita), para medir si gana.
+  // Mismas reglas que la página /valor (src/lib/football/valor.ts), con las cuotas guardadas en combo-odds.json.
+  let valuePicksAdded = 0;
+  await step("valor-del-dia", async () => {
+    const { consensusFromOffers, bestFromOffers, valuePicks } = await import("../src/lib/football/valor.ts");
+    const stored = readJsonOptional("combo-odds.json", { matches: [] }).matches ?? [];
+    const registro = readJsonOptional("valor-registro.json", { picks: [] });
+    registro.rule =
+      "Selecciones de «Valor del día» (mejor cuota de 3+ casas entre +3 % y +15 % sobre el consenso de las casas). Una fila por partido y resultado, guardada la primera vez que aparece; no se edita.";
+    registro.picks = Array.isArray(registro.picks) ? registro.picks : [];
+    const seen = new Set(registro.picks.map((pick) => `${pick.matchId}|${pick.outcomeIndex}`));
+    for (const item of stored) {
+      const row = byId.get(item.id);
+      if (!row || row[5] !== "por-jugar" || !(Date.parse(row[1]) - Date.now() > PREMATCH_MS)) continue;
+      const offers = (item.markets?.["1X2"] ?? [])
+        .filter((book) => Array.isArray(book.cells) && book.cells.length >= 3 && !book.cells.slice(0, 3).some((cell) => cell.withdrawn))
+        .map((book) => ({ house: String(book.house).replace(/\.(co|latam|com)$/i, ""), odds: book.cells.slice(0, 3).map((cell) => Number(cell.text)) }));
+      const probs = consensusFromOffers(offers);
+      const best = bestFromOffers(offers);
+      if (!probs || !best) continue;
+      for (const pick of valuePicks(probs, best, offers.length)) {
+        const key = `${item.id}|${pick.outcomeIndex}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        registro.picks.push({
+          matchId: item.id,
+          home: row[3],
+          away: row[4],
+          competition: row[2],
+          kickoff: row[1],
+          outcomeIndex: pick.outcomeIndex,
+          prob: pick.prob,
+          house: pick.house,
+          odds: pick.odds,
+          ev: pick.ev,
+          readAt: item.readAtBogota ?? null,
+          savedAt: started,
+        });
+        valuePicksAdded += 1;
+      }
+    }
+    writeJson("valor-registro.json", registro);
+  });
+
   const historyFile = readJsonOptional("sheets-history.json", { byId: {} });
   if (!historyFile.byId || typeof historyFile.byId !== "object") historyFile.byId = {};
   const yesterdayFile = readJsonOptional("sheets-yesterday.json", { sheets: [] });
@@ -1124,6 +1168,7 @@ async function main() {
     sheetsHistory: Object.keys(historyFile.byId).length,
     oddsKept: Object.keys(keptOdds).length,
     wplayCopiedDropped: wplayCleaned.dropped.length,
+    valuePicksAdded,
     wplayWithdrawn,
     oddsDiscardedByTest: discardedOdds,
     predictionsSaved: fresh.length,
@@ -1201,6 +1246,7 @@ async function finishCut(coverage, previous = null) {
       evaluations: readJsonOptional("evaluations.json", {}),
       marks: readJsonOptional("value-marks.json", { marks: [] }).marks ?? [],
       closings: readJsonOptional("cierres.json", { byMatch: {} }).byMatch ?? {},
+      picks: readJsonOptional("valor-registro.json", { picks: [] }).picks ?? [],
       agenda: readJsonOptional("agenda.json", { matches: [] }).matches ?? [],
       standings: readJsonOptional("standings-auto.json", { leagues: [] }).leagues ?? [],
     });
@@ -1300,12 +1346,13 @@ async function cierre() {
   const registry = readJsonOptional("value-marks.json", { marks: [] });
   const file = readJsonOptional("cierres.json", { byMatch: {} });
   file.rule =
-    "Cuotas 1X2 de las casas leídas entre 10 y 130 min antes del inicio de los partidos con marca de valor. Las escribe cierre.yml cada hora; queda la última lectura antes del inicio. 30 días.";
+    "Cuotas 1X2 de las casas leídas entre 10 y 130 min antes del inicio de los partidos con marca de valor o de «Valor del día». Las escribe cierre.yml cada hora; queda la última lectura antes del inicio. 30 días.";
   const keep = now - 30 * 24 * 3600 * 1000;
   file.byMatch = Object.fromEntries(Object.entries(file.byMatch ?? {}).filter(([, row]) => Date.parse(row?.kickoff ?? "") >= keep));
+  const picks = readJsonOptional("valor-registro.json", { picks: [] }).picks ?? [];
   const targets = [
     ...new Map(
-      (registry.marks ?? [])
+      [...(registry.marks ?? []), ...picks]
         .filter((mark) => (mark.market ?? "1x2") === "1x2")
         .filter((mark) => {
           const left = Date.parse(mark.kickoff) - now;
@@ -1314,7 +1361,7 @@ async function cierre() {
         .map((mark) => [mark.matchId, mark]),
     ).values(),
   ];
-  console.log(`cierre: ${targets.length} partidos con marca por empezar en 10-130 min.`);
+  console.log(`cierre: ${targets.length} partidos con marca o «Valor del día» por empezar en 10-130 min.`);
   if (targets.length === 0) return;
   const read = await browserPages(
     targets.map((mark) => ({

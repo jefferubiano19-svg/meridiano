@@ -20,6 +20,7 @@ import { Route as MananaRouteImport } from './routes/manana'
 import { Route as ModeloRouteImport } from './routes/modelo'
 import { Route as ResponsableRouteImport } from './routes/responsable'
 import { Route as RiesgoRouteImport } from './routes/riesgo'
+import { Route as ValorRouteImport } from './routes/valor'
 import { Route as AgendaIdRouteImport } from './routes/agenda.$id'
 import { Route as LigasIdRouteImport } from './routes/ligas.$id'
 import { Route as PartidoIdRouteImport } from './routes/partido.$id'
@@ -79,6 +80,11 @@ const RiesgoRoute = RiesgoRouteImport.update({
   path: '/riesgo',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ValorRoute = ValorRouteImport.update({
+  id: '/valor',
+  path: '/valor',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AgendaIdRoute = AgendaIdRouteImport.update({
   id: '/agenda/$id',
   path: '/agenda/$id',
@@ -107,6 +113,7 @@ export interface FileRoutesByFullPath {
   '/modelo': typeof ModeloRoute
   '/responsable': typeof ResponsableRoute
   '/riesgo': typeof RiesgoRoute
+  '/valor': typeof ValorRoute
   '/agenda/$id': typeof AgendaIdRoute
   '/ligas/$id': typeof LigasIdRoute
   '/partido/$id': typeof PartidoIdRoute
@@ -123,6 +130,7 @@ export interface FileRoutesByTo {
   '/modelo': typeof ModeloRoute
   '/responsable': typeof ResponsableRoute
   '/riesgo': typeof RiesgoRoute
+  '/valor': typeof ValorRoute
   '/agenda/$id': typeof AgendaIdRoute
   '/ligas/$id': typeof LigasIdRoute
   '/partido/$id': typeof PartidoIdRoute
@@ -140,6 +148,7 @@ export interface FileRoutesById {
   '/modelo': typeof ModeloRoute
   '/responsable': typeof ResponsableRoute
   '/riesgo': typeof RiesgoRoute
+  '/valor': typeof ValorRoute
   '/agenda/$id': typeof AgendaIdRoute
   '/ligas/$id': typeof LigasIdRoute
   '/partido/$id': typeof PartidoIdRoute
@@ -158,6 +167,7 @@ export interface FileRouteTypes {
     | '/modelo'
     | '/responsable'
     | '/riesgo'
+    | '/valor'
     | '/agenda/$id'
     | '/ligas/$id'
     | '/partido/$id'
@@ -174,6 +184,7 @@ export interface FileRouteTypes {
     | '/modelo'
     | '/responsable'
     | '/riesgo'
+    | '/valor'
     | '/agenda/$id'
     | '/ligas/$id'
     | '/partido/$id'
@@ -190,6 +201,7 @@ export interface FileRouteTypes {
     | '/modelo'
     | '/responsable'
     | '/riesgo'
+    | '/valor'
     | '/agenda/$id'
     | '/ligas/$id'
     | '/partido/$id'
@@ -207,6 +219,7 @@ export interface RootRouteChildren {
   ModeloRoute: typeof ModeloRoute
   ResponsableRoute: typeof ResponsableRoute
   RiesgoRoute: typeof RiesgoRoute
+  ValorRoute: typeof ValorRoute
   AgendaIdRoute: typeof AgendaIdRoute
   PartidoIdRoute: typeof PartidoIdRoute
 }
@@ -290,6 +303,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RiesgoRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/valor': {
+      id: '/valor'
+      path: '/valor'
+      fullPath: '/valor'
+      preLoaderRoute: typeof ValorRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/agenda/$id': {
       id: '/agenda/$id'
       path: '/agenda/$id'
@@ -336,6 +356,7 @@ const rootRouteChildren: RootRouteChildren = {
   ModeloRoute: ModeloRoute,
   ResponsableRoute: ResponsableRoute,
   RiesgoRoute: RiesgoRoute,
+  ValorRoute: ValorRoute,
   AgendaIdRoute: AgendaIdRoute,
   PartidoIdRoute: PartidoIdRoute,
 }

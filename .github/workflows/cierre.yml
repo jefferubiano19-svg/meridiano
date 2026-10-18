@@ -1,6 +1,6 @@
 name: cierre
 
-# Cuotas de cierre de los partidos con marca de valor (entre 10 y 130 min antes del inicio) → data/cierres.json.
+# Cuotas de cierre de los partidos con marca de valor o de «Valor del día» (entre 10 y 130 min antes del inicio) → data/cierres.json.
 # Sirve para medir si las marcas le ganan al precio de cierre. No toca nada más. Ver cierre() en scripts/corte.mjs.
 on:
   schedule:
@@ -29,6 +29,7 @@ jobs:
             const fs = require("fs");
             let marks = [];
             try { marks = JSON.parse(fs.readFileSync("data/value-marks.json", "utf8")).marks || []; } catch {}
+            try { marks = marks.concat(JSON.parse(fs.readFileSync("data/valor-registro.json", "utf8")).picks || []); } catch {}
             const now = Date.now();
             const ids = new Set(marks.filter((m) => (m.market || "1x2") === "1x2").filter((m) => {
               const left = Date.parse(m.kickoff) - now;
