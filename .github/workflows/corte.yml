@@ -1,11 +1,8 @@
 name: corte
 
+# Sin horario propio de GitHub: llegaba hasta 2 horas tarde y repetía cortes ya hechos (17 oct 2026).
+# Lo lanzan cron-job.org (00:15, 12:00 y 17:00 Bogotá) y, si falta alguno, el vigía (vigia.yml).
 on:
-  schedule:
-    # 05:15 UTC = 00:15 en Bogotá. 17:00 UTC = 12:00 en Bogotá.
-    - cron: "15 5 * * *"
-    - cron: "0 17 * * *"
-  # Lanzamiento a mano o desde el disparador externo (cron-job.org), que llega a la hora exacta.
   workflow_dispatch:
     inputs:
       corte:
@@ -36,10 +33,13 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx playwright install --with-deps chromium
+      # El corte pudo esperar en cola a que terminara otro: trae los datos más recientes para que el candado
+      # (data/cut-done.json) vea si este turno ya se hizo y no lo repita.
+      - name: Traer los datos más recientes
+        run: git pull --ff-only origin "${GITHUB_REF_NAME}"
       - run: npm run corte
         env:
-          # A mano o externo: el que se elija. Programado: 17:00 UTC es el de las 12:00; el otro, el de la noche.
-          CORTE: ${{ github.event_name == 'workflow_dispatch' && inputs.corte || (github.event.schedule == '0 17 * * *' && 'mediodia' || 'noche') }}
+          CORTE: ${{ inputs.corte }}
           FORZAR: ${{ inputs.forzar && 'si' || 'no' }}
       - name: Guardar /data
         if: always()
@@ -48,9 +48,13 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add data
           git diff --cached --quiet || git commit -m "Corte de datos"
-          # Si alguien subió código mientras corría el corte, se trae primero y luego se sube.
-          git pull --rebase origin "${GITHUB_REF_NAME}"
-          git push
+          # Si alguien subió código mientras corría el corte, se trae primero y luego se sube (3 intentos).
+          for intento in 1 2 3; do
+            git pull --rebase origin "${GITHUB_REF_NAME}" && git push && break
+            echo "push falló (intento $intento); se reintenta en 15 s"
+            sleep 15
+          done
       - name: Publicar en Vercel
         if: always()
-        run: curl -X POST "${{ secrets.VERCEL_DEPLOY_HOOK }}"
+        # -f: si Vercel responde con error, el paso queda en rojo y el vigía lo vuelve a pedir.
+        run: curl -fsS --retry 3 --retry-delay 10 -X POST "${{ secrets.VERCEL_DEPLOY_HOOK }}"

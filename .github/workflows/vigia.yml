@@ -1,0 +1,36 @@
+name: vigia
+
+# Vigía de los cortes: revisa cada hora que los 3 cortes del día se hayan hecho,
+# relanza el que falte y avisa con un issue (correo al dueño del repositorio).
+# No depende de cron-job.org ni de Claude. Ver scripts/vigia.mjs.
+on:
+  schedule:
+    # Minuto 50 de cada hora (UTC). Cubre los turnos 00:15, 12:00 y 17:00 de Bogotá con 35-50 min de margen.
+    - cron: "50 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+  issues: write
+
+concurrency:
+  group: vigia
+  cancel-in-progress: false
+
+jobs:
+  vigia:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 1
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - run: node scripts/vigia.mjs
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Para volver a publicar en Vercel si el corte falló en ese paso (el mismo secreto del corte).
+          VERCEL_DEPLOY_HOOK: ${{ secrets.VERCEL_DEPLOY_HOOK }}

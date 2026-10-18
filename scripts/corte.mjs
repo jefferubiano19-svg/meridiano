@@ -19,7 +19,7 @@ const CUT_MODE = ["mediodia", "tarde"].includes(process.env.CORTE) ? process.env
 /** Partidos por corte a los que se les lee la pestaña Cuotas para el consenso (además del Combo). */
 const ODDS_CAP = 450;
 /** Las cuotas del consenso no pueden comerse más de este tiempo del corte. */
-const ODDS_BUDGET_MS = 75 * 60 * 1000;
+const ODDS_BUDGET_MS = 90 * 60 * 1000;
 /** Una cuota solo cuenta si se lee al menos este tiempo antes del inicio. */
 const PREMATCH_MS = 10 * 60 * 1000;
 /** Tablas de posiciones que lee el corte de la noche: competición de la agenda → página de la liga en Flashscore. */
@@ -386,7 +386,9 @@ async function readOdds(page, markets = READ_MARKETS) {
     await tab.waitFor({ state: "visible", timeout: 8000 });
     await tab.click({ timeout: 4000 });
   } catch {
-    /* la pestaña no estaba */
+    // Sin pestaña de Cuotas ninguna casa ofrece el partido: se sigue con el siguiente en vez de esperar
+    // otros ~20 s por la pestaña 1X2 y la tabla (revisión del 17 oct 2026: los cortes se quedaban sin tiempo).
+    return { books: [], noOddsTab: true };
   }
   await page.waitForTimeout(600);
   const books = [];
@@ -1145,6 +1147,9 @@ async function main() {
     consensusTomorrowTargets: tomorrowTargets,
     consensusTomorrowRead: consensusRead.filter((row) => row.books && String(row.kickoff ?? "").startsWith(tomorrowName)).length,
     consensusRead: consensusStored,
+    oddsAttempted: consensusRead.length,
+    oddsNoTab: consensusRead.filter((row) => row.noOddsTab).length,
+    oddsFailed: consensusRead.filter((row) => row.failed).length,
     consensusWith3Houses: consensusRead.filter((row) => liveHouses(row) >= 3).length,
     predictionsWithConsensus: fresh.filter((row) => row.consensus).length,
     predictionsWithWplay: fresh.filter((row) => row.marketSource === "wplay").length,
