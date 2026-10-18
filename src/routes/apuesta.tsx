@@ -35,6 +35,16 @@ function probability(match: MatchReading, market: Market): number | null {
   return p.home + p.away;
 }
 
+/** Mejor cuota leída para un resultado simple (1, X o 2). Las dobles no están en la tabla de las casas. */
+function bestFor(match: MatchReading, market: Market): { house: string; odds: number } | null {
+  const best = match.bestOdds;
+  if (!best) return null;
+  if (market === "home") return best.home;
+  if (market === "draw") return best.draw;
+  if (market === "away") return best.away;
+  return null;
+}
+
 function parseOdds(text: string): number | null {
   const value = Number(text.replace(",", "."));
   return Number.isFinite(value) && value > 1 ? value : null;
@@ -231,6 +241,15 @@ function BetCheckPage() {
                     </dd>
                   </div>
                 </dl>
+                {bestFor(row.leg.match, row.leg.market) ? (
+                  <p className="mt-2 text-xs text-muted">
+                    {(() => {
+                      const best = bestFor(row.leg.match, row.leg.market)!;
+                      const evBest = row.p != null ? row.p * best.odds - 1 : null;
+                      return `Mejor cuota leída: ${num(best.odds)} en ${best.house}${evBest != null ? ` (por cada $100: ${evBest >= 0 ? "+" : "−"}$${Math.abs(evBest * 100).toFixed(1).replace(".", ",")})` : ""}. Verifica que siga igual en la casa.`;
+                    })()}
+                  </p>
+                ) : null}
                 {row.ev != null ? (
                   <p className={`mt-2 text-xs ${bad ? "text-danger" : good ? "text-value" : "text-muted"}`}>
                     {bad

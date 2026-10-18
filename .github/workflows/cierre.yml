@@ -1,0 +1,66 @@
+name: cierre
+
+# Cuotas de cierre de los partidos con marca de valor (entre 10 y 130 min antes del inicio) → data/cierres.json.
+# Sirve para medir si las marcas le ganan al precio de cierre. No toca nada más. Ver cierre() en scripts/corte.mjs.
+on:
+  schedule:
+    # Minuto 23 de cada hora (lejos de la hora en punto, cuando GitHub se atrasa más).
+    - cron: "23 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: cierre
+  cancel-in-progress: false
+
+jobs:
+  cierre:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      # Sin partidos con marca por empezar pronto no se instala nada: la vuelta dura segundos.
+      - name: ¿Hay marcas por cerrar?
+        id: hay
+        run: |
+          n=$(node -e '
+            const fs = require("fs");
+            let marks = [];
+            try { marks = JSON.parse(fs.readFileSync("data/value-marks.json", "utf8")).marks || []; } catch {}
+            const now = Date.now();
+            const ids = new Set(marks.filter((m) => (m.market || "1x2") === "1x2").filter((m) => {
+              const left = Date.parse(m.kickoff) - now;
+              return left > 10 * 60000 && left <= 130 * 60000;
+            }).map((m) => m.matchId));
+            console.log(ids.size);
+          ')
+          echo "n=$n" >> "$GITHUB_OUTPUT"
+          echo "Partidos con marca por empezar en 10-130 min: $n"
+      - uses: actions/setup-node@v5
+        if: steps.hay.outputs.n != '0'
+        with:
+          node-version: 22
+          cache: npm
+      - if: steps.hay.outputs.n != '0'
+        run: npm ci
+      - if: steps.hay.outputs.n != '0'
+        run: npx playwright install --with-deps chromium
+      - if: steps.hay.outputs.n != '0'
+        run: npm run corte
+        env:
+          CORTE: cierre
+      - name: Guardar data/cierres.json
+        if: steps.hay.outputs.n != '0'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/cierres.json
+          git diff --cached --quiet && exit 0
+          git commit -m "Cuotas de cierre"
+          for intento in 1 2 3; do
+            git pull --rebase origin "${GITHUB_REF_NAME}" && git push && break
+            echo "push falló (intento $intento); se reintenta en 15 s"
+            sleep 15
+          done

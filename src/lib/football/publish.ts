@@ -254,6 +254,43 @@ export function marketOnly(matchId: string): Publication | null {
   };
 }
 
+export interface BestOdds {
+  home: { house: string; odds: number };
+  draw: { house: string; odds: number };
+  away: { house: string; odds: number };
+  /** Casas con cuota vigente comparadas. */
+  houses: number;
+  /** Margen que queda si se toma la mejor cuota de cada resultado: suma de 1/cuota − 1 (negativo = las casas se contradicen). */
+  margin: number;
+  readAt: string | null;
+}
+
+function houseName(house: string): string {
+  return house.replace(/\.(co|latam|com)$/i, "");
+}
+
+/**
+ * Mejor cuota de cada resultado entre las casas leídas (pestaña Cuotas; si no está Wplay ahí, la de la Lista).
+ * No cambia ninguna probabilidad: solo dice dónde se paga más. Requiere 2 o más casas.
+ */
+export function bestOdds(matchId: string): BestOdds | null {
+  const { rows, readAt } = booksOf(matchId);
+  const offers = rows.map((row) => ({ house: houseName(row.house), prices: [row.home, row.draw, row.away] }));
+  const lite = WPLAY[matchId];
+  if (lite && !rows.some((row) => /wplay/i.test(row.house)) && lite.odds.every((price) => price > 1)) {
+    offers.push({ house: "Wplay", prices: lite.odds.slice(0, 3) });
+  }
+  if (offers.length < 2) return null;
+  const pick = (index: number) => {
+    const top = offers.reduce((a, b) => (b.prices[index] > a.prices[index] ? b : a));
+    return { house: top.house, odds: top.prices[index] };
+  };
+  const home = pick(0);
+  const draw = pick(1);
+  const away = pick(2);
+  return { home, draw, away, houses: offers.length, margin: 1 / home.odds + 1 / draw.odds + 1 / away.odds - 1, readAt: readAt ?? lite?.readAt ?? null };
+}
+
 /** true si hay cuotas de mercado para el partido (3+ casas o Wplay): es decir, una casa lo ofrece. */
 export function hasMarketOdds(matchId: string): boolean {
   if (WPLAY[matchId]) return true;

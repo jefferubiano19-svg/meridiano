@@ -10,7 +10,7 @@ import { LEAGUES, LEAGUE_BY_ID } from "./leagues";
 import { getAnalysis } from "./model";
 import { estimateNamed } from "./named";
 import { nationModel } from "./nations";
-import { hasMarketOdds, marketOnly, publication } from "./publish";
+import { bestOdds, hasMarketOdds, marketOnly, publication } from "./publish";
 import { levelCFor, recentFor } from "./recent";
 import { sheetFor } from "./sheets";
 import historyFile from "../../../data/sheets-history.json";
@@ -158,6 +158,7 @@ function seal(seed: Seed): MatchReading {
     value: best
       ? { house: best.house, odds: best.odds, side: best.side, readAt: pub?.readAt ?? null }
       : null,
+    bestOdds: open ? bestOdds(seed.id) : null,
   };
   CACHE.set(seed.id, reading);
   return reading;

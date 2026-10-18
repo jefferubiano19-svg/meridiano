@@ -191,8 +191,8 @@ function ModelPage() {
         <p className="text-[11px] uppercase tracking-[0.18em] text-subtle">Transparencia</p>
         <h1 className="mt-2 font-display text-4xl tracking-tight">Cómo estima Meridiano</h1>
         <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted">
-          Las probabilidades las calcula código, sin modelo de lenguaje. Dos cortes al día (00:15 y 12:00, hora de
-          Bogotá) leen Flashscore, guardan una predicción por partido antes del inicio y, al otro día, la comparan con
+          Las probabilidades las calcula código, sin modelo de lenguaje. Tres cortes al día (00:15, 12:00 y 17:00,
+          hora de Bogotá) leen Flashscore, guardan una predicción por partido antes del inicio y, al otro día, la comparan con
           el resultado. Esta página se arma con lo que escribió el último corte.
         </p>
         <div className="mt-4">
@@ -215,9 +215,40 @@ function ModelPage() {
         </p>
         <p className="mt-1 text-xs text-subtle">
           Último corte: {corteName(lastCut.corte)}, {bogotaClock(lastCut.finishedAtBogota)}
-          {hours != null ? ` (hace ${hours < 1 ? "menos de 1 hora" : `${Math.floor(hours)} h`})` : ""}. Próximo: 00:15 o
-          12:00, hora de Bogotá.
+          {hours != null ? ` (hace ${hours < 1 ? "menos de 1 hora" : `${Math.floor(hours)} h`})` : ""}. Próximos: 00:15,
+          12:00 y 17:00, hora de Bogotá.
         </p>
+      </Section>
+
+      <Section title="¿Las marcas de valor ganan?">
+        {(() => {
+          const vr = (review as { valueResults?: { settled: number; roi: Stat; closed: number; clvHouse: Stat; evClose: Stat; verdict: string } } | null)
+            ?.valueResults;
+          if (!vr) return <p className="text-sm text-muted">Se mide desde el próximo corte.</p>;
+          const money = (stat: Stat) =>
+            stat.mean == null
+              ? "sin datos"
+              : `${stat.mean >= 0 ? "+" : "−"}${Math.abs(stat.mean * 100).toFixed(1).replace(".", ",")} %${
+                  stat.low != null && stat.high != null && stat.n >= 20
+                    ? ` (IC 95 % ${(stat.low * 100).toFixed(1).replace(".", ",")} % a ${(stat.high * 100).toFixed(1).replace(".", ",")} %)`
+                    : ""
+                }${stat.n < 20 ? " — muy pocas para concluir" : ""}`;
+          return (
+            <div className="space-y-2 text-sm leading-relaxed text-muted">
+              <p>
+                <strong className="text-fg">Veredicto:</strong> {vr.verdict}.
+              </p>
+              <p>
+                Contra el consenso de cierre (la mejor medida de si había ventaja): {money(vr.evClose)} por apuesta, en {vr.closed}{" "}
+                marcas. Contra la misma casa al cierre: {money(vr.clvHouse)}.
+              </p>
+              <p>
+                Resultado real apostando lo mismo a cada marca: {money(vr.roi)} por apuesta, en {vr.settled} marcas ya jugadas.
+                Con pocas apuestas este número varía muchísimo; por eso manda la comparación con el cierre.
+              </p>
+            </div>
+          );
+        })()}
       </Section>
 
       <Section title="Cómo se calcula">

@@ -39,6 +39,15 @@ export interface MatchReading {
   confidence: string;
   revisar: boolean;
   value: ValueMark | null;
+  /** Mejor cuota de cada resultado entre las casas leídas (solo partidos por jugar). */
+  bestOdds?: {
+    home: { house: string; odds: number };
+    draw: { house: string; odds: number };
+    away: { house: string; odds: number };
+    houses: number;
+    margin: number;
+    readAt: string | null;
+  } | null;
 }
 
 export interface ComboMatch extends MatchReading {

@@ -1200,6 +1200,7 @@ async function finishCut(coverage, previous = null) {
       predictions: readJsonOptional("predictions.json", { records: [] }).records ?? [],
       evaluations: readJsonOptional("evaluations.json", {}),
       marks: readJsonOptional("value-marks.json", { marks: [] }).marks ?? [],
+      closings: readJsonOptional("cierres.json", { byMatch: {} }).byMatch ?? {},
       agenda: readJsonOptional("agenda.json", { matches: [] }).matches ?? [],
       standings: readJsonOptional("standings-auto.json", { leagues: [] }).leagues ?? [],
     });
@@ -1288,7 +1289,62 @@ async function repair() {
   console.log(JSON.stringify(coverage, null, 2));
 }
 
-if (process.argv[2] === "repair") {
+/**
+ * Cierre (CORTE=cierre, cierre.yml cada hora): para los partidos con marca de valor que empiezan entre 10 y 130 min,
+ * lee la tabla 1X2 de las casas y la guarda en data/cierres.json (último dato antes del inicio). No toca ningún otro
+ * archivo ni el candado de los cortes. Con esto la revisión mide si las marcas le ganan al precio de cierre (CLV).
+ */
+async function cierre() {
+  const started = bogotaStamp();
+  const now = Date.now();
+  const registry = readJsonOptional("value-marks.json", { marks: [] });
+  const file = readJsonOptional("cierres.json", { byMatch: {} });
+  file.rule =
+    "Cuotas 1X2 de las casas leídas entre 10 y 130 min antes del inicio de los partidos con marca de valor. Las escribe cierre.yml cada hora; queda la última lectura antes del inicio. 30 días.";
+  const keep = now - 30 * 24 * 3600 * 1000;
+  file.byMatch = Object.fromEntries(Object.entries(file.byMatch ?? {}).filter(([, row]) => Date.parse(row?.kickoff ?? "") >= keep));
+  const targets = [
+    ...new Map(
+      (registry.marks ?? [])
+        .filter((mark) => (mark.market ?? "1x2") === "1x2")
+        .filter((mark) => {
+          const left = Date.parse(mark.kickoff) - now;
+          return left > PREMATCH_MS && left <= 130 * 60 * 1000;
+        })
+        .map((mark) => [mark.matchId, mark]),
+    ).values(),
+  ];
+  console.log(`cierre: ${targets.length} partidos con marca por empezar en 10-130 min.`);
+  if (targets.length === 0) return;
+  const read = await browserPages(
+    targets.map((mark) => ({
+      id: mark.matchId,
+      kickoff: mark.kickoff,
+      kind: "cuotas",
+      url: `https://www.flashscore.co/partido/${mark.matchId}/`,
+      read: async (page) => readOdds(page, ONLY_1X2),
+    })),
+  );
+  let saved = 0;
+  for (const row of read) {
+    const books = (row.books ?? [])
+      .filter((book) => book.market === "1x2" && Array.isArray(book.odds) && book.odds.length === 3 && !book.struck)
+      .map((book) => ({ house: book.book, odds: book.odds }));
+    if (!books.length) continue;
+    file.byMatch[row.id] = { kickoff: row.kickoff, readAt: started, books };
+    saved += 1;
+  }
+  file.updatedAt = started;
+  writeJson("cierres.json", file);
+  console.log(`cierre: ${saved} de ${targets.length} guardados.`);
+}
+
+if (process.env.CORTE === "cierre") {
+  cierre().catch((error) => {
+    console.error("cierre:", error);
+    process.exitCode = 1;
+  });
+} else if (process.argv[2] === "repair") {
   repair().catch((error) => {
     failures.push({ step: "repair", error: error instanceof Error ? error.message : String(error) });
     console.error(error);

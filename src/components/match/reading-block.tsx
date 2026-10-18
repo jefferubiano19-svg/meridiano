@@ -33,6 +33,16 @@ export function ReadingBlock({ match }: { match: MatchReading }) {
       ) : (
         <Row stack k="Mercado (solo Wplay)" v={wayText(match.wplay)} />
       )}
+      {match.bestOdds ? (
+        <>
+          <Row
+            stack
+            k={`Mejor cuota (${match.bestOdds.houses} casas)`}
+            v={`1 ${formatOdds(match.bestOdds.home.odds)} ${match.bestOdds.home.house} · X ${formatOdds(match.bestOdds.draw.odds)} ${match.bestOdds.draw.house} · 2 ${formatOdds(match.bestOdds.away.odds)} ${match.bestOdds.away.house}`}
+          />
+          <Row k="Margen con la mejor cuota" v={marginText(match.bestOdds.margin)} />
+        </>
+      ) : null}
       <Row k="Nivel" v={levelText(match.level)} />
       <Row k="Confianza" v={match.confidence || "baja"} />
       {match.revisar ? (
@@ -63,6 +73,12 @@ const LEVELS: Record<string, string> = {
   "5.4": "Selecciones · Elo",
   M: "M · solo mercado",
 };
+
+/** Margen de la casa que queda tomando la mejor cuota de cada resultado. Negativo: las casas se contradicen. */
+function marginText(margin: number): string {
+  const value = `${(Math.abs(margin) * 100).toFixed(1).replace(".", ",")} %`;
+  return margin >= 0 ? value : `−${value} (las casas no coinciden: revisa que las cuotas sigan vigentes)`;
+}
 
 function levelText(level: string | null | undefined): string {
   if (!level) return MISSING;

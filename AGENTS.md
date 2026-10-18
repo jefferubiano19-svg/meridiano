@@ -57,6 +57,15 @@ Reglas de lectura: respetar `robots.txt`, 3 s entre páginas, User-Agent propio.
 
 Marca de valor: 3+ casas y EV ≥ 3 % contra el consenso sin la casa juzgada. El modelo solo no marca valor.
 
+**Mejor cuota** (`publish.ts` `bestOdds`): por resultado, la casa que más paga entre las leídas (pestaña Cuotas; Wplay de la
+Lista si no está en la pestaña) y el margen que queda. Solo informa; no cambia ninguna probabilidad. Se ve en la ficha y en Apuesta.
+
+**Cierre** (`.github/workflows/cierre.yml`, minuto 23 de cada hora): `CORTE=cierre` lee la tabla 1X2 de los partidos con
+marca de valor que empiezan en 10–130 min y la guarda en `data/cierres.json` (solo ese archivo). Si no hay marcas por
+cerrar, la vuelta termina sin instalar nada. `review.ts` → `valueResults`: retorno real de las marcas (IC 95 %), contra la
+misma casa al cierre y contra el consenso de cierre (`evClose`, la medida que decide; 30 cierres para una primera
+lectura, 100 para concluir). La página Modelo lo muestra en «¿Las marcas de valor ganan?».
+
 **Sombras** (se guardan, no se publican): xG, Elo de clubes, temporada Liga BetPlay (`season.ts`).
 Una sombra se publica solo con ≥ 500 partidos comparados y el IC 95 % de la diferencia de RPS entero bajo cero.
 Congelamiento de parámetros hasta 500 partidos comparables con el consenso.

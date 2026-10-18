@@ -6,6 +6,8 @@
  * Solo mide: no cambia ningún parámetro ni ninguna predicción.
  * ------------------------------------------------------------------------- */
 
+import { shin } from "./engine";
+
 export type Light = "verde" | "amarillo" | "rojo" | "gris";
 
 type Way = { home: number; draw: number; away: number };
@@ -55,7 +57,18 @@ export interface ReviewInput {
   cuts: CutRow[];
   predictions: PredictionRow[];
   evaluations: { byMatch?: ByMatch[]; goal?: number };
-  marks: { clv?: number | null; closingOdds?: number | null; house?: string }[];
+  marks: {
+    clv?: number | null;
+    closingOdds?: number | null;
+    house?: string;
+    matchId?: string;
+    market?: string | null;
+    outcomeIndex?: number;
+    odds?: number;
+    kickoff?: string;
+  }[];
+  /** data/cierres.json → byMatch: cuotas 1X2 de las casas leídas poco antes del inicio. */
+  closings?: Record<string, { readAt?: string; kickoff?: string; books?: { house: string; odds: number[] }[] }>;
   agenda: [string, string, string, string, string, string, number | null, number | null, unknown, unknown][];
   standings: { competition: string; rows: { team: string; gp: number; w?: number; d?: number; l?: number; gf: number; ga: number }[] }[];
 }
@@ -95,6 +108,12 @@ export interface Review {
     byLevel: { level: string; n: number; rpsPublished: number | null; comparable: number; distance: Stat }[];
   };
   value: { marks: number; withClose: number; clv: Stat; stage: string };
+  /**
+   * Resultado de las marcas de valor 1X2: retorno real apostando 1 a cada una (con IC 95 %), y contra el cierre:
+   * clvHouse = cuota / cuota de la misma casa al cierre − 1; evClose = cuota × probabilidad del consenso de cierre − 1.
+   * evClose es la mejor estimación de si la marca tenía ventaja real; el retorno real necesita cientos de apuestas.
+   */
+  valueResults: { settled: number; roi: Stat; closed: number; clvHouse: Stat; evClose: Stat; verdict: string };
   shadows: { key: string; label: string; n: number; diff: Stat }[];
   /** Partidos publicados con Wplay como mercado (sin 3 casas): publicada contra modelo solo. */
   wplayMarket: { n: number; rpsPublished: number | null; rpsModel: number | null; diff: Stat; excludedCopied: number };
@@ -224,6 +243,52 @@ export function buildReview(input: ReviewInput): Review {
   // 4. Valor y CLV.
   const closed = input.marks.filter((mark) => typeof mark.clv === "number" && (mark.closingOdds ?? 0) > 1);
   const clv = stat(closed.map((mark) => mark.clv as number));
+
+  // 4b. Resultado real de las marcas 1X2 y comparación con el cierre (data/cierres.json).
+  const agendaById = new Map(input.agenda.map((row) => [row[0], row]));
+  const seenMark = new Set<string>();
+  const marks1x2 = input.marks.filter((mark) => {
+    if ((mark.market ?? "1x2") !== "1x2" || !mark.matchId || !(Number(mark.odds) > 1) || !Number.isInteger(mark.outcomeIndex)) return false;
+    const key = `${mark.matchId}|${mark.house}|${mark.outcomeIndex}`;
+    if (seenMark.has(key)) return false;
+    seenMark.add(key);
+    return true;
+  });
+  const pnl: number[] = [];
+  for (const mark of marks1x2) {
+    const row = agendaById.get(mark.matchId as string);
+    if (!row || row[5] !== "finalizado" || row[6] == null || row[7] == null) continue;
+    const winner = row[6] > row[7] ? 0 : row[6] === row[7] ? 1 : 2;
+    pnl.push(winner === mark.outcomeIndex ? (mark.odds as number) - 1 : -1);
+  }
+  const clvHouse: number[] = [];
+  const evClose: number[] = [];
+  for (const mark of marks1x2) {
+    const close = input.closings?.[mark.matchId as string];
+    if (!close?.books?.length) continue;
+    const same = close.books.find((book) => book.house === mark.house);
+    const index = mark.outcomeIndex as number;
+    if (same && same.odds[index] > 1) clvHouse.push((mark.odds as number) / same.odds[index] - 1);
+    const fairs = close.books.map((book) => shin(book.odds[0], book.odds[1], book.odds[2])).filter((f): f is NonNullable<typeof f> => Boolean(f));
+    if (fairs.length >= 3) {
+      const key = (["home", "draw", "away"] as const)[index];
+      const sorted = fairs.map((f) => f[key]).sort((a, b) => a - b);
+      const mid = Math.floor(sorted.length / 2);
+      const p = sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+      evClose.push((mark.odds as number) * p - 1);
+    }
+  }
+  const roiStat = stat(pnl);
+  const evStat = stat(evClose);
+  const verdict =
+    evClose.length < 30
+      ? `sin conclusión: ${evClose.length} marcas con cierre de 3+ casas (hacen falta 30 para una primera lectura y 100 para decidir)`
+      : evStat.low != null && evStat.low > 0
+        ? "las marcas le ganan al cierre: hay ventaja medida"
+        : evStat.high != null && evStat.high < 0
+          ? "las marcas pierden contra el cierre: no hay ventaja"
+          : "todavía no se distingue de cero";
+  const valueResults = { settled: pnl.length, roi: roiStat, closed: evClose.length, clvHouse: stat(clvHouse), evClose: evStat, verdict };
 
   // 5. Sombras contra la publicada, en los mismos partidos.
   const shadowLabels: Record<string, string> = {
@@ -410,6 +475,7 @@ export function buildReview(input: ReviewInput): Review {
       clv,
       stage: closed.length >= 100 ? "con muestra" : "sin conclusión (menos de 100 marcas con cierre)",
     },
+    valueResults,
     shadows,
     wplayMarket,
     modelBlend,
