@@ -272,6 +272,9 @@ export function buildReview(input: ReviewInput): Review {
     for (const mark of marks1x2) {
       const close = input.closings?.[mark.matchId as string];
       if (!close?.books?.length) continue;
+      // Solo las 5 casas colombianas (una lectura desde EE. UU. puede traer otras, como bet365.us).
+      close.books = close.books.filter((book) => /^(wplay\.co|betano\.co|stake\.latam|bwin\.co|betplay)$/i.test(String(book.house).trim()));
+      if (!close.books.length) continue;
       const same = close.books.find((book) => houseKey(book.house) === houseKey(mark.house));
       const index = mark.outcomeIndex as number;
       if (same && same.odds[index] > 1) clvHouse.push((mark.odds as number) / same.odds[index] - 1);

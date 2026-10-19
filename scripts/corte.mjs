@@ -463,6 +463,13 @@ async function readStandings(page) {
 }
 
 /** Guarda las cuotas leídas en data/combo-odds.json, el archivo del que sale el consenso de la app. */
+/**
+ * Las 5 casas colombianas que usa Meridiano. Flashscore a veces muestra otras según el país desde donde se consulta
+ * (los servidores de GitHub están en EE. UU.: aparecía bet365.us). Cualquier otra casa se descarta al leer.
+ */
+const HOUSES = /^(wplay\.co|betano\.co|stake\.latam|bwin\.co|betplay)$/i;
+const colombian = (book) => HOUSES.test(String(book?.book ?? book?.house ?? "").trim());
+
 function storeOdds(results, started) {
   const file = readJsonOptional("combo-odds.json", { matches: [] });
   file.source = "www.flashscore.co pestaña Cuotas, fila a fila. Casa = alt del logo. Sin alt no entra. Lo escribe el corte diario.";
@@ -474,7 +481,8 @@ function storeOdds(results, started) {
     if (item?.markets?.btts) item.markets.btts = item.markets.btts.filter((row) => Array.isArray(row.cells) && row.cells.length === 2);
   }
   let stored = 0;
-  for (const result of results ?? []) {
+  for (const raw of results ?? []) {
+    const result = raw && Array.isArray(raw.books) ? { ...raw, books: raw.books.filter(colombian) } : raw;
     if (!result?.id || !Array.isArray(result.books) || result.books.length === 0) continue;
     const pick = (market) => result.books.filter((book) => book.market === market);
     const cells = (book, withLine) => [
@@ -522,7 +530,7 @@ function marksFromOdds(match, rows, at) {
   const kickoffMs = Date.parse(match.kickoff);
   if (!Number.isFinite(kickoffMs) || kickoffMs - Date.now() <= 10 * 60 * 1000) return [];
   const live = [];
-  for (const row of rows.filter(usable)) {
+  for (const row of rows.filter(usable).filter(colombian)) {
     if (row.market === "mas-menos") {
       const line = String(row.line ?? "").trim().replace(",", ".");
       if (!/^\d+(?:\.\d+)?$/.test(line) || row.odds.length !== 2) continue;
@@ -1052,6 +1060,7 @@ async function main() {
       const row = byId.get(item.id);
       if (!row || row[5] !== "por-jugar" || !(Date.parse(row[1]) - Date.now() > PREMATCH_MS)) continue;
       const offers = (item.markets?.["1X2"] ?? [])
+        .filter(colombian)
         .filter((book) => Array.isArray(book.cells) && book.cells.length >= 3 && !book.cells.slice(0, 3).some((cell) => cell.withdrawn))
         .map((book) => ({ house: String(book.house).replace(/\.(co|latam|com)$/i, ""), odds: book.cells.slice(0, 3).map((cell) => Number(cell.text)) }));
       const probs = consensusFromOffers(offers);
@@ -1375,6 +1384,7 @@ async function cierre() {
   let saved = 0;
   for (const row of read) {
     const books = (row.books ?? [])
+      .filter(colombian)
       .filter((book) => book.market === "1x2" && Array.isArray(book.odds) && book.odds.length === 3 && !book.struck)
       .map((book) => ({ house: book.book, odds: book.odds }));
     if (!books.length) continue;

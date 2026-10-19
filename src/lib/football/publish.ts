@@ -94,6 +94,8 @@ function booksOf(matchId: string): { rows: BookPrice[]; readAt: string | null } 
   if (!match) return { rows: [], readAt: null };
   const rows: BookPrice[] = [];
   for (const row of match.markets["1X2"] ?? []) {
+    // Solo las 5 casas colombianas (Flashscore a veces muestra casas de otro país, como bet365.us).
+    if (!/^(wplay\.co|betano\.co|stake\.latam|bwin\.co|betplay)$/i.test(row.house.trim())) continue;
     const cells = row.cells.slice(0, 3);
     if (cells.length < 3 || cells.some((cell) => cell.withdrawn)) continue;
     const home = Number(cells[0].text);
