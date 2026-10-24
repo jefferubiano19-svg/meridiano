@@ -27,6 +27,7 @@ const pct = (value: number) => `${(value * 100).toFixed(1).replace(".", ",")} %`
 const num = (value: number) => value.toFixed(2).replace(".", ",");
 const SIDE = ["local", "empate", "visita"] as const;
 const MARKET = ["home", "draw", "away"] as const;
+const houseName = (house: string) => house.replace(/\.(co|latam)$/i, "");
 
 function team(match: MatchReading, index: number): string {
   if (index === 0) return match.homeEs || match.home;
@@ -109,9 +110,12 @@ function ValorPage() {
       <section className="rounded-xl bg-surface p-4 text-sm leading-relaxed text-muted shadow-[var(--shadow-border)]">
         <h2 className="font-display text-lg text-fg">Cómo usarlo</h2>
         <ol className="mt-2 list-decimal space-y-1 pl-5">
-          <li>Busca el partido en la casa indicada y confirma la hora y el equipo local.</li>
-          <li>Apuesta solo si la casa paga la cuota mínima o más. Si paga menos, ya no tiene valor.</li>
-          <li>Por separado, nunca en combinada, y siempre la misma cantidad pequeña.</li>
+          <li>Busca el partido en la casa indicada (no en otra) y confirma la hora y el equipo local.</li>
+          <li>Apuesta solo si esa casa paga la cuota mínima o más. Si paga menos, ya no tiene valor: no se apuesta.</li>
+          <li>
+            <strong className="text-fg">Cada selección sola, nunca en combinada</strong>, una por partido y siempre la misma
+            cantidad pequeña. Una combinada de 4 selecciones de 13–20 % se cumple menos de 1 vez en 400.
+          </li>
           <li>Cuenta con perder la mayoría: el valor solo aparece después de muchas apuestas.</li>
         </ol>
       </section>
@@ -148,7 +152,7 @@ function ValorPage() {
                 <div>
                   <dt className="text-[10px] uppercase tracking-wide text-subtle">Mejor cuota</dt>
                   <dd>
-                    {num(pick.odds)} · {pick.house}
+                    {num(pick.odds)} · {houseName(pick.house)}
                   </dd>
                 </div>
                 <div>
@@ -164,6 +168,20 @@ function ValorPage() {
                   <dd>{match.bestOdds?.houses ?? "—"}</dd>
                 </div>
               </dl>
+              <div className="mt-3 rounded-lg bg-elevated p-3 text-xs leading-relaxed text-fg ring-1 ring-border">
+                <p>
+                  <strong>Solo en {houseName(pick.house)}, a {num(pick.minOdds)} o más.</strong> En otra casa o con menos cuota
+                  ya no tiene valor: no se apuesta.
+                </p>
+                <p className="mt-1">
+                  <strong>Sola, nunca en combinada.</strong> El valor medido es de apuestas sueltas; en combinada se pierde.
+                </p>
+                {rows.filter((row) => row.match.id === match.id).length > 1 ? (
+                  <p className="mt-1">
+                    <strong>Este partido tiene {rows.filter((row) => row.match.id === match.id).length} selecciones: juega solo una.</strong>
+                  </p>
+                ) : null}
+              </div>
               <p className="mt-2 text-xs text-muted">
                 Cuota leída en el último corte{match.bestOdds?.readAt ? ` (${match.bestOdds.readAt.slice(11, 16)})` : ""}: verifica
                 que siga igual en la casa.
