@@ -291,11 +291,18 @@ export function buildReview(input: ReviewInput): Review {
     const verdict =
       evClose.length < 30
         ? `sin conclusión: ${evClose.length} con cierre de 3+ casas (hacen falta 30 para una primera lectura y 100 para decidir)`
-        : evStat.low != null && evStat.low > 0
-          ? "le ganan al cierre: hay ventaja medida"
-          : evStat.high != null && evStat.high < 0
-            ? "pierden contra el cierre: no hay ventaja"
-            : "todavía no se distingue de cero";
+        : evClose.length < 100
+          ? // Entre 30 y 99 cierres es una primera lectura: puede cambiar; se decide con 100.
+            evStat.low != null && evStat.low > 0
+            ? `primera lectura favorable: le ganan al cierre en ${evClose.length} (preliminar; se confirma con 100)`
+            : evStat.high != null && evStat.high < 0
+              ? `primera lectura desfavorable: pierden contra el cierre en ${evClose.length} (preliminar; se confirma con 100)`
+              : `primera lectura: todavía no se distingue de cero en ${evClose.length} (se decide con 100)`
+          : evStat.low != null && evStat.low > 0
+            ? "le ganan al cierre: hay ventaja medida"
+            : evStat.high != null && evStat.high < 0
+              ? "pierden contra el cierre: no hay ventaja"
+              : "todavía no se distingue de cero";
     return { settled: pnl.length, roi: stat(pnl), closed: evClose.length, clvHouse: stat(clvHouse), evClose: evStat, verdict };
   };
   const valueResults = resultsOf(input.marks);
