@@ -271,6 +271,19 @@ async function browserPages(jobs, stop) {
     return jobs.map((job) => ({ ...job, failed: "navegador no disponible" }));
   }
   const page = await browser.newPage();
+  // Flashscore pide las cuotas con la ubicación del visitante (geoIpCode). Los servidores de GitHub están en EE. UU.
+  // y desde el 27 oct 2026 eso trae solo bet365.us (y nada en ligas colombianas). Meridiano es para apostar en
+  // Colombia: se pide la vista de Colombia, que es la que ve cualquier usuario en Colombia (las 5 casas).
+  await page
+    .route(/global\.ds\.lsapp\.eu\/odds\//, (route) => {
+      const url = new URL(route.request().url());
+      if (url.searchParams.has("geoIpCode")) {
+        url.searchParams.set("geoIpCode", "CO");
+        url.searchParams.set("geoIpSubdivisionCode", "CODC");
+      }
+      return route.continue({ url: url.toString() });
+    })
+    .catch(() => undefined);
   try {
     for (const job of jobs) {
       if (typeof stop === "function" && stop()) break;
@@ -1416,7 +1429,7 @@ async function diagCuotas() {
   const near = open.filter((r) => Date.parse(r[1]) - now <= 130 * 60 * 1000).slice(0, 4);
   const big = /ENGLAND: Premier|SPAIN: LaLiga|ITALY: Serie A|GERMANY: Bundesliga|FRANCE: Ligue 1|COLOMBIA|ARGENTINA|BRAZIL|MEXICO|PORTUGAL|NETHERLANDS|UEFA|CONMEBOL|CHAMPIONS/i;
   const far = open.filter((r) => Date.parse(r[1]) - now > 130 * 60 * 1000 && big.test(String(r[2]))).slice(0, 8);
-  const targets = [...far.slice(0, 2), ...near.slice(0, 1)];
+  const targets = [...far.slice(0, 6), ...near.slice(0, 2)];
   const read = await browserPages(
     targets.map((r) => ({
       id: r[0],
