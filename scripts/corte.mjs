@@ -1430,6 +1430,18 @@ async function cierre() {
     saved += 1;
   }
   file.updatedAt = started;
+  // Registro de la última vuelta (para revisar fallas sin acceso a los logs de GitHub).
+  file.lastRun = {
+    at: started,
+    targets: targets.length,
+    saved,
+    rows: read.map((row) => ({
+      id: row.id,
+      failed: row.failed ?? null,
+      noOddsTab: Boolean(row.noOddsTab),
+      books: (row.books ?? []).map((book) => `${book.book}:${book.market}:${(book.odds ?? []).join("/")}${book.struck ? "x" : ""}`),
+    })),
+  };
   writeJson("cierres.json", file);
   console.log(`cierre: ${saved} de ${targets.length} guardados.`);
 }
