@@ -1396,7 +1396,70 @@ async function cierre() {
   console.log(`cierre: ${saved} de ${targets.length} guardados.`);
 }
 
-if (process.env.CORTE === "cierre") {
+/**
+ * Diagnóstico de la lectura de cuotas (CORTE=diag, a mano con diag.yml). Lee 12 partidos por empezar: 4 cercanos
+ * (como el cierre) y 8 de ligas grandes más lejanos (como el corte), y guarda lo que vio el navegador en
+ * data/diag-cuotas.json: título, si hubo pestaña Cuotas, filas y casas antes del filtro colombiano, y un trozo
+ * del texto visible cuando no hay tabla. No toca ningún otro archivo.
+ */
+async function diagCuotas() {
+  const agenda = readJsonOptional("agenda.json", {});
+  const rows = [];
+  (function walk(x) {
+    if (Array.isArray(x)) {
+      if (typeof x[0] === "string" && /^\d{4}-/.test(String(x[1] ?? ""))) rows.push(x);
+      else x.forEach(walk);
+    } else if (x && typeof x === "object") Object.values(x).forEach(walk);
+  })(agenda);
+  const now = Date.now();
+  const open = rows.filter((r) => r[5] === "por-jugar" && Date.parse(r[1]) - now > 15 * 60 * 1000 && Date.parse(r[1]) - now < 36 * 3600 * 1000);
+  const near = open.filter((r) => Date.parse(r[1]) - now <= 130 * 60 * 1000).slice(0, 4);
+  const big = /ENGLAND: Premier|SPAIN: LaLiga|ITALY: Serie A|GERMANY: Bundesliga|FRANCE: Ligue 1|COLOMBIA|ARGENTINA|BRAZIL|MEXICO|PORTUGAL|NETHERLANDS|UEFA|CONMEBOL|CHAMPIONS/i;
+  const far = open.filter((r) => Date.parse(r[1]) - now > 130 * 60 * 1000 && big.test(String(r[2]))).slice(0, 8);
+  const targets = [...near, ...far];
+  const read = await browserPages(
+    targets.map((r) => ({
+      id: r[0],
+      kickoff: r[1],
+      label: `${r[3]} – ${r[4]} (${r[2]})`,
+      kind: "cuotas",
+      url: `https://www.flashscore.co/partido/${r[0]}/`,
+      read: async (page) => {
+        const title = await page.title().catch(() => "");
+        const result = await readOdds(page, ONLY_1X2);
+        const seen = await page
+          .evaluate(() => ({
+            hasOddsTable: Boolean(document.querySelector(".oddsCell__odds")),
+            tableRows: document.querySelectorAll(".oddsCell__odds .ui-table__body .ui-table__row").length,
+            imgAlts: [...document.querySelectorAll(".oddsCell__odds img[alt]")].map((img) => img.getAttribute("alt")).slice(0, 12),
+            tabs: [...document.querySelectorAll("a,button")].map((el) => (el.textContent || "").trim()).filter((t) => t && t.length < 30).slice(0, 40),
+            text: (document.body?.innerText || "").replace(/\s+/g, " ").slice(0, 700),
+          }))
+          .catch((error) => ({ error: String(error) }));
+        return {
+          title,
+          noOddsTab: Boolean(result.noOddsTab),
+          books: (result.books ?? []).map((b) => ({ book: b.book, market: b.market, odds: b.odds, struck: b.struck })),
+          colombian: (result.books ?? []).filter(colombian).length,
+          seen,
+        };
+      },
+    })),
+  );
+  writeJson("diag-cuotas.json", {
+    at: bogotaStamp(),
+    rule: "Diagnóstico de la lectura de cuotas (CORTE=diag). Solo informa.",
+    rows: read.map(({ read: _read, ...row }) => row),
+  });
+  console.log(`diag: ${read.length} partidos; con casas colombianas: ${read.filter((r) => r.colombian > 0).length}`);
+}
+
+if (process.env.CORTE === "diag") {
+  diagCuotas().catch((error) => {
+    console.error("diag:", error);
+    process.exitCode = 1;
+  });
+} else if (process.env.CORTE === "cierre") {
   cierre().catch((error) => {
     console.error("cierre:", error);
     process.exitCode = 1;

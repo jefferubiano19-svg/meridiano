@@ -1,0 +1,36 @@
+name: diag
+
+# Diagnóstico a mano de la lectura de cuotas: CORTE=diag → data/diag-cuotas.json. Ver diagCuotas() en scripts/corte.mjs.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  diag:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run corte
+        env:
+          CORTE: diag
+      - name: Guardar data/diag-cuotas.json
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/diag-cuotas.json || exit 0
+          git diff --cached --quiet && exit 0
+          git commit -m "Diagnóstico de cuotas"
+          for intento in 1 2 3; do
+            git pull --rebase origin "${GITHUB_REF_NAME}" && git push && break
+            sleep 15
+          done
