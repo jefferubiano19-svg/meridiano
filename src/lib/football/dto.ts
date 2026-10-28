@@ -54,6 +54,8 @@ export interface ComboMatch extends MatchReading {
   pick: string;
   pickKey: "home" | "draw" | "away";
   pickProbability: number | null;
+  /** «El rival marca»: el no favorito y la probabilidad de que haga al menos un gol (de la 1X2 publicada). */
+  rival?: { team: string; side: "home" | "away"; p: number } | null;
 }
 
 export interface DayBoard {

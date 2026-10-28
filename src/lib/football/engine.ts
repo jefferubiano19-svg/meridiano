@@ -53,6 +53,38 @@ export function lambdasFor(target: ThreeWay, rho = -0.08): [number, number] {
     lh = Math.min(4, Math.max(0.2, lh - (j22 * e1 - j12 * e2) / det));
     la = Math.min(4, Math.max(0.2, la - (-j21 * e1 + j11 * e2) / det));
   }
+  // Newton a veces no converge con favoritos muy marcados (p. ej. 90 % de visita) y termina en 4,0 y 4,0:
+  // entonces se busca en rejilla y se afina (revisión del 28 oct 2026).
+  const miss = (h: number, a: number) => {
+    const [e1, e2] = err(h, a);
+    return Math.abs(e1) + Math.abs(e2);
+  };
+  if (miss(lh, la) > 0.005) {
+    let best = { h: lh, a: la, e: miss(lh, la) };
+    for (let h = 0.2; h <= 4.0001; h += 0.05) {
+      for (let a = 0.2; a <= 4.0001; a += 0.05) {
+        const e = miss(h, a);
+        if (e < best.e) best = { h, a, e };
+      }
+    }
+    for (let step = 0.025; step >= 0.0005; step /= 2) {
+      let moved = true;
+      while (moved) {
+        moved = false;
+        for (const [dh, da] of [[step, 0], [-step, 0], [0, step], [0, -step]]) {
+          const h = Math.min(4, Math.max(0.2, best.h + dh));
+          const a = Math.min(4, Math.max(0.2, best.a + da));
+          const e = miss(h, a);
+          if (e < best.e) {
+            best = { h, a, e };
+            moved = true;
+          }
+        }
+      }
+    }
+    lh = best.h;
+    la = best.a;
+  }
   return [lh, la];
 }
 
@@ -99,6 +131,26 @@ export function scoreboard(lambdaHome: number, lambdaAway: number, rho = -0.08):
     matrix: ready.filter((cell) => cell.hg <= 6 && cell.ag <= 6),
     topScores,
   };
+}
+
+/**
+ * Probabilidad de que el no favorito (el de menor probabilidad de ganar entre local y visita) marque al menos un gol,
+ * con los goles esperados que reproducen la probabilidad 1X2 publicada (mismo marcador de Poisson con rho).
+ */
+export function rivalScores(published: ThreeWay): { side: "home" | "away"; p: number } | null {
+  const side = published.home < published.away ? "home" : "away";
+  const [lh, la] = lambdasFor(published);
+  const fit = scoreboard(lh, la).p1x2;
+  // Si ni la rejilla reproduce la 1X2 publicada (diferencia mayor a 1 punto), no se muestra.
+  if (Math.abs(fit.home - published.home) + Math.abs(fit.away - published.away) > 0.01) return null;
+  const board = scoreboard(lh, la);
+  let mass = 0;
+  let hit = 0;
+  for (const cell of board.matrix) {
+    mass += cell.p;
+    if ((side === "home" ? cell.hg : cell.ag) >= 1) hit += cell.p;
+  }
+  return { side, p: mass > 0 ? hit / mass : 0 };
 }
 
 export function devig(home: number, draw: number, away: number): ThreeWay | null {

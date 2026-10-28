@@ -6,7 +6,7 @@
  * Solo mide: no cambia ningún parámetro ni ninguna predicción.
  * ------------------------------------------------------------------------- */
 
-import { shin } from "./engine";
+import { rivalScores, shin } from "./engine";
 
 export type Light = "verde" | "amarillo" | "rojo" | "gris";
 
@@ -124,6 +124,17 @@ export interface Review {
   /** Sombra: mezcla 80 % consenso + 20 % modelo contra el consenso solo, en los mismos partidos. Negativa: el modelo aporta. */
   modelBlend: { n: number; diff: Stat };
   calibration: { label: string; n: number; expected: number | null; observed: number | null }[];
+  /**
+   * «El rival marca»: probabilidad de que el no favorito haga al menos un gol (de la 1X2 publicada) contra lo
+   * que pasó. Brier contra una constante (la frecuencia real) y calibración por tramos. Solo mide.
+   */
+  rivalGoal: {
+    n: number;
+    rate: number | null;
+    brier: number | null;
+    brierConstant: number | null;
+    buckets: { label: string; n: number; expected: number | null; observed: number | null }[];
+  };
   anomalies: { light: Light; items: { key: string; label: string; count: number; examples: string[] }[] };
 }
 
@@ -470,6 +481,38 @@ export function buildReview(input: ReviewInput): Review {
   const serious = items.filter((item) => !["conflictos", "sin-resultado"].includes(item.key) && item.count > 0).length;
   const anomaliesLight: Light = serious === 0 ? "verde" : items.some((item) => ["despues-inicio", "suma", "id-repetido"].includes(item.key) && item.count > 0) ? "rojo" : "amarillo";
 
+  // «El rival marca»: la fila evaluada de cada partido contra su marcador.
+  const rivalRows: { p: number; y: number }[] = [];
+  {
+    const rowsById = new Map(input.predictions.map((row) => [row.id, row]));
+    for (const ev of byMatch) {
+      const row = ev.rowId ? rowsById.get(ev.rowId) : undefined;
+      const score = (ev as unknown as { score?: unknown }).score;
+      if (!row?.published || !Array.isArray(score) || score.length < 2) continue;
+      const rival = rivalScores(row.published);
+      if (!rival) continue;
+      const { side, p } = rival;
+      rivalRows.push({ p, y: Number(side === "home" ? score[0] : score[1]) >= 1 ? 1 : 0 });
+    }
+  }
+  const rivalRate = mean(rivalRows.map((row) => row.y));
+  const rivalGoal: Review["rivalGoal"] = {
+    n: rivalRows.length,
+    rate: rivalRate,
+    brier: mean(rivalRows.map((row) => (row.p - row.y) ** 2)),
+    brierConstant: rivalRate == null ? null : mean(rivalRows.map((row) => (rivalRate - row.y) ** 2)),
+    buckets: [
+      [0, 0.6, "menos de 60 %"],
+      [0.6, 0.7, "60–70 %"],
+      [0.7, 0.8, "70–80 %"],
+      [0.8, 0.9, "80–90 %"],
+      [0.9, 1.01, "90 % o más"],
+    ].map(([low, high, label]) => {
+      const part = rivalRows.filter((row) => row.p >= (low as number) && row.p < (high as number));
+      return { label: label as string, n: part.length, expected: mean(part.map((row) => row.p)), observed: mean(part.map((row) => row.y)) };
+    }),
+  };
+
   return {
     generatedAt: new Date(now).toISOString(),
     window: { from: bogotaDay(from), to: bogotaDay(now) },
@@ -499,6 +542,7 @@ export function buildReview(input: ReviewInput): Review {
     wplayMarket,
     modelBlend,
     calibration,
+    rivalGoal,
     anomalies: { light: anomaliesLight, items },
   };
 }

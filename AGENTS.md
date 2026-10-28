@@ -71,6 +71,13 @@ cerrar, la vuelta termina sin instalar nada. `review.ts` → `valueResults`: ret
 misma casa al cierre y contra el consenso de cierre (`evClose`, la medida que decide; 30 cierres para una primera
 lectura, 100 para concluir). La página Modelo lo muestra en «¿Las marcas de valor ganan?».
 
+**El rival marca** (página `/rival`): de las listas «Partido hoy» y «Partido» (mañana), la probabilidad de que el no
+favorito haga al menos un gol, con los goles esperados que reproducen la 1X2 publicada (`engine.ts` → `rivalScores`,
+`lambdasFor`). `review.ts` → `rivalGoal` la mide contra los marcadores (Brier contra la frecuencia y calibración por
+tramos; 28 oct 2026: 9.247 partidos, 0,2180 contra 0,2236; por encima de 80 % exagera: 83 % dicho, 75 % real). Sin
+recalibrar: la recalibración logística no mejoró fuera de muestra (IC de la mejora −0,0006 a +0,0012).
+`lambdasFor` busca en rejilla cuando Newton no converge (favoritos de ~90 % terminaban en 4,0 y 4,0).
+
 **Sombras** (se guardan, no se publican): xG, Elo de clubes, temporada Liga BetPlay (`season.ts`).
 Una sombra se publica solo con ≥ 500 partidos comparados y el IC 95 % de la diferencia de RPS entero bajo cero.
 Congelamiento de parámetros hasta 500 partidos comparables con el consenso.

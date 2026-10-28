@@ -1,6 +1,7 @@
 import { AGENDA, agendaOnDay, type AgendaMatch } from "./agenda";
 import { spanishName } from "./standings";
 import { buildCombinada, buildCombinadaManana, type CombinadaLeg } from "./combinada";
+import { rivalScores } from "./engine";
 import { agendaToday, agendaTomorrow, bogotaDay, shiftDay } from "./clock";
 import { MISSING, type ComboBoard, type ComboMatch, type ConsultaBoard, type DayBoard, type LeagueCard, type LeaguePage, type MatchReading, type ModeloBundle, type SearchBoard, type Way } from "./dto";
 import { DIXON_FETCHED_AT, DIXON_REPORT, DIXON_RULE } from "./dixon";
@@ -304,7 +305,14 @@ function withPick(leg: CombinadaLeg): ComboMatch {
       { key: "draw" as const, name: "Empate", p: base.published.draw },
       { key: "away" as const, name: leg.away, p: base.published.away },
     ].sort((a, b) => b.p - a.p);
-    return { ...base, pick: sides[0].name, pickKey: sides[0].key, pickProbability: sides[0].p };
+    const rival = rivalScores(base.published);
+    return {
+      ...base,
+      pick: sides[0].name,
+      pickKey: sides[0].key,
+      pickProbability: sides[0].p,
+      rival: rival ? { team: rival.side === "home" ? leg.home : leg.away, side: rival.side, p: rival.p } : null,
+    };
   }
   return { ...base, pick: leg.pick, pickKey: leg.key, pickProbability: null };
 }
