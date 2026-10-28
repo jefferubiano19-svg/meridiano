@@ -1416,7 +1416,7 @@ async function diagCuotas() {
   const near = open.filter((r) => Date.parse(r[1]) - now <= 130 * 60 * 1000).slice(0, 4);
   const big = /ENGLAND: Premier|SPAIN: LaLiga|ITALY: Serie A|GERMANY: Bundesliga|FRANCE: Ligue 1|COLOMBIA|ARGENTINA|BRAZIL|MEXICO|PORTUGAL|NETHERLANDS|UEFA|CONMEBOL|CHAMPIONS/i;
   const far = open.filter((r) => Date.parse(r[1]) - now > 130 * 60 * 1000 && big.test(String(r[2]))).slice(0, 8);
-  const targets = [...near, ...far];
+  const targets = [...far.slice(0, 2), ...near.slice(0, 1)];
   const read = await browserPages(
     targets.map((r) => ({
       id: r[0],
@@ -1425,6 +1425,23 @@ async function diagCuotas() {
       kind: "cuotas",
       url: `https://www.flashscore.co/partido/${r[0]}/`,
       read: async (page) => {
+        const requests = [];
+        page.on("request", (req) => {
+          const url = req.url();
+          if (/odds|geo|bookmaker|lsapp|graphql/i.test(url)) requests.push(url.slice(0, 300));
+        });
+        const env = await page
+          .evaluate(() => {
+            const out = {};
+            for (const key of Object.keys(window)) {
+              if (!/geo|country|environment|config|bookmaker/i.test(key)) continue;
+              try { out[key] = JSON.stringify(window[key]).slice(0, 600); } catch { out[key] = "?"; }
+            }
+            const html = document.documentElement.outerHTML;
+            const geo = html.match(/.{0,120}geo.{0,160}/gi) ?? [];
+            return { keys: out, geo: geo.slice(0, 8) };
+          })
+          .catch((error) => ({ error: String(error) }));
         const title = await page.title().catch(() => "");
         const result = await readOdds(page, ONLY_1X2);
         const seen = await page
@@ -1442,6 +1459,8 @@ async function diagCuotas() {
           books: (result.books ?? []).map((b) => ({ book: b.book, market: b.market, odds: b.odds, struck: b.struck })),
           colombian: (result.books ?? []).filter(colombian).length,
           seen,
+          env,
+          requests: requests.slice(0, 25),
         };
       },
     })),
