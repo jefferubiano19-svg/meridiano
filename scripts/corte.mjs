@@ -399,9 +399,15 @@ async function readOdds(page, markets = READ_MARKETS) {
     await tab.waitFor({ state: "visible", timeout: 8000 });
     await tab.click({ timeout: 4000 });
   } catch {
-    // Sin pestaña de Cuotas ninguna casa ofrece el partido: se sigue con el siguiente en vez de esperar
-    // otros ~20 s por la pestaña 1X2 y la tabla (revisión del 17 oct 2026: los cortes se quedaban sin tiempo).
-    return { books: [], noOddsTab: true };
+    // Sin pestaña de Cuotas. Desde EE. UU. Flashscore la oculta en ligas que bet365.us no ofrece (p. ej. Colombia),
+    // aunque las casas colombianas sí las tengan: se abre directamente la comparación 1X2 (con la vista de Colombia).
+    // Si tampoco aparece la tabla, ninguna casa ofrece el partido y se sigue sin esperar más.
+    const base = page.url().split("#")[0];
+    await page.goto(`${base}#/comparacion-de-cuotas/1x2-cuotas/partido`, { waitUntil: "domcontentloaded", timeout: 20000 }).catch(() => undefined);
+    const shown = await page.waitForSelector(".oddsCell__odds .ui-table__row", { timeout: 6000 }).then(() => true).catch(() => false);
+    if (!shown) return { books: [], noOddsTab: true };
+    const rows = (await readOddsTable(page)).filter((row) => row.odds.length === 3);
+    return { books: rows.map((row) => ({ ...row, market: "1x2" })), viaHash: true };
   }
   await page.waitForTimeout(600);
   const books = [];
