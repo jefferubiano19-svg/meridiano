@@ -1401,15 +1401,24 @@ async function cierre() {
   ];
   console.log(`cierre: ${targets.length} partidos con marca o «Valor del día» por empezar en 10-130 min.`);
   if (targets.length === 0) return;
-  const read = await browserPages(
-    targets.map((mark) => ({
-      id: mark.matchId,
-      kickoff: mark.kickoff,
-      kind: "cuotas",
-      url: `https://www.flashscore.co/partido/${mark.matchId}/`,
-      read: async (page) => readOdds(page, ONLY_1X2),
-    })),
-  );
+  const job = (mark) => ({
+    id: mark.matchId,
+    kickoff: mark.kickoff,
+    kind: "cuotas",
+    url: `https://www.flashscore.co/partido/${mark.matchId}/`,
+    read: async (page) => readOdds(page, ONLY_1X2),
+  });
+  const goodRead = (row) => (row?.books ?? []).filter(colombian).filter((book) => book.market === "1x2" && !book.struck).length >= 3;
+  let read = await browserPages(targets.map(job));
+  // La página de cuotas a veces llega vacía (sobre todo la primera de cada navegador): hasta 2 intentos más,
+  // con un navegador nuevo, para los partidos que no trajeron 3 casas colombianas.
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    const missing = targets.filter((mark) => !goodRead(read.find((row) => row.id === mark.matchId)));
+    if (!missing.length) break;
+    console.log(`cierre: reintento ${attempt} para ${missing.length} partido(s) sin 3 casas.`);
+    const again = await browserPages(missing.map(job));
+    read = [...read.filter((row) => !missing.some((mark) => mark.matchId === row.id)), ...again];
+  }
   let saved = 0;
   for (const row of read) {
     const books = (row.books ?? [])
