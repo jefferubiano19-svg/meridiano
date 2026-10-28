@@ -58,6 +58,14 @@ function RivalPage() {
     [board],
   );
 
+  // Corte por la medición (28 oct 2026, 9.247 partidos): desde 70 % se cumplió ~73 %; 60–70 %, ~64 %; debajo, ~53 % o menos.
+  const TIERS = [
+    { key: "si", title: "Sí puede marcar", note: "70 % o más. Históricamente se cumplió cerca de 7 de cada 10.", min: 0.7, max: 2 },
+    { key: "parejo", title: "Parejo", note: "Entre 60 y 70 %. Se cumplió cerca de 6 de cada 10: casi una moneda.", min: 0.6, max: 0.7 },
+    { key: "no", title: "Poco probable", note: "Menos de 60 %. No conviene contar con ese gol.", min: 0, max: 0.6 },
+  ] as const;
+  const tiered = TIERS.map((tier) => ({ ...tier, rows: rows.filter((match) => match.rival.p >= tier.min && match.rival.p < tier.max) }));
+
   const bucketOf = (p: number) => track?.buckets.find((bucket) => {
     const [low, high] = bucket.label === "menos de 60 %" ? [0, 0.6] : bucket.label === "60–70 %" ? [0.6, 0.7] : bucket.label === "70–80 %" ? [0.7, 0.8] : bucket.label === "80–90 %" ? [0.8, 0.9] : [0.9, 1.01];
     return p >= low && p < high;
@@ -72,8 +80,8 @@ function RivalPage() {
         <h1 className="mt-2 font-display text-4xl tracking-tight">El rival marca</h1>
         <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted">
           Para cada partido de la lista, la probabilidad de que el equipo no favorito haga al menos un gol (en las casas:
-          «total de goles del equipo, más de 0,5»). Sale de la misma probabilidad publicada del partido. Ordenado de mayor
-          a menor.
+          «total de goles del equipo, más de 0,5»). Sale de la misma probabilidad publicada del partido. Separado en tres grupos según
+          lo que se ha cumplido en la realidad.
         </p>
         <div className="mt-4 flex gap-2" role="tablist">
           {(["hoy", "manana"] as const).map((key) => (
@@ -147,41 +155,65 @@ function RivalPage() {
       ) : rows.length === 0 ? (
         <p className="text-sm text-muted">No hay partidos con probabilidad publicada para este día.</p>
       ) : (
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {rows.map((match) => {
-            const bucket = bucketOf(match.rival.p);
-            return (
-              <article key={match.id} className="rounded-xl bg-surface p-4 shadow-[var(--shadow-border)]">
-                <p className="text-[11px] uppercase tracking-[0.14em] text-subtle">{match.competition}</p>
-                <h2 className="mt-1 font-display text-xl tracking-tight">
-                  {match.home} — {match.away}
-                </h2>
-                <p className="mt-1 text-xs text-muted">{kickLabel(match.kickoff)}</p>
-                <p className="mt-3 text-base text-fg">
-                  <strong>{match.rival.team}</strong> marca al menos 1 gol{" "}
-                  <span className="text-muted">({match.rival.side === "home" ? "local" : "visita"}, no favorito)</span>
-                </p>
-                <dl className="mt-3 grid grid-cols-3 gap-2 text-sm">
-                  <div>
-                    <dt className="text-[10px] uppercase tracking-wide text-subtle">Probabilidad</dt>
-                    <dd className="tabular-nums">{pct(match.rival.p)}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-[10px] uppercase tracking-wide text-subtle">Cuota justa</dt>
-                    <dd className="tabular-nums">{fair(match.rival.p)}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-[10px] uppercase tracking-wide text-subtle">Pasó (histórico)</dt>
-                    <dd className="tabular-nums">{bucket?.observed == null ? "—" : pct(bucket.observed)}</dd>
-                  </div>
-                </dl>
-                <p className="mt-2 text-xs text-muted">
-                  Favorito: {match.pick}
-                  {match.pickProbability != null ? ` (${pct(match.pickProbability)} de ganar)` : ""}.
-                </p>
-              </article>
-            );
-          })}
+        <div className="space-y-6">
+          <section className="rounded-xl bg-surface p-4 text-sm shadow-[var(--shadow-border)]">
+            <h2 className="font-display text-lg">
+              De {rows.length} partidos, en {tiered[0].rows.length} el no favorito sí puede marcar
+            </h2>
+            <p className="mt-1 text-muted">
+              {tiered[0].rows.length === 0
+                ? "Ningún no favorito llega a 70 %: en esta lista no hay un gol del rival con buena probabilidad."
+                : tiered[0].rows.map((match) => `${match.rival.team} (${pct(match.rival.p)})`).join(" · ")}
+            </p>
+          </section>
+          {tiered.map((tier) =>
+            tier.rows.length === 0 ? null : (
+              <section key={tier.key} className="space-y-3">
+                <div>
+                  <h2 className="font-display text-2xl tracking-tight">
+                    {tier.title} <span className="text-muted">({tier.rows.length})</span>
+                  </h2>
+                  <p className="text-sm text-muted">{tier.note}</p>
+                </div>
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                  {tier.rows.map((match) => {
+                    const bucket = bucketOf(match.rival.p);
+                    return (
+                      <article key={match.id} className="rounded-xl bg-surface p-4 shadow-[var(--shadow-border)]">
+                        <p className="text-[11px] uppercase tracking-[0.14em] text-subtle">{match.competition}</p>
+                        <h2 className="mt-1 font-display text-xl tracking-tight">
+                          {match.home} — {match.away}
+                        </h2>
+                        <p className="mt-1 text-xs text-muted">{kickLabel(match.kickoff)}</p>
+                        <p className="mt-3 text-base text-fg">
+                          <strong>{match.rival.team}</strong> marca al menos 1 gol{" "}
+                          <span className="text-muted">({match.rival.side === "home" ? "local" : "visita"}, no favorito)</span>
+                        </p>
+                        <dl className="mt-3 grid grid-cols-3 gap-2 text-sm">
+                          <div>
+                            <dt className="text-[10px] uppercase tracking-wide text-subtle">Probabilidad</dt>
+                            <dd className="tabular-nums">{pct(match.rival.p)}</dd>
+                          </div>
+                          <div>
+                            <dt className="text-[10px] uppercase tracking-wide text-subtle">Cuota justa</dt>
+                            <dd className="tabular-nums">{fair(match.rival.p)}</dd>
+                          </div>
+                          <div>
+                            <dt className="text-[10px] uppercase tracking-wide text-subtle">Pasó (histórico)</dt>
+                            <dd className="tabular-nums">{bucket?.observed == null ? "—" : pct(bucket.observed)}</dd>
+                          </div>
+                        </dl>
+                        <p className="mt-2 text-xs text-muted">
+                          Favorito: {match.pick}
+                          {match.pickProbability != null ? ` (${pct(match.pickProbability)} de ganar)` : ""}.
+                        </p>
+                      </article>
+                    );
+                  })}
+                </div>
+              </section>
+            ),
+          )}
         </div>
       )}
     </div>
