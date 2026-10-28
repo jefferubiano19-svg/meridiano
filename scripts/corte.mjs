@@ -404,7 +404,7 @@ async function readOdds(page, markets = READ_MARKETS) {
     // Si tampoco aparece la tabla, ninguna casa ofrece el partido y se sigue sin esperar más.
     const base = page.url().split("#")[0];
     await page.goto(`${base}#/comparacion-de-cuotas/1x2-cuotas/partido`, { waitUntil: "domcontentloaded", timeout: 20000 }).catch(() => undefined);
-    const shown = await page.waitForSelector(".oddsCell__odds .ui-table__row", { timeout: 6000 }).then(() => true).catch(() => false);
+    const shown = await page.waitForSelector(".oddsCell__odds .ui-table__row", { timeout: 8000 }).then(() => true).catch(() => false);
     if (!shown) return { books: [], noOddsTab: true };
     const rows = (await readOddsTable(page)).filter((row) => row.odds.length === 3);
     return { books: rows.map((row) => ({ ...row, market: "1x2" })), viaHash: true };
@@ -416,7 +416,17 @@ async function readOdds(page, markets = READ_MARKETS) {
     const opened = await clickTab(page, market.label);
     // Si la pestaña no abrió, la tabla visible sigue siendo la anterior: no se lee (evita guardar 1X2 como "ambos marcan").
     if (!opened && market.id !== "1x2") continue;
-    const rows = (await readOddsTable(page)).filter((row) => row.odds.length === (market.id === "1x2" ? 3 : 2));
+    // La tabla llega de otra petición (la de cuotas con la vista de Colombia): se espera a que tenga filas.
+    // Sin esta espera, las primeras páginas de cada navegador se leían vacías (diagnóstico del 28 oct 2026).
+    await page.waitForSelector(".oddsCell__odds .ui-table__row", { timeout: 10000 }).catch(() => undefined);
+    let rows = (await readOddsTable(page)).filter((row) => row.odds.length === (market.id === "1x2" ? 3 : 2));
+    if (market.id === "1x2" && rows.length === 0) {
+      // Último intento: la comparación 1X2 por dirección directa.
+      const base = page.url().split("#")[0];
+      await page.goto(`${base}#/comparacion-de-cuotas/1x2-cuotas/partido`, { waitUntil: "domcontentloaded", timeout: 20000 }).catch(() => undefined);
+      await page.waitForSelector(".oddsCell__odds .ui-table__row", { timeout: 10000 }).catch(() => undefined);
+      rows = (await readOddsTable(page)).filter((row) => row.odds.length === 3);
+    }
     const signature = JSON.stringify(rows.map((row) => [row.book, row.odds]));
     if (market.id === "1x2") first = signature;
     else if (signature === first) continue;
