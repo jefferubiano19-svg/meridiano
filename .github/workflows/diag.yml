@@ -3,6 +3,11 @@ name: diag
 # Diagnóstico a mano de la lectura de cuotas: CORTE=diag → data/diag-cuotas.json. Ver diagCuotas() en scripts/corte.mjs.
 on:
   workflow_dispatch:
+    inputs:
+      ids:
+        description: "IDs de partido de Flashscore separados por coma (vacío = automático)"
+        required: false
+        default: ""
 
 permissions:
   contents: write
@@ -22,6 +27,7 @@ jobs:
       - run: npm run corte
         env:
           CORTE: diag
+          DIAG_IDS: ${{ inputs.ids }}
       - name: Guardar data/diag-cuotas.json
         if: always()
         run: |

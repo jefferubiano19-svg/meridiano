@@ -1454,7 +1454,8 @@ async function diagCuotas() {
   const near = open.filter((r) => Date.parse(r[1]) - now <= 130 * 60 * 1000).slice(0, 4);
   const big = /ENGLAND: Premier|SPAIN: LaLiga|ITALY: Serie A|GERMANY: Bundesliga|FRANCE: Ligue 1|COLOMBIA|ARGENTINA|BRAZIL|MEXICO|PORTUGAL|NETHERLANDS|UEFA|CONMEBOL|CHAMPIONS/i;
   const far = open.filter((r) => Date.parse(r[1]) - now > 130 * 60 * 1000 && big.test(String(r[2]))).slice(0, 8);
-  const targets = [...far.slice(0, 6), ...near.slice(0, 2)];
+  const forced = String(process.env.DIAG_IDS ?? "").split(",").map((id) => id.trim()).filter(Boolean);
+  const targets = forced.length ? rows.filter((r) => forced.includes(r[0])) : [...far.slice(0, 6), ...near.slice(0, 2)];
   const read = await browserPages(
     targets.map((r) => ({
       id: r[0],
