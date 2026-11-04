@@ -1467,7 +1467,7 @@ async function cierre() {
     ).values(),
   ];
   // Cuota vigente: las selecciones de «Valor del día» que empiezan entre 130 min y 24 h se releen cada hora
-  // (data/vigentes.json) para que la página diga si siguen con valor y a qué cuota. Las 25 más próximas.
+  // (data/vigentes.json) para que la página diga si siguen con valor y a qué cuota. Las 15 más próximas.
   const closingIds = new Set(targets.map((mark) => mark.matchId));
   const refresh = [
     ...new Map(
@@ -1480,7 +1480,7 @@ async function cierre() {
         .sort((a, b) => a.kickoff.localeCompare(b.kickoff))
         .map((pick) => [pick.matchId, pick]),
     ).values(),
-  ].slice(0, 25);
+  ].slice(0, 15);
   console.log(`cierre: ${targets.length} partidos por empezar en 10-130 min; ${refresh.length} selecciones para cuota vigente.`);
   if (targets.length === 0 && refresh.length === 0) return;
   const job = (mark) => ({
@@ -1496,7 +1496,8 @@ async function cierre() {
   // La página de cuotas a veces llega vacía (sobre todo la primera de cada navegador): hasta 2 intentos más,
   // con un navegador nuevo, para los partidos que no trajeron 3 casas colombianas.
   for (let attempt = 1; attempt <= 2; attempt += 1) {
-    const missing = all.filter((mark) => !goodRead(read.find((row) => row.id === mark.matchId)));
+    // Los reintentos son solo para el cierre (la medición); la cuota vigente se vuelve a leer en una hora.
+    const missing = targets.filter((mark) => !goodRead(read.find((row) => row.id === mark.matchId)));
     if (!missing.length) break;
     console.log(`cierre: reintento ${attempt} para ${missing.length} partido(s) sin 3 casas.`);
     const again = await browserPages(missing.map(job));

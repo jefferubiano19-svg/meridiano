@@ -74,7 +74,7 @@ lectura, 100 para concluir). La página Modelo lo muestra en «¿Las marcas de v
 **Aviso, cuota vigente y listas (4 nov 2026)**:
 - Aviso: tras el paso `valor-del-dia`, `notifyPicks` comenta en el issue «Valor del día: selecciones nuevas» con @dueño
   (correo de GitHub) las selecciones nuevas que no han empezado. `corte.yml` da `issues: write` y `GITHUB_TOKEN`.
-- Cuota vigente: `cierre()` relee también, cada hora, las selecciones que empiezan entre 130 min y 24 h (25 como máximo)
+- Cuota vigente: `cierre()` relee también, cada hora, las selecciones que empiezan entre 130 min y 24 h (15 como máximo, sin reintentos)
   → `data/vigentes.json`. `vigentes.ts` → `currentOdds` toma la lectura más reciente (vigentes o cierres) y `/valor`
   dice si la selección sigue con valor (`recheck`). Solo informa: la medición sigue con `cierres.json`.
 - Filtro «Solo cuota menor a 4» en `/valor`; `review.ts` → `pickResultsLow` mide esas selecciones por separado.
