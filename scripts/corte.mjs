@@ -1593,6 +1593,18 @@ async function diagCuotas() {
           .catch((error) => ({ error: String(error) }));
         const title = await page.title().catch(() => "");
         const result = await readOdds(page, ONLY_1X2);
+        // Mercados extra (doble oportunidad, empate no válido): pestaña, dirección y filas tal como se leen.
+        const extra = [];
+        for (const label of ["Doble oportunidad", "Apuesta sin empate"]) {
+          const opened = await clickTab(page, label);
+          await page.waitForTimeout(800);
+          await page.waitForSelector(".oddsCell__odds .ui-table__row", { timeout: 6000 }).catch(() => undefined);
+          const rows = await readOddsTable(page).catch(() => []);
+          const head = await page
+            .evaluate(() => [...document.querySelectorAll(".oddsCell__odds .ui-table__header, .ui-table__header")].map((el) => (el.textContent || "").replace(/\s+/g, " ").trim()).slice(0, 3))
+            .catch(() => []);
+          extra.push({ label, opened, url: page.url(), head, rows: rows.map((row) => `${row.book}:${row.odds.join("/")}${row.struck ? "x" : ""}`) });
+        }
         const seen = await page
           .evaluate(() => ({
             hasOddsTable: Boolean(document.querySelector(".oddsCell__odds")),
@@ -1608,8 +1620,9 @@ async function diagCuotas() {
           books: (result.books ?? []).map((b) => ({ book: b.book, market: b.market, odds: b.odds, struck: b.struck })),
           colombian: (result.books ?? []).filter(colombian).length,
           seen,
-          env,
-          requests: requests.slice(0, 25),
+          env: null,
+          extra,
+          requests: [],
         };
       },
     })),
