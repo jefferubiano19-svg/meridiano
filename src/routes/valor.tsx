@@ -20,6 +20,9 @@ export const Route = createFileRoute("/valor")({ component: ValorPage });
 interface Row {
   match: MatchReading;
   pick: ValuePick;
+  /** Puesto por probabilidad entre las que siguen con valor (1 = la más probable). */
+  rank?: number | null;
+  total?: number;
   /** Lectura de cada hora (cierre.yml), si es más reciente que la del corte. */
   now: { readAt: string; still: boolean; house: string; odds: number; minOdds: number } | null;
 }
@@ -71,6 +74,7 @@ function ValorPage() {
   type PickRecord = { settled: number; roi: Stat; closed: number; evClose: Stat; verdict: string };
   const [records, setRecords] = useState<{ all: PickRecord | null; low: PickRecord | null }>({ all: null, low: null });
   const [low, setLow] = useState(false);
+  const [order, setOrder] = useState<"rank" | "time">("rank");
   const record = low ? records.low : records.all;
 
   useEffect(() => {
@@ -106,9 +110,16 @@ function ValorPage() {
         out.push({ match, pick, now: recheck(match, pick) });
       }
     }
-    // Primero las que siguen con valor; las que ya lo perdieron, al final.
-    return out.sort((a, b) => Number(a.now?.still === false) - Number(b.now?.still === false) || a.match.kickoff.localeCompare(b.match.kickoff));
-  }, [matches, low]);
+    // Puesto 1 a N: entre las que siguen con valor, 1 es la que más probabilidad tiene de cumplirse. Las que ya
+    // perdieron el valor no llevan puesto y van al final.
+    const ranked = out
+      .filter((row) => row.now?.still !== false)
+      .sort((a, b) => b.pick.prob - a.pick.prob || a.match.kickoff.localeCompare(b.match.kickoff));
+    const rank = new Map(ranked.map((row, index) => [row, index + 1]));
+    const gone = out.filter((row) => row.now?.still === false);
+    const live = order === "rank" ? ranked : [...ranked].sort((a, b) => a.match.kickoff.localeCompare(b.match.kickoff));
+    return [...live, ...gone].map((row) => ({ ...row, rank: rank.get(row) ?? null, total: ranked.length }));
+  }, [matches, low, order]);
 
   return (
     <div className="space-y-6">
@@ -138,6 +149,27 @@ function ValorPage() {
             </button>
           ))}
         </div>
+        <div className="mt-2 flex flex-wrap gap-2" role="tablist" aria-label="Orden">
+          {[
+            { key: "rank" as const, label: "Por probabilidad (1 primero)" },
+            { key: "time" as const, label: "Por hora" },
+          ].map((option) => (
+            <button
+              key={option.key}
+              type="button"
+              role="tab"
+              aria-selected={order === option.key}
+              onClick={() => setOrder(option.key)}
+              className={`h-9 rounded-full px-4 text-sm ring-1 ring-border ${order === option.key ? "bg-fg text-bg" : "bg-elevated text-fg"}`}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+        <p className="mt-2 max-w-2xl text-xs text-muted">
+          #1 es la selección con más probabilidad de cumplirse entre las que tienen valor. Todas tienen valor; el puesto
+          solo dice cuál se cumple más seguido. Juntarlas en combinada multiplica las probabilidades hacia abajo.
+        </p>
         {low ? (
           <p className="mt-2 max-w-2xl text-xs text-muted">
             Cuota menor a {LOW_ODDS}: se ganan cerca de 4 o 5 de cada 10, con menos ventaja por apuesta y rachas más cortas.
@@ -150,8 +182,9 @@ function ValorPage() {
             title="Valor del día"
             build={() => ({
               name: "Valor del día",
-              headers: ["Inicio", "Competición", "Partido", "Selección", "Lado", "Casa", "Cuota", "Cuota mínima", "Se cumple", "Cuota justa", "Valor por $100", "Casas leídas", "Cuota leída", "Cuota vigente", "¿Sigue con valor?"],
-              rows: rows.map(({ match, pick, now }) => [
+              headers: ["Puesto", "Inicio", "Competición", "Partido", "Selección", "Lado", "Casa", "Cuota", "Cuota mínima", "Se cumple", "Cuota justa", "Valor por $100", "Casas leídas", "Cuota leída", "Cuota vigente", "¿Sigue con valor?"],
+              rows: rows.map(({ match, pick, now, rank }) => [
+                rank ?? null,
                 match.kickoff.slice(0, 16).replace("T", " "),
                 match.competition,
                 `${match.home} — ${match.away}`,
@@ -211,12 +244,22 @@ function ValorPage() {
         </p>
       ) : (
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {rows.map(({ match, pick, now }) => (
+          {rows.map(({ match, pick, now, rank, total }) => (
             <article
               key={`${match.id}-${pick.outcomeIndex}`}
               className={`rounded-xl bg-surface p-4 shadow-[var(--shadow-border)] ${now && !now.still ? "opacity-60" : ""}`}
             >
-              <p className="text-[11px] uppercase tracking-[0.14em] text-subtle">{match.competition}</p>
+              <div className="flex items-start justify-between gap-3">
+                <p className="text-[11px] uppercase tracking-[0.14em] text-subtle">{match.competition}</p>
+                {rank ? (
+                  <span
+                    className="shrink-0 rounded-full bg-accent px-2.5 py-1 text-xs font-semibold tabular-nums text-accent-fg"
+                    title={`Puesto ${rank} de ${total} por probabilidad de cumplirse`}
+                  >
+                    #{rank}
+                  </span>
+                ) : null}
+              </div>
               <h2 className="mt-1 font-display text-xl tracking-tight">
                 {match.home} — {match.away}
               </h2>
