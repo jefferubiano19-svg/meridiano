@@ -6,7 +6,18 @@ import { AGENDA } from "./agenda";
  * contra los marcadores de la agenda. Se usa la primera lista publicada ese mismo día (la del corte de la noche).
  * ------------------------------------------------------------------------- */
 
-type Leg = { id: string; key: "home" | "draw" | "away"; probability: number };
+type Leg = {
+  id: string;
+  key: "home" | "draw" | "away";
+  probability: number;
+  home?: string;
+  away?: string;
+  competition?: string;
+  kickoff?: string;
+  pick?: string;
+  /** Probabilidad de empate al guardar (desde el 5 nov 2026), para «favorito o empate». */
+  draw?: number;
+};
 type Slot = { savedAt: string; legs: Leg[] };
 
 export interface ListResult {
@@ -45,4 +56,12 @@ export function listHistory(beforeDay: string, days = 7): ListResult[] {
     out.push({ day, savedAt: slot.savedAt, legs: slot.legs.length, settled, hits, expected });
   }
   return out;
+}
+
+/** La lista «Partido hoy» fija del día: la primera publicada ese mismo día (corte de la noche). */
+export function savedList(day: string): { savedAt: string; key: string; legs: Leg[] } | null {
+  const slots = Object.entries(byDay[day] ?? {}).filter(([key]) => key.startsWith("hoy-"));
+  if (!slots.length) return null;
+  const [key, slot] = slots.sort((a, b) => a[1].savedAt.localeCompare(b[1].savedAt))[0];
+  return slot.legs.length ? { savedAt: slot.savedAt, key, legs: slot.legs } : null;
 }

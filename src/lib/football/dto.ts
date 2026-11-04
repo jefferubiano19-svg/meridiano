@@ -62,6 +62,10 @@ export interface ComboMatch extends MatchReading {
   pick: string;
   pickKey: "home" | "draw" | "away";
   pickProbability: number | null;
+  /** Lista fija: cómo terminó el lado elegido (null si no ha terminado). */
+  outcome?: "acierto" | "fallo" | null;
+  /** Probabilidad de «favorito o empate» (doble oportunidad del lado elegido), de la 1X2 publicada. */
+  favOrDraw?: number | null;
   /** «El rival marca»: el no favorito y la probabilidad de que haga al menos un gol (de la 1X2 publicada). */
   rival?: { team: string; side: "home" | "away"; p: number } | null;
 }
@@ -78,6 +82,8 @@ export interface ComboBoard {
   withOdds?: boolean;
   joint: number | null;
   matches: ComboMatch[];
+  /** Lista fija del día (la guardada por el primer corte del día), si existe. */
+  frozen?: { savedAt: string; settled: number; hits: number; expected: number } | null;
   /** Cómo le fue a la lista de los días anteriores (la publicada en la madrugada de cada día). */
   history?: { day: string; savedAt: string; legs: number; settled: number; hits: number; expected: number }[];
 }

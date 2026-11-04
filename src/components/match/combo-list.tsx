@@ -139,6 +139,20 @@ export function ComboList({ which }: { which: "hoy" | "manana" }) {
         <p className="text-sm text-muted">{failed ? "No se pudo cargar la lista." : "Cargando los partidos…"}</p>
       ) : (
         <>
+          {board.frozen ? (
+            <section className="rounded-xl bg-surface p-5 shadow-[var(--shadow-border)]">
+              <h2 className="font-display text-xl">Lista fija de hoy</h2>
+              <p className="mt-2 text-sm leading-relaxed text-muted">
+                Publicada a las {board.frozen.savedAt.slice(11, 16)} y no cambia en el día: los partidos que ya empezaron
+                siguen en la lista y se marcan ✔ o ✘ al terminar.
+              </p>
+              <p className="mt-2 text-base">
+                {board.frozen.settled === 0
+                  ? "Todavía no termina ningún partido."
+                  : `Van ${board.frozen.hits} aciertos de ${board.frozen.settled} terminados (esperado ${board.frozen.expected.toFixed(1).replace(".", ",")}).`}
+              </p>
+            </section>
+          ) : null}
           <section className="rounded-xl bg-surface p-5 shadow-[var(--shadow-border)]">
             <h2 className="font-display text-xl">{board.matches.length} partidos, cada uno por separado</h2>
             <p className="mt-2 text-sm leading-relaxed text-muted">
@@ -223,6 +237,8 @@ export function ComboList({ which }: { which: "hoy" | "manana" }) {
             ))}
           </div>
           <p className="-mt-2 text-xs text-muted">
+            «Favorito o empate» (doble oportunidad) es lo que más se acierta: cuando Meridiano dijo 85–90 %, pasó el 89 %; cuando
+            dijo 90–95 %, el 94 % (1.917 partidos ya jugados). La casa lo paga poco: compara con la cuota justa.{" "}
             #1 es el partido cuyo resultado más probable tiene la probabilidad más alta de la lista; #{board.matches.length} el
             más bajo. Más alto no significa que pague más: la cuota de esos favoritos suele ser baja.
           </p>
@@ -239,11 +255,17 @@ export function ComboList({ which }: { which: "hoy" | "manana" }) {
                 key={match.id}
                 match={match}
                 rank={ranks.has(match.id) ? { position: ranks.get(match.id) as number, total: board.matches.length } : null}
-                extra={
+                extra={[
+                  match.outcome === "acierto" ? "✔ Acertó" : match.outcome === "fallo" ? "✘ Falló" : "",
                   match.pickProbability == null
                     ? `Lado ${match.pick}: ${MISSING}`
-                    : `Lado ${match.pick}: ${formatPct(match.pickProbability, 1)} · cuota justa ${(1 / match.pickProbability).toFixed(2).replace(".", ",")}`
-                }
+                    : `Lado ${match.pick}: ${formatPct(match.pickProbability, 1)} · cuota justa ${(1 / match.pickProbability).toFixed(2).replace(".", ",")}`,
+                  match.favOrDraw != null
+                    ? `${match.pick} o empate: ${formatPct(match.favOrDraw, 1)} · cuota justa ${(1 / match.favOrDraw).toFixed(2).replace(".", ",")}`
+                    : "",
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
               />
             ))}
           </div>

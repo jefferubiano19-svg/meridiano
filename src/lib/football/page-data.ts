@@ -3,7 +3,7 @@ import { spanishName } from "./standings";
 import { buildCombinada, buildCombinadaManana, type CombinadaLeg } from "./combinada";
 import { rivalScores } from "./engine";
 import { currentOdds, doubleOffers } from "./vigentes";
-import { listHistory } from "./listas";
+import { listHistory, savedList } from "./listas";
 import { agendaToday, agendaTomorrow, bogotaDay, shiftDay } from "./clock";
 import { MISSING, type ComboBoard, type ComboMatch, type ConsultaBoard, type DayBoard, type LeagueCard, type LeaguePage, type MatchReading, type ModeloBundle, type SearchBoard, type Way } from "./dto";
 import { DIXON_FETCHED_AT, DIXON_REPORT, DIXON_RULE } from "./dixon";
@@ -315,15 +315,75 @@ function withPick(leg: CombinadaLeg): ComboMatch {
       pick: sides[0].name,
       pickKey: sides[0].key,
       pickProbability: sides[0].p,
+      favOrDraw: favOrDraw(base.published, sides[0].key),
       rival: rival ? { team: rival.side === "home" ? leg.home : leg.away, side: rival.side, p: rival.p } : null,
     };
   }
   return { ...base, pick: leg.pick, pickKey: leg.key, pickProbability: null };
 }
 
+/** Probabilidad de «favorito o empate» del lado elegido (si el lado es el empate, no aplica). */
+function favOrDraw(published: Way | null | undefined, key: "home" | "draw" | "away"): number | null {
+  if (!published || key === "draw") return null;
+  return published[key] + published.draw;
+}
+
+/** Fila de la lista fija: el lado y la probabilidad quedan como se publicaron; el estado y el marcador, los de ahora. */
+function frozenPick(leg: { id: string; key: "home" | "draw" | "away"; probability: number; home?: string; away?: string; competition?: string; kickoff?: string; pick?: string }): ComboMatch {
+  const base =
+    readingById(leg.id) ??
+    blank({
+      id: leg.id,
+      href: `/agenda/${leg.id}`,
+      home: leg.home ?? "",
+      away: leg.away ?? "",
+      competition: leg.competition ?? "",
+      kickoff: leg.kickoff ?? "",
+      status: "por-jugar",
+      homeScore: null,
+      awayScore: null,
+    });
+  let outcome: ComboMatch["outcome"] = null;
+  if (base.status === "finalizado" && base.homeScore != null && base.awayScore != null) {
+    const actual = base.homeScore > base.awayScore ? "home" : base.homeScore === base.awayScore ? "draw" : "away";
+    outcome = actual === leg.key ? "acierto" : "fallo";
+  }
+  const rival = base.published ? rivalScores(base.published) : null;
+  return {
+    ...base,
+    pick: leg.pick ?? (leg.key === "home" ? base.home : leg.key === "away" ? base.away : "Empate"),
+    pickKey: leg.key,
+    pickProbability: leg.probability,
+    outcome,
+    favOrDraw: favOrDraw(base.published, leg.key),
+    rival: rival ? { team: rival.side === "home" ? base.home : base.away, side: rival.side, p: rival.p } : null,
+  };
+}
+
 export function comboBoard(which: "hoy" | "manana"): ComboBoard {
   const day = which === "manana" ? agendaTomorrow() : agendaToday();
   const ticket = which === "manana" ? buildCombinadaManana(day) : buildCombinada(day);
+  // «Partido hoy»: la lista fija de la madrugada (no cambia en el día); si todavía no hay, la calculada ahora.
+  const saved = which === "hoy" ? savedList(day) : null;
+  if (saved) {
+    const matches = saved.legs.map(frozenPick);
+    const done = matches.filter((match) => match.outcome != null);
+    const joint = matches.reduce((product, match) => product * (match.pickProbability ?? 1), 1);
+    return {
+      day,
+      pool: ticket.today,
+      withOdds: ticket.withOdds,
+      joint,
+      matches,
+      frozen: {
+        savedAt: saved.savedAt,
+        settled: done.length,
+        hits: done.filter((match) => match.outcome === "acierto").length,
+        expected: done.reduce((sum, match) => sum + (match.pickProbability ?? 0), 0),
+      },
+      history: listHistory(day),
+    };
+  }
   const matches = ticket.legs.map(withPick);
   const joint =
     matches.length > 0 && matches.every((match) => match.pickProbability != null)
