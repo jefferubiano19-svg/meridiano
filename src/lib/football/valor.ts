@@ -16,6 +16,13 @@ import { shin } from "./engine";
 export const VALUE_MIN_EV = 0.03;
 export const VALUE_MAX_EV = 0.15;
 export const VALUE_MIN_HOUSES = 3;
+/**
+ * Regla del 5 nov 2026: solo resultados que se cumplen 40 % o más de las veces. Con 195 selecciones resueltas al 4 nov,
+ * las de 40 %+ ganaron 22 de 39 (+17 % en plata) y las de menos de 20 %, 5 de 73 (−42 %); todas con valor al cierre.
+ * El valor no cambia con el nivel; cambia cuántas se ganan. Se mide aparte desde esa fecha (review.ts → pickTiers).
+ */
+export const VALUE_MIN_PROB = 0.4;
+export const VALUE_RULE_SINCE = "2026-11-05";
 
 export interface Offer {
   house: string;
@@ -65,13 +72,18 @@ export function bestFromOffers(offers: Offer[]): { house: string; odds: number }
 }
 
 /** Selecciones con valor dados la probabilidad (consenso) y la mejor cuota de cada resultado. */
-export function valuePicks(probs: number[], best: { house: string; odds: number }[], houses: number): ValuePick[] {
+export function valuePicks(
+  probs: number[],
+  best: { house: string; odds: number }[],
+  houses: number,
+  minProb = VALUE_MIN_PROB,
+): ValuePick[] {
   if (houses < VALUE_MIN_HOUSES || probs.length < 3 || best.length < 3) return [];
   const out: ValuePick[] = [];
   for (const index of [0, 1, 2] as const) {
     const prob = probs[index];
     const { house, odds } = best[index];
-    if (!(prob > 0) || !(odds > 1)) continue;
+    if (!(prob > 0) || !(odds > 1) || prob < minProb) continue;
     const ev = prob * odds - 1;
     if (ev < VALUE_MIN_EV || ev > VALUE_MAX_EV) continue;
     out.push({ outcomeIndex: index, prob, house, odds, ev, fair: 1 / prob, minOdds: (1 + VALUE_MIN_EV) / prob });

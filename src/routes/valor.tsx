@@ -53,7 +53,8 @@ function recheck(match: MatchReading, pick: ValuePick): Row["now"] {
   const best = bestFromOffers(current.offers);
   if (!probs || !best) return null;
   const top = best[pick.outcomeIndex];
-  const again = valuePicks(probs, best, current.offers.length).find((item) => item.outcomeIndex === pick.outcomeIndex);
+  // Para decir si sigue con valor solo cuenta el valor, no el nivel de probabilidad.
+  const again = valuePicks(probs, best, current.offers.length, 0).find((item) => item.outcomeIndex === pick.outcomeIndex);
   return {
     readAt: current.readAt,
     still: Boolean(again),

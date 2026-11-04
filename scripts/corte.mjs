@@ -1139,7 +1139,7 @@ async function main() {
     const stored = readJsonOptional("combo-odds.json", { matches: [] }).matches ?? [];
     const registro = readJsonOptional("valor-registro.json", { picks: [] });
     registro.rule =
-      "Selecciones de «Valor del día» (mejor cuota de 3+ casas entre +3 % y +15 % sobre el consenso de las casas). Una fila por partido y resultado, guardada la primera vez que aparece; no se edita.";
+      "Selecciones de «Valor del día» (mejor cuota de 3+ casas entre +3 % y +15 % sobre el consenso de las casas; desde el 5 nov 2026, regla v2: solo resultados de 40 % o más). Una fila por partido, mercado y resultado, guardada la primera vez que aparece; no se edita.";
     registro.picks = Array.isArray(registro.picks) ? registro.picks : [];
     const seen = new Set(registro.picks.map((pick) => `${pick.matchId}|${pick.outcomeIndex}`));
     for (const item of stored) {
@@ -1170,6 +1170,8 @@ async function main() {
           ev: pick.ev,
           readAt: item.readAtBogota ?? null,
           savedAt: started,
+          // v2 (5 nov 2026): solo 40 % o más de probabilidad (valor.ts → VALUE_MIN_PROB).
+          rule: "v2",
         });
         valuePicksAdded += 1;
       }
@@ -1595,9 +1597,31 @@ async function diagCuotas() {
         const result = await readOdds(page, ONLY_1X2);
         // Mercados extra (doble oportunidad, empate no válido): pestaña, dirección y filas tal como se leen.
         const extra = [];
+        const hrefs = await page
+          .evaluate(() =>
+            [...document.querySelectorAll("a,button")]
+              .filter((el) => /Doble oportunidad|Apuesta sin empate/i.test(el.textContent || ""))
+              .map((el) => ({ tag: el.tagName, text: (el.textContent || "").trim(), href: el.getAttribute("href"), visible: el.getBoundingClientRect().width > 0 })),
+          )
+          .catch(() => []);
+        extra.push({ label: "hrefs", opened: null, url: JSON.stringify(hrefs).slice(0, 600), head: [], rows: [] });
         for (const label of ["Doble oportunidad", "Apuesta sin empate"]) {
-          const opened = await clickTab(page, label);
-          await page.waitForTimeout(800);
+          const found = hrefs.find((item) => item.text === label && item.href);
+          let opened = false;
+          if (found) {
+            const base = page.url().split("#")[0];
+            const target = found.href.startsWith("http") ? found.href : found.href.startsWith("#") ? `${base}${found.href}` : new URL(found.href, page.url()).toString();
+            await page.goto(target, { waitUntil: "domcontentloaded", timeout: 20000 }).catch(() => undefined);
+            opened = true;
+          } else {
+            opened = await page.evaluate((text) => {
+              const el = [...document.querySelectorAll("a,button")].find((node) => (node.textContent || "").trim() === text);
+              if (!el) return false;
+              el.click();
+              return true;
+            }, label).catch(() => false);
+          }
+          await page.waitForTimeout(1500);
           await page.waitForSelector(".oddsCell__odds .ui-table__row", { timeout: 6000 }).catch(() => undefined);
           const rows = await readOddsTable(page).catch(() => []);
           const head = await page
