@@ -105,15 +105,28 @@ function Row({ k, v, stack = false }: { k: string; v: string; stack?: boolean })
 export function MatchReadingCard({
   match,
   extra,
+  rank,
 }: {
   match: MatchReading;
   extra?: string;
+  /** Puesto en una lista (1 = mejor), si la lista lo usa. */
+  rank?: { position: number; total: number } | null;
 }) {
   const score =
     match.homeScore != null && match.awayScore != null ? `${match.homeScore}–${match.awayScore}` : null;
   const body = (
     <>
-      <p className="text-[11px] uppercase tracking-[0.14em] text-subtle">{match.competition || MISSING}</p>
+      <div className="flex items-start justify-between gap-3">
+        <p className="text-[11px] uppercase tracking-[0.14em] text-subtle">{match.competition || MISSING}</p>
+        {rank ? (
+          <span
+            className="shrink-0 rounded-full bg-accent px-2.5 py-1 text-xs font-semibold tabular-nums text-accent-fg"
+            title={`Puesto ${rank.position} de ${rank.total} por probabilidad`}
+          >
+            #{rank.position}
+          </span>
+        ) : null}
+      </div>
       <h2 className="mt-1 font-display text-2xl tracking-tight">
         {match.home} — {match.away}
       </h2>

@@ -48,6 +48,7 @@ export function ComboList({ which }: { which: "hoy" | "manana" }) {
   const [board, setBoard] = useState<ComboBoard | null>(null);
   const [failed, setFailed] = useState(false);
   const [query, setQuery] = useState("");
+  const [order, setOrder] = useState<"rank" | "time">("rank");
 
   useEffect(() => {
     let live = true;
@@ -65,14 +66,24 @@ export function ComboList({ which }: { which: "hoy" | "manana" }) {
     };
   }, [which]);
 
+  // Puesto de 1 a 20: 1 es el lado más probable de la lista (probabilidad publicada). Sin probabilidad, al final.
+  const ranks = useMemo(() => {
+    const sorted = [...(board?.matches ?? [])].sort(
+      (a, b) => (b.pickProbability ?? -1) - (a.pickProbability ?? -1) || a.kickoff.localeCompare(b.kickoff),
+    );
+    return new Map(sorted.map((match, index) => [match.id, index + 1]));
+  }, [board]);
+
   const matches = useMemo(() => {
     if (!board) return [];
     const q = query.trim().toLowerCase();
-    if (!q) return board.matches;
-    return board.matches.filter((match) =>
-      `${match.home} ${match.away} ${match.competition} ${match.pick}`.toLowerCase().includes(q),
+    const list = q
+      ? board.matches.filter((match) => `${match.home} ${match.away} ${match.competition} ${match.pick}`.toLowerCase().includes(q))
+      : board.matches;
+    return [...list].sort((a, b) =>
+      order === "rank" ? (ranks.get(a.id) ?? 99) - (ranks.get(b.id) ?? 99) : a.kickoff.localeCompare(b.kickoff),
     );
-  }, [board, query]);
+  }, [board, query, order, ranks]);
 
   const day = board?.day ?? "";
 
@@ -96,15 +107,29 @@ export function ComboList({ which }: { which: "hoy" | "manana" }) {
             <ExportBar
               filename={which === "hoy" ? "meridiano-combo" : "meridiano-manana"}
               title={which === "hoy" ? "Partido hoy" : "Partido"}
-              build={() =>
-                readingsSheet(
+              build={() => {
+                const sheet = readingsSheet(
                   "Partidos",
                   matches,
                   board.joint == null
                     ? `Probabilidad conjunta ${MISSING}. ${JOINT_NOTE}`
                     : `Probabilidad conjunta ${formatJoint(board.joint)}. ${JOINT_NOTE}`,
-                )
-              }
+                );
+                // Puesto (1 = más probable) y lado elegido al principio de cada fila.
+                return {
+                  ...sheet,
+                  headers: ["Puesto", "Lado", "Probabilidad del lado", ...sheet.headers],
+                  rows: sheet.rows.map((row, index) => {
+                    const match = matches[index];
+                    return [
+                      ranks.get(match.id) ?? null,
+                      match.pick,
+                      match.pickProbability == null ? null : formatPct(match.pickProbability, 1),
+                      ...row,
+                    ];
+                  }),
+                };
+              }}
             />
           </div>
         ) : null}
@@ -120,7 +145,8 @@ export function ComboList({ which }: { which: "hoy" | "manana" }) {
               {board.withOdds
                 ? `En el día hay ${board.pool} partidos por jugar con cuota en casas de apuestas.`
                 : `Para este día todavía no hay cuotas leídas: se toman los ${board.pool} partidos por jugar con probabilidad.`}{" "}
-              Aquí se listan los {board.matches.length} con el favorito más probable, ordenados por hora. Cada
+              Aquí se listan los {board.matches.length} con el favorito más probable, numerados de 1 a {board.matches.length} por
+              probabilidad. Cada
               probabilidad es de ese partido solo.
             </p>
             <dl className="mt-5 grid gap-3 sm:grid-cols-2">
@@ -179,6 +205,27 @@ export function ComboList({ which }: { which: "hoy" | "manana" }) {
             </section>
           ) : null}
 
+          <div className="flex flex-wrap items-center gap-2" role="tablist" aria-label="Orden de la lista">
+            {[
+              { key: "rank" as const, label: "Por probabilidad (1 a 20)" },
+              { key: "time" as const, label: "Por hora" },
+            ].map((option) => (
+              <button
+                key={option.key}
+                type="button"
+                role="tab"
+                aria-selected={order === option.key}
+                onClick={() => setOrder(option.key)}
+                className={`h-9 rounded-full px-4 text-sm ring-1 ring-border ${order === option.key ? "bg-fg text-bg" : "bg-elevated text-fg"}`}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+          <p className="-mt-2 text-xs text-muted">
+            #1 es el partido cuyo resultado más probable tiene la probabilidad más alta de la lista; #{board.matches.length} el
+            más bajo. Más alto no significa que pague más: la cuota de esos favoritos suele ser baja.
+          </p>
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
@@ -191,6 +238,7 @@ export function ComboList({ which }: { which: "hoy" | "manana" }) {
               <MatchReadingCard
                 key={match.id}
                 match={match}
+                rank={ranks.has(match.id) ? { position: ranks.get(match.id) as number, total: board.matches.length } : null}
                 extra={
                   match.pickProbability == null
                     ? `Lado ${match.pick}: ${MISSING}`
