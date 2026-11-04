@@ -27,7 +27,23 @@ interface Row {
   now: { readAt: string; still: boolean; house: string; odds: number; minOdds: number } | null;
 }
 
-const LOW_ODDS = 4;
+/**
+ * Niveles por probabilidad de cumplirse (regla del 5 nov 2026). Con 195 selecciones resueltas: 40 % o más se
+ * cumplió 22 de 39 (+17 % en plata, +5,2 % contra el cierre); menos de 20 %, 5 de 73 (−42 % en plata). Todas
+ * tienen ventaja contra el cierre: el nivel no cambia el valor, cambia cuántas se ganan y lo largas que son las rachas.
+ */
+const TIERS = [
+  { key: "alta", label: "Alta · 40 % o más", min: 0.4 },
+  { key: "media", label: "25 % o más", min: 0.25 },
+  { key: "todas", label: "Todas", min: 0 },
+] as const;
+type TierKey = (typeof TIERS)[number]["key"];
+
+function tierOf(prob: number): { label: string; tone: string } {
+  if (prob >= 0.4) return { label: "Alta", tone: "text-value" };
+  if (prob >= 0.25) return { label: "Media", tone: "text-fg" };
+  return { label: "Baja", tone: "text-warn" };
+}
 
 /** Revisa la selección con la lectura más reciente: ¿la mejor casa todavía paga por encima de lo que vale? */
 function recheck(match: MatchReading, pick: ValuePick): Row["now"] {
@@ -72,10 +88,13 @@ function ValorPage() {
   const today = useAgendaToday();
   const [matches, setMatches] = useState<MatchReading[] | null>(null);
   type PickRecord = { settled: number; roi: Stat; closed: number; evClose: Stat; verdict: string };
-  const [records, setRecords] = useState<{ all: PickRecord | null; low: PickRecord | null }>({ all: null, low: null });
-  const [low, setLow] = useState(false);
+  type TierRecord = { key: string; label: string; since: string; all: PickRecord; forward: PickRecord };
+  const [records, setRecords] = useState<{ all: PickRecord | null; tiers: TierRecord[] }>({ all: null, tiers: [] });
+  const [tier, setTier] = useState<TierKey>("alta");
   const [order, setOrder] = useState<"rank" | "time">("rank");
-  const record = low ? records.low : records.all;
+  const tierRecord = records.tiers.find((item) => item.key === tier) ?? null;
+  const record = tierRecord?.all ?? (tier === "todas" ? records.all : null);
+  const minProb = TIERS.find((item) => item.key === tier)?.min ?? 0;
 
   useEffect(() => {
     let live = true;
@@ -88,14 +107,31 @@ function ValorPage() {
       });
     void loadModelo()
       .then((bundle) => {
-        const review = bundle.review as unknown as { pickResults?: PickRecord; pickResultsLow?: PickRecord } | null;
-        if (live) setRecords({ all: review?.pickResults ?? null, low: review?.pickResultsLow ?? null });
+        const review = bundle.review as unknown as { pickResults?: PickRecord; pickTiers?: TierRecord[] } | null;
+        if (live) setRecords({ all: review?.pickResults ?? null, tiers: review?.pickTiers ?? [] });
       })
       .catch(() => undefined);
     return () => {
       live = false;
     };
   }, [today]);
+
+  // Cuántas hay en cada nivel (para los botones), antes de filtrar.
+  const counts = useMemo(() => {
+    const now = Date.now();
+    const probs: number[] = [];
+    for (const match of matches ?? []) {
+      if (match.status !== "por-jugar" || !(Date.parse(match.kickoff) - now > 10 * 60 * 1000)) continue;
+      if (!match.consensus || !match.bestOdds) continue;
+      const probsOf = [match.consensus.home, match.consensus.draw, match.consensus.away];
+      const best = [match.bestOdds.home, match.bestOdds.draw, match.bestOdds.away];
+      for (const pick of valuePicks(probsOf, best, match.bestOdds.houses)) {
+        if (recheck(match, pick)?.still === false) continue;
+        probs.push(pick.prob);
+      }
+    }
+    return Object.fromEntries(TIERS.map((item) => [item.key, probs.filter((prob) => prob >= item.min).length])) as Record<TierKey, number>;
+  }, [matches]);
 
   const rows = useMemo(() => {
     const now = Date.now();
@@ -106,7 +142,7 @@ function ValorPage() {
       const probs = [match.consensus.home, match.consensus.draw, match.consensus.away];
       const best = [match.bestOdds.home, match.bestOdds.draw, match.bestOdds.away];
       for (const pick of valuePicks(probs, best, match.bestOdds.houses)) {
-        if (low && !(pick.odds < LOW_ODDS)) continue;
+        if (pick.prob < minProb) continue;
         out.push({ match, pick, now: recheck(match, pick) });
       }
     }
@@ -119,7 +155,7 @@ function ValorPage() {
     const gone = out.filter((row) => row.now?.still === false);
     const live = order === "rank" ? ranked : [...ranked].sort((a, b) => a.match.kickoff.localeCompare(b.match.kickoff));
     return [...live, ...gone].map((row) => ({ ...row, rank: rank.get(row) ?? null, total: ranked.length }));
-  }, [matches, low, order]);
+  }, [matches, minProb, order]);
 
   return (
     <div className="space-y-6">
@@ -132,20 +168,17 @@ function ValorPage() {
           cumplen pocas veces. No es una recomendación: la decisión sobre apostar se toma al llegar a 300 selecciones
           resueltas. Cada selección nueva llega por correo apenas el corte la encuentra, y la cuota se revisa cada hora.
         </p>
-        <div className="mt-4 flex flex-wrap gap-2" role="tablist" aria-label="Filtro de cuota">
-          {[
-            { key: false, label: "Todas" },
-            { key: true, label: `Solo cuota menor a ${LOW_ODDS}` },
-          ].map((option) => (
+        <div className="mt-4 flex flex-wrap gap-2" role="tablist" aria-label="Nivel de probabilidad">
+          {TIERS.map((option) => (
             <button
-              key={String(option.key)}
+              key={option.key}
               type="button"
               role="tab"
-              aria-selected={low === option.key}
-              onClick={() => setLow(option.key)}
-              className={`h-9 rounded-full px-4 text-sm ring-1 ring-border ${low === option.key ? "bg-fg text-bg" : "bg-elevated text-fg"}`}
+              aria-selected={tier === option.key}
+              onClick={() => setTier(option.key)}
+              className={`h-9 rounded-full px-4 text-sm ring-1 ring-border ${tier === option.key ? "bg-fg text-bg" : "bg-elevated text-fg"}`}
             >
-              {option.label}
+              {option.label} ({counts[option.key] ?? 0})
             </button>
           ))}
         </div>
@@ -170,21 +203,23 @@ function ValorPage() {
           #1 es la selección con más probabilidad de cumplirse entre las que tienen valor. Todas tienen valor; el puesto
           solo dice cuál se cumple más seguido. Juntarlas en combinada multiplica las probabilidades hacia abajo.
         </p>
-        {low ? (
-          <p className="mt-2 max-w-2xl text-xs text-muted">
-            Cuota menor a {LOW_ODDS}: se ganan cerca de 4 o 5 de cada 10, con menos ventaja por apuesta y rachas más cortas.
-            La medición de abajo es solo de estas selecciones.
-          </p>
-        ) : null}
+        <p className="mt-2 max-w-2xl text-xs text-muted">
+          {tier === "alta"
+            ? "Alta: solo selecciones que se cumplen 40 % o más de las veces. Hasta hoy se ganó más de la mitad (22 de 39). Es la opción por defecto."
+            : tier === "media"
+              ? "25 % o más: se suman las de probabilidad media; se gana cerca de 1 de cada 3, con rachas de pérdidas más largas."
+              : "Todas: incluye las de baja probabilidad (cuota alta). Tienen valor, pero se pierden casi siempre: solo para muchas apuestas iguales."}
+        </p>
         <div className="mt-4">
           <ExportBar
             filename="meridiano-valor-del-dia"
             title="Valor del día"
             build={() => ({
               name: "Valor del día",
-              headers: ["Puesto", "Inicio", "Competición", "Partido", "Selección", "Lado", "Casa", "Cuota", "Cuota mínima", "Se cumple", "Cuota justa", "Valor por $100", "Casas leídas", "Cuota leída", "Cuota vigente", "¿Sigue con valor?"],
+              headers: ["Puesto", "Nivel", "Inicio", "Competición", "Partido", "Selección", "Lado", "Casa", "Cuota", "Cuota mínima", "Se cumple", "Cuota justa", "Valor por $100", "Casas leídas", "Cuota leída", "Cuota vigente", "¿Sigue con valor?"],
               rows: rows.map(({ match, pick, now, rank }) => [
                 rank ?? null,
+                tierOf(pick.prob).label,
                 match.kickoff.slice(0, 16).replace("T", " "),
                 match.competition,
                 `${match.home} — ${match.away}`,
@@ -208,7 +243,9 @@ function ValorPage() {
       </header>
 
       <section className="rounded-xl bg-surface p-4 text-sm shadow-[var(--shadow-border)]">
-        <h2 className="font-display text-lg">¿Han ganado hasta ahora?{low ? ` (cuota menor a ${LOW_ODDS})` : ""}</h2>
+        <h2 className="font-display text-lg">
+          ¿Han ganado hasta ahora? ({TIERS.find((item) => item.key === tier)?.label.toLowerCase()})
+        </h2>
         {record ? (
           <div className="mt-2 space-y-1 text-muted">
             <p>
@@ -216,6 +253,14 @@ function ValorPage() {
             </p>
             <p>Contra el consenso de cierre: {money(record.evClose)}.</p>
             <p>Resultado real: {money(record.roi)}.</p>
+            {tierRecord && tier !== "todas" ? (
+              <p className="pt-1 text-xs">
+                Prueba limpia (solo selecciones registradas desde el {tierRecord.since.split("-").reverse().join("/")}, cuando se
+                fijó esta regla): {tierRecord.forward.settled} resueltas · resultado {money(tierRecord.forward.roi)} · contra el
+                cierre {money(tierRecord.forward.evClose)}. El corte de 40 % se eligió mirando el histórico; por eso lo que
+                vale es esta prueba hacia adelante.
+              </p>
+            ) : null}
           </div>
         ) : (
           <p className="mt-2 text-muted">Se empieza a medir desde el próximo corte.</p>
@@ -239,8 +284,9 @@ function ValorPage() {
         <p className="text-sm text-muted">Cargando partidos de hoy y mañana…</p>
       ) : rows.length === 0 ? (
         <p className="text-sm text-muted">
-          Hoy y mañana ninguna casa paga por encima de lo que vale ningún resultado (con 3 o más casas leídas). Es lo
-          normal: en ese caso no hay apuesta con valor.
+          {tier !== "todas" && (counts.todas ?? 0) > 0
+            ? `Hoy y mañana no hay selecciones con valor de este nivel. Hay ${counts.todas} de probabilidad más baja en «Todas». No apostar también es una decisión válida.`
+            : "Hoy y mañana ninguna casa paga por encima de lo que vale ningún resultado (con 3 o más casas leídas). Es lo normal: en ese caso no hay apuesta con valor."}
         </p>
       ) : (
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
@@ -271,7 +317,9 @@ function ValorPage() {
               <dl className="mt-3 grid grid-cols-2 gap-2 text-sm">
                 <div>
                   <dt className="text-[10px] uppercase tracking-wide text-subtle">Se cumple</dt>
-                  <dd>{pct(pick.prob)}</dd>
+                  <dd>
+                    {pct(pick.prob)} <span className={`text-xs ${tierOf(pick.prob).tone}`}>· {tierOf(pick.prob).label}</span>
+                  </dd>
                 </div>
                 <div>
                   <dt className="text-[10px] uppercase tracking-wide text-subtle">Cuota justa</dt>

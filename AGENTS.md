@@ -77,7 +77,13 @@ lectura, 100 para concluir). La página Modelo lo muestra en «¿Las marcas de v
 - Cuota vigente: `cierre()` relee también, cada hora, las selecciones que empiezan entre 130 min y 24 h (15 como máximo, sin reintentos)
   → `data/vigentes.json`. `vigentes.ts` → `currentOdds` toma la lectura más reciente (vigentes o cierres) y `/valor`
   dice si la selección sigue con valor (`recheck`). Solo informa: la medición sigue con `cierres.json`.
-- Filtro «Solo cuota menor a 4» en `/valor`; `review.ts` → `pickResultsLow` mide esas selecciones por separado.
+- Niveles por probabilidad en `/valor` (regla del 5 nov 2026, reemplaza el filtro de cuota < 4): «Alta · 40 % o más»
+  (por defecto), «25 % o más» y «Todas»; puesto 1 a N por probabilidad entre las que siguen con valor. Base: 195
+  resueltas al 4 nov (40 %+: 22 de 39, +17 % en plata, +5,2 % al cierre; < 20 %: 5 de 73, −42 % en plata; todas las
+  franjas con valor al cierre positivo). `review.ts` → `pickTiers` mide cada nivel en todo el histórico y, aparte,
+  solo desde el 5 nov (`forward`, la prueba limpia: el corte se eligió mirando el histórico). El registro no cambia:
+  se siguen guardando todas las selecciones. `pickResultsLow` (cuota < 4) se sigue calculando.
+- El aviso por correo ordena por probabilidad y marca el nivel (Alta / Media / Baja).
 - Listas: al final de cada corte, `scripts/listas.mjs` (proceso aparte) guarda «Partido hoy» y «Partido» en
   `data/listas.json` (una por día y corte, 30 días); `listas.ts` → `listHistory` muestra en «Partido hoy» cuántas acertó
   la lista de la madrugada de cada día.

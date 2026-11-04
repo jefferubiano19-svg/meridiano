@@ -522,16 +522,18 @@ async function notifyPicks(picks) {
   const side = (pick) => (pick.outcomeIndex === 0 ? pick.home : pick.outcomeIndex === 2 ? pick.away : "Empate");
   const num = (value) => Number(value).toFixed(2).replace(".", ",");
   const pct = (value) => `${(value * 100).toFixed(1).replace(".", ",")} %`;
-  const sorted = [...open].sort((a, b) => a.kickoff.localeCompare(b.kickoff));
+  // De mayor a menor probabilidad de cumplirse; «Alta» (40 % o más) es el nivel por defecto de la página.
+  const sorted = [...open].sort((a, b) => b.prob - a.prob || a.kickoff.localeCompare(b.kickoff));
+  const tier = (prob) => (prob >= 0.4 ? "**Alta**" : prob >= 0.25 ? "Media" : "Baja");
   const lines = sorted.map(
     (pick) =>
-      `| ${pick.kickoff.slice(5, 10).split("-").reverse().join("/")} ${pick.kickoff.slice(11, 16)} | ${pick.home} – ${pick.away} | **${side(pick)}** | ${pick.house} | ${num(pick.odds)} | **${num((1 + 0.03) / pick.prob)}** | ${pct(pick.prob)} |${pick.odds < 4 ? " cuota baja |" : " |"}`,
+      `| ${pick.kickoff.slice(5, 10).split("-").reverse().join("/")} ${pick.kickoff.slice(11, 16)} | ${pick.home} – ${pick.away} | **${side(pick)}** | ${pick.house} | ${num(pick.odds)} | **${num((1 + 0.03) / pick.prob)}** | ${pct(pick.prob)} | ${tier(pick.prob)} |`,
   );
   const owner = repo.split("/")[0];
   const body = [
     `@${owner} ${sorted.length === 1 ? "1 selección nueva" : `${sorted.length} selecciones nuevas`} (corte ${CUT_MODE}, leídas desde las ${String(CUT_STARTED ?? "").slice(11, 16)}).`,
     "",
-    "| Inicio (Bogotá) | Partido | Selección | Casa | Cuota | Mínima | Se cumple | |",
+    "| Inicio (Bogotá) | Partido | Selección | Casa | Cuota | Mínima | Se cumple | Nivel |",
     "|---|---|---|---|---|---|---|---|",
     ...lines,
     "",

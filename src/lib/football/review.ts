@@ -120,6 +120,14 @@ export interface Review {
   pickResults: { settled: number; roi: Stat; closed: number; clvHouse: Stat; evClose: Stat; verdict: string };
   /** Lo mismo solo con las selecciones de cuota menor a 4 (filtro de la página /valor). */
   pickResultsLow: { settled: number; roi: Stat; closed: number; clvHouse: Stat; evClose: Stat; verdict: string };
+  /** «Valor del día» por nivel de probabilidad: histórico completo y solo desde que se fijó la regla (forward). */
+  pickTiers: {
+    key: string;
+    label: string;
+    since: string;
+    all: { settled: number; roi: Stat; closed: number; clvHouse: Stat; evClose: Stat; verdict: string };
+    forward: { settled: number; roi: Stat; closed: number; clvHouse: Stat; evClose: Stat; verdict: string };
+  }[];
   shadows: { key: string; label: string; n: number; diff: Stat }[];
   /** Partidos publicados con Wplay como mercado (sin 3 casas): publicada contra modelo solo. */
   wplayMarket: { n: number; rpsPublished: number | null; rpsModel: number | null; diff: Stat; excludedCopied: number };
@@ -322,6 +330,24 @@ export function buildReview(input: ReviewInput): Review {
   const pickResults = resultsOf(input.picks ?? []);
   // Filtro «cuota menor a 4» de la página /valor: la misma medición solo con esas selecciones.
   const pickResultsLow = resultsOf((input.picks ?? []).filter((pick) => Number(pick.odds) < 4));
+  // Niveles de probabilidad de «Valor del día» (regla fijada el 5 nov 2026): todo el histórico y, aparte, solo lo
+  // registrado desde ese día, que es la prueba limpia (el corte de 40 % se eligió mirando el histórico).
+  const TIER_SINCE = "2026-11-05";
+  // Acumulados, como los filtros de la página: «40 % o más» y «25 % o más» (incluye la anterior).
+  const pickTiers = [
+    { key: "alta", label: "40 % o más", min: 0.4 },
+    { key: "media", label: "25 % o más", min: 0.25 },
+    { key: "todas", label: "todas", min: 0 },
+  ].map((tier) => {
+    const inTier = (input.picks ?? []).filter((pick) => Number((pick as { prob?: number }).prob) >= tier.min);
+    return {
+      key: tier.key,
+      label: tier.label,
+      all: resultsOf(inTier),
+      since: TIER_SINCE,
+      forward: resultsOf(inTier.filter((pick) => String((pick as { savedAt?: string }).savedAt ?? "") >= TIER_SINCE)),
+    };
+  });
 
   // 5. Sombras contra la publicada, en los mismos partidos.
   const shadowLabels: Record<string, string> = {
@@ -543,6 +569,7 @@ export function buildReview(input: ReviewInput): Review {
     valueResults,
     pickResults,
     pickResultsLow,
+    pickTiers,
     shadows,
     wplayMarket,
     modelBlend,
