@@ -107,7 +107,10 @@ tramos; 28 oct 2026: 9.247 partidos, 0,2180 contra 0,2236; por encima de 80 % ex
 recalibrar: la recalibración logística no mejoró fuera de muestra (IC de la mejora −0,0006 a +0,0012).
 `lambdasFor` busca en rejilla cuando Newton no converge (favoritos de ~90 % terminaban en 4,0 y 4,0).
 
-**Sombras** (se guardan, no se publican): xG, Elo de clubes, temporada Liga BetPlay (`season.ts`).
+**Sombras** (se guardan, no se publican): xG, Elo de clubes, temporada Liga BetPlay (`season.ts`) y, desde el 5 nov
+2026, la **corrección de favoritos fuertes** (`favorites.ts` → `adjustFavorite`; review.ts → sombra «favoritos», solo
+partidos desde el 5 nov). Base: con favorito de 65 %+, ganó 77,9 % contra 74,4 % dicho (femenino 87,4 / 78,0; copas
+84,2 / 75,8), estable antes y después del 24 oct; prueba fuera de muestra −0,0002 de RPS (IC −0,0006 a +0,0002).
 Una sombra se publica solo con ≥ 500 partidos comparados y el IC 95 % de la diferencia de RPS entero bajo cero.
 Congelamiento de parámetros hasta 500 partidos comparables con el consenso.
 

@@ -7,6 +7,7 @@
  * ------------------------------------------------------------------------- */
 
 import { rivalScores, shin } from "./engine";
+import { adjustFavorite, FAVORITE_ADJUST } from "./favorites";
 
 export type Light = "verde" | "amarillo" | "rojo" | "gris";
 
@@ -405,6 +406,26 @@ export function buildReview(input: ReviewInput): Review {
       diff: stat(pairs.map((row) => (row.shadowRps?.[key] as number) - ((row.publishedRps ?? row.rpsPublished) as number))),
     };
   });
+
+  // Sombra «favoritos» (5 nov 2026): corrección de favoritos fuertes (favorites.ts), solo partidos jugados desde esa
+  // fecha (los parámetros se ajustaron con lo anterior). RPS corregida − publicada; negativa = la corrección acierta más.
+  {
+    const rowsById = new Map(input.predictions.map((row) => [row.id, row]));
+    const rpsOf = (p: { home: number; draw: number; away: number }, actual: "home" | "draw" | "away") => {
+      const o = { home: actual === "home" ? 1 : 0, draw: actual === "draw" ? 1 : 0 };
+      const c1 = p.home - o.home;
+      const c2 = p.home + p.draw - o.home - o.draw;
+      return (c1 * c1 + c2 * c2) / 2;
+    };
+    const diffs: number[] = [];
+    for (const ev of byMatch) {
+      const row = ev.rowId ? rowsById.get(ev.rowId) : undefined;
+      if (!row?.published || String(row.kickoff) < FAVORITE_ADJUST.since) continue;
+      const meta = row as unknown as { home?: string; away?: string; competition?: string };
+      diffs.push(rpsOf(adjustFavorite(row.published, meta), ev.actual) - rpsOf(row.published, ev.actual));
+    }
+    shadows.push({ key: "favoritos", label: "Corrección de favoritos", n: diffs.length, diff: stat(diffs) });
+  }
 
   // Fuera las predicciones cuyas cuotas de Wplay eran copiadas de otro partido (lector anterior al 14 oct 2026):
   // misma hora de lectura y mismas 3 cuotas en partidos distintos. Medirlas sería medir un error de lectura.
