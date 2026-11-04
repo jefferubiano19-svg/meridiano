@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
+import { ExportBar } from "@/components/export-bar";
 import { Input } from "@/components/ui/input";
 import { shiftDay } from "@/lib/football/clock";
 import type { MatchReading } from "@/lib/football/dto";
@@ -122,6 +123,36 @@ function BetCheckPage() {
           pasa al juntarlas en una combinada. También puedes agregarlos desde la ficha de cada partido con los
           botones 1 · X · 2. Tu apuesta queda solo en este navegador. No es una recomendación.
         </p>
+        {rows.length ? (
+          <div className="mt-4">
+            <ExportBar
+              filename="meridiano-mi-apuesta"
+              title="Revisar mi apuesta"
+              build={() => ({
+                name: "Mi apuesta",
+                headers: ["Inicio", "Competición", "Partido", "Apuesta", "Se cumple", "Cuota justa", "La casa paga", "Por cada $100", "Mejor cuota leída"],
+                rows: rows.map((row) => {
+                  const best = bestFor(row.leg.match, row.leg.market);
+                  return [
+                    row.leg.match.kickoff.slice(0, 16).replace("T", " "),
+                    row.leg.match.competition,
+                    `${row.leg.match.home} — ${row.leg.match.away}`,
+                    MARKETS.find((market) => market.key === row.leg.market)?.label ?? row.leg.market,
+                    row.p != null ? pct(row.p) : "NO DISPONIBLE",
+                    row.fair != null ? Number(row.fair.toFixed(2)) : null,
+                    row.odds,
+                    row.ev != null ? Number((row.ev * 100).toFixed(1)) : null,
+                    best ? `${num(best.odds)} en ${best.house}` : null,
+                  ];
+                }),
+                note:
+                  rows.length > 1 && jointP != null && jointOdds != null && jointEv != null
+                    ? `Combinada: acertar todas ${pct(jointP)} (1 de cada ${Math.max(1, Math.round(1 / jointP))}); cuota total ${num(jointOdds)}; cuota justa total ${num(1 / jointP)}; en promedio ${jointEv >= 0 ? "+" : "−"}${pct(Math.abs(jointEv))}. No es una recomendación.`
+                    : "No es una recomendación.",
+              })}
+            />
+          </div>
+        ) : null}
       </header>
 
       <section className="rounded-xl bg-surface p-5 shadow-[var(--shadow-border)]">

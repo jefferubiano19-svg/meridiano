@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
+import { ExportBar } from "@/components/export-bar";
 import { kickLabel } from "@/components/match/reading-block";
 import type { ComboBoard, ComboMatch } from "@/lib/football/dto";
 import { boardDayLabel } from "@/lib/football/format";
@@ -83,6 +84,34 @@ function RivalPage() {
           «total de goles del equipo, más de 0,5»). Sale de la misma probabilidad publicada del partido. Separado en tres grupos según
           lo que se ha cumplido en la realidad.
         </p>
+        <div className="mt-4">
+          <ExportBar
+            filename={`meridiano-rival-marca-${which}`}
+            title="El rival marca"
+            build={() => ({
+              name: "El rival marca",
+              headers: ["Grupo", "Inicio", "Competición", "Partido", "No favorito", "Lado", "Marca al menos 1 gol", "Cuota justa", "Pasó (histórico)", "Favorito", "Favorito gana"],
+              rows: tiered.flatMap((tier) =>
+                tier.rows.map((match) => [
+                  tier.title,
+                  match.kickoff.slice(0, 16).replace("T", " "),
+                  match.competition,
+                  `${match.home} — ${match.away}`,
+                  match.rival.team,
+                  match.rival.side === "home" ? "local" : "visita",
+                  pct(match.rival.p),
+                  Number((1 / match.rival.p).toFixed(2)),
+                  bucketOf(match.rival.p)?.observed == null ? null : pct(bucketOf(match.rival.p)!.observed as number),
+                  match.pick,
+                  match.pickProbability == null ? null : pct(match.pickProbability),
+                ]),
+              ),
+              note: track?.brier != null
+                ? `Medido en ${track.n} partidos: el no favorito marcó en el ${pct(track.rate ?? 0)}. Por encima de 80 % la probabilidad exagera. Sin cuotas leídas ni valor medido en este mercado: cada partido por separado, nunca en combinada.`
+                : "Sin cuotas leídas ni valor medido en este mercado: cada partido por separado, nunca en combinada.",
+            })}
+          />
+        </div>
         <div className="mt-4 flex gap-2" role="tablist">
           {(["hoy", "manana"] as const).map((key) => (
             <button

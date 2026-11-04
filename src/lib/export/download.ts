@@ -6,7 +6,7 @@ export interface ExportSheet {
 }
 
 function file(name: string, ext: string): string {
-  const base = name.replace(/[^\w.-]+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "") || "meridiano";
+  const base = name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^\w.-]+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "") || "meridiano";
   return base.toLowerCase().endsWith(ext) ? base : `${base}${ext}`;
 }
 
@@ -56,7 +56,9 @@ function latin(text: string): number[] {
     .replace(/\u2013|\u2014/g, "-")
     .replace(/\u2018|\u2019/g, "'")
     .replace(/\u201c|\u201d/g, '"')
-    .replace(/\u2026/g, "...");
+    .replace(/\u2026/g, "...")
+    .replace(/\u2212/g, "-")
+    .replace(/\u00a0|\u202f/g, " ");
   const bytes: number[] = [];
   for (const char of clean) {
     const code = char.charCodeAt(0);

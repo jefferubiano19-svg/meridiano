@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { shiftDay } from "@/lib/football/clock";
 import type { MatchReading } from "@/lib/football/dto";
+import { ExportBar } from "@/components/export-bar";
 import { kickLabel } from "@/components/match/reading-block";
 import { loadDay, loadModelo } from "@/lib/football/pages";
 import { useAgendaToday } from "@/lib/football/use-today";
@@ -90,6 +91,32 @@ function ValorPage() {
           (entre +{pct(VALUE_MIN_EV)} y +{pct(VALUE_MAX_EV)} por apuesta). Casi siempre son equipos no favoritos: se
           cumplen pocas veces. No es una recomendación y la ventaja todavía no está demostrada.
         </p>
+        <div className="mt-4">
+          <ExportBar
+            filename="meridiano-valor-del-dia"
+            title="Valor del día"
+            build={() => ({
+              name: "Valor del día",
+              headers: ["Inicio", "Competición", "Partido", "Selección", "Lado", "Casa", "Cuota", "Cuota mínima", "Se cumple", "Cuota justa", "Valor por $100", "Casas leídas", "Cuota leída"],
+              rows: rows.map(({ match, pick }) => [
+                match.kickoff.slice(0, 16).replace("T", " "),
+                match.competition,
+                `${match.home} — ${match.away}`,
+                team(match, pick.outcomeIndex),
+                SIDE[pick.outcomeIndex],
+                houseName(pick.house),
+                Number(pick.odds.toFixed(2)),
+                Number(pick.minOdds.toFixed(2)),
+                pct(pick.prob),
+                Number(pick.fair.toFixed(2)),
+                Number((pick.ev * 100).toFixed(1)),
+                match.bestOdds?.houses ?? null,
+                match.bestOdds?.readAt?.slice(0, 16).replace("T", " ") ?? null,
+              ]),
+              note: `Reglas: solo en la casa indicada, a la cuota mínima o más; sola, nunca en combinada; una por partido. ${record ? `Medición: ${record.verdict}. Contra el cierre: ${money(record.evClose)}. Resultado real: ${money(record.roi)}.` : ""}`,
+            })}
+          />
+        </div>
       </header>
 
       <section className="rounded-xl bg-surface p-4 text-sm shadow-[var(--shadow-border)]">

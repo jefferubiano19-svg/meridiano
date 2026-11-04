@@ -1,6 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { ExportBar } from "@/components/export-bar";
 import { MatchReadingCard } from "@/components/match/reading-block";
+import { readingsSheet } from "@/lib/export/reading-rows";
 import type { MatchReading } from "@/lib/football/dto";
 import { loadFicha } from "@/lib/football/pages";
 
@@ -25,5 +27,14 @@ function Page() {
   }, [id]);
   if (match === undefined) return <p className="text-sm text-muted">Cargando la ficha…</p>;
   if (!match) return <p className="text-sm text-muted">Ese partido no está en el corte publicado.</p>;
-  return <MatchReadingCard match={{ ...match, href: "" }} />;
+  return (
+    <div className="space-y-4">
+      <ExportBar
+        filename={`meridiano-${match.home}-${match.away}`}
+        title={`${match.home} — ${match.away}`}
+        build={() => readingsSheet("Partido", [match], "Probabilidades publicadas por Meridiano. No es una recomendación.")}
+      />
+      <MatchReadingCard match={{ ...match, href: "" }} />
+    </div>
+  );
 }
