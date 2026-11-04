@@ -2,6 +2,7 @@
  * Corte diario. No usa un modelo de lenguaje.
  * Si un paso falla, los demás siguen y el fallo queda en el registro.
  */
+import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { chromium } from "playwright";
 
@@ -489,6 +490,59 @@ async function readStandings(page) {
       return true;
     }),
   };
+}
+
+/**
+ * Aviso de «Valor del día»: comenta en el issue «Valor del día: selecciones nuevas» con la mención al dueño del
+ * repositorio (GitHub manda el correo). Solo si el corte agregó selecciones que todavía no empiezan. Sin
+ * GITHUB_TOKEN (pruebas locales) no hace nada.
+ */
+async function notifyPicks(picks) {
+  const token = process.env.GITHUB_TOKEN || "";
+  const repo = process.env.GITHUB_REPOSITORY || "";
+  const open = picks.filter((pick) => Date.parse(pick.kickoff) - Date.now() > PREMATCH_MS);
+  if (!token || !repo || open.length === 0) return { sent: false, picks: open.length };
+  const gh = async (method, path, body) => {
+    const response = await fetch(`https://api.github.com${path}`, {
+      method,
+      headers: {
+        Accept: "application/vnd.github+json",
+        Authorization: `Bearer ${token}`,
+        "X-GitHub-Api-Version": "2022-11-28",
+        "User-Agent": "meridiano-corte",
+        ...(body ? { "Content-Type": "application/json" } : {}),
+      },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    const text = await response.text();
+    if (!response.ok) throw new Error(`${method} ${path.split("?")[0]} → ${response.status} ${text.slice(0, 120)}`);
+    return text ? JSON.parse(text) : null;
+  };
+  const TITLE = "Valor del día: selecciones nuevas";
+  const side = (pick) => (pick.outcomeIndex === 0 ? pick.home : pick.outcomeIndex === 2 ? pick.away : "Empate");
+  const num = (value) => Number(value).toFixed(2).replace(".", ",");
+  const pct = (value) => `${(value * 100).toFixed(1).replace(".", ",")} %`;
+  const sorted = [...open].sort((a, b) => a.kickoff.localeCompare(b.kickoff));
+  const lines = sorted.map(
+    (pick) =>
+      `| ${pick.kickoff.slice(5, 10).split("-").reverse().join("/")} ${pick.kickoff.slice(11, 16)} | ${pick.home} – ${pick.away} | **${side(pick)}** | ${pick.house} | ${num(pick.odds)} | **${num((1 + 0.03) / pick.prob)}** | ${pct(pick.prob)} |${pick.odds < 4 ? " cuota baja |" : " |"}`,
+  );
+  const owner = repo.split("/")[0];
+  const body = [
+    `@${owner} ${sorted.length === 1 ? "1 selección nueva" : `${sorted.length} selecciones nuevas`} (corte ${CUT_MODE}, leídas desde las ${String(CUT_STARTED ?? "").slice(11, 16)}).`,
+    "",
+    "| Inicio (Bogotá) | Partido | Selección | Casa | Cuota | Mínima | Se cumple | |",
+    "|---|---|---|---|---|---|---|---|",
+    ...lines,
+    "",
+    "Reglas: solo en esa casa y a la mínima o más; sola, nunca en combinada; una por partido; mismo monto pequeño. La cuota baja con las horas: si ya está debajo de la mínima, no tiene valor. Detalle y cuota vigente: https://meridiano-beige.vercel.app/valor",
+    "",
+    "_Lo escribe el corte (scripts/corte.mjs). No es una recomendación; la decisión sobre apostar queda para las 300 selecciones resueltas._",
+  ].join("\n");
+  const issues = (await gh("GET", `/repos/${repo}/issues?state=open&per_page=50`)).filter((issue) => issue.title === TITLE && !issue.pull_request);
+  if (issues[0]) await gh("POST", `/repos/${repo}/issues/${issues[0].number}/comments`, { body });
+  else await gh("POST", `/repos/${repo}/issues`, { title: TITLE, body });
+  return { sent: true, picks: sorted.length };
 }
 
 /** Guarda las cuotas leídas en data/combo-odds.json, el archivo del que sale el consenso de la app. */
@@ -1077,6 +1131,7 @@ async function main() {
   // «Valor del día»: cada selección se guarda la primera vez que aparece (no se edita), para medir si gana.
   // Mismas reglas que la página /valor (src/lib/football/valor.ts), con las cuotas guardadas en combo-odds.json.
   let valuePicksAdded = 0;
+  const newPicks = [];
   await step("valor-del-dia", async () => {
     const { consensusFromOffers, bestFromOffers, valuePicks } = await import("../src/lib/football/valor.ts");
     const stored = readJsonOptional("combo-odds.json", { matches: [] }).matches ?? [];
@@ -1099,6 +1154,7 @@ async function main() {
         const key = `${item.id}|${pick.outcomeIndex}`;
         if (seen.has(key)) continue;
         seen.add(key);
+        newPicks.push({ matchId: item.id, home: row[3], away: row[4], competition: row[2], kickoff: row[1], outcomeIndex: pick.outcomeIndex, prob: pick.prob, house: pick.house, odds: pick.odds, ev: pick.ev });
         registro.picks.push({
           matchId: item.id,
           home: row[3],
@@ -1118,6 +1174,8 @@ async function main() {
     }
     writeJson("valor-registro.json", registro);
   });
+  // Aviso por correo apenas hay selecciones nuevas (la ventaja se pierde si la cuota baja antes de apostar).
+  await step("aviso-valor", () => notifyPicks(newPicks));
 
   const historyFile = readJsonOptional("sheets-history.json", { byId: {} });
   if (!historyFile.byId || typeof historyFile.byId !== "object") historyFile.byId = {};
@@ -1242,6 +1300,15 @@ async function main() {
   };
   writeJson("cut-coverage.json", coverage);
   await finishCut(coverage, last);
+  // Listas «Partido hoy» y «Partido» como quedan publicadas con estos datos (proceso aparte: lee data/ nuevo).
+  if (today.length > 0) {
+    const run = spawnSync(process.execPath, ["--experimental-strip-types", "--import", "./scripts/register-ts.mjs", "scripts/listas.mjs", mode], {
+      encoding: "utf8",
+      timeout: 5 * 60 * 1000,
+    });
+    if (run.status !== 0) console.error("listas:", (run.stderr || run.error?.message || "").slice(0, 400));
+    else console.log((run.stdout || "").trim());
+  }
   // Queda marcado como hecho solo si se leyó la agenda del día.
   if (today.length > 0) writeJson("cut-done.json", { ...readJsonOptional("cut-done.json", {}), [mode]: todayName });
   console.log(JSON.stringify(coverage, null, 2));
@@ -1399,8 +1466,23 @@ async function cierre() {
         .map((mark) => [mark.matchId, mark]),
     ).values(),
   ];
-  console.log(`cierre: ${targets.length} partidos con marca o «Valor del día» por empezar en 10-130 min.`);
-  if (targets.length === 0) return;
+  // Cuota vigente: las selecciones de «Valor del día» que empiezan entre 130 min y 24 h se releen cada hora
+  // (data/vigentes.json) para que la página diga si siguen con valor y a qué cuota. Las 25 más próximas.
+  const closingIds = new Set(targets.map((mark) => mark.matchId));
+  const refresh = [
+    ...new Map(
+      picks
+        .filter((pick) => !closingIds.has(pick.matchId))
+        .filter((pick) => {
+          const left = Date.parse(pick.kickoff) - now;
+          return left > 130 * 60 * 1000 && left <= 24 * 3600 * 1000;
+        })
+        .sort((a, b) => a.kickoff.localeCompare(b.kickoff))
+        .map((pick) => [pick.matchId, pick]),
+    ).values(),
+  ].slice(0, 25);
+  console.log(`cierre: ${targets.length} partidos por empezar en 10-130 min; ${refresh.length} selecciones para cuota vigente.`);
+  if (targets.length === 0 && refresh.length === 0) return;
   const job = (mark) => ({
     id: mark.matchId,
     kickoff: mark.kickoff,
@@ -1409,32 +1491,45 @@ async function cierre() {
     read: async (page) => readOdds(page, ONLY_1X2),
   });
   const goodRead = (row) => (row?.books ?? []).filter(colombian).filter((book) => book.market === "1x2" && !book.struck).length >= 3;
-  let read = await browserPages(targets.map(job));
+  const all = [...targets, ...refresh];
+  let read = await browserPages(all.map(job));
   // La página de cuotas a veces llega vacía (sobre todo la primera de cada navegador): hasta 2 intentos más,
   // con un navegador nuevo, para los partidos que no trajeron 3 casas colombianas.
   for (let attempt = 1; attempt <= 2; attempt += 1) {
-    const missing = targets.filter((mark) => !goodRead(read.find((row) => row.id === mark.matchId)));
+    const missing = all.filter((mark) => !goodRead(read.find((row) => row.id === mark.matchId)));
     if (!missing.length) break;
     console.log(`cierre: reintento ${attempt} para ${missing.length} partido(s) sin 3 casas.`);
     const again = await browserPages(missing.map(job));
     read = [...read.filter((row) => !missing.some((mark) => mark.matchId === row.id)), ...again];
   }
+  const current = readJsonOptional("vigentes.json", { byMatch: {} });
+  current.rule =
+    "Última lectura 1X2 (casas colombianas) de cada selección de «Valor del día» que no ha empezado: la escribe cierre.yml cada hora. Solo informa; la medición usa cierres.json.";
+  current.byMatch = Object.fromEntries(Object.entries(current.byMatch ?? {}).filter(([, row]) => Date.parse(row?.kickoff ?? "") >= now - 24 * 3600 * 1000));
   let saved = 0;
+  let refreshed = 0;
   for (const row of read) {
     const books = (row.books ?? [])
       .filter(colombian)
       .filter((book) => book.market === "1x2" && Array.isArray(book.odds) && book.odds.length === 3 && !book.struck)
       .map((book) => ({ house: book.book, odds: book.odds }));
     if (!books.length) continue;
+    current.byMatch[row.id] = { kickoff: row.kickoff, readAt: started, books };
+    refreshed += 1;
+    if (!closingIds.has(row.id)) continue;
     file.byMatch[row.id] = { kickoff: row.kickoff, readAt: started, books };
     saved += 1;
   }
+  current.updatedAt = started;
+  writeJson("vigentes.json", current);
   file.updatedAt = started;
   // Registro de la última vuelta (para revisar fallas sin acceso a los logs de GitHub).
   file.lastRun = {
     at: started,
     targets: targets.length,
     saved,
+    refresh: refresh.length,
+    refreshed,
     rows: read.map((row) => ({
       id: row.id,
       failed: row.failed ?? null,
@@ -1443,7 +1538,7 @@ async function cierre() {
     })),
   };
   writeJson("cierres.json", file);
-  console.log(`cierre: ${saved} de ${targets.length} guardados.`);
+  console.log(`cierre: ${saved} de ${targets.length} cierres guardados; ${refreshed} cuotas vigentes.`);
 }
 
 /**

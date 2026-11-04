@@ -6,7 +6,7 @@ import { ExportBar } from "@/components/export-bar";
 import { kickLabel } from "@/components/match/reading-block";
 import { loadDay, loadModelo } from "@/lib/football/pages";
 import { useAgendaToday } from "@/lib/football/use-today";
-import { VALUE_MAX_EV, VALUE_MIN_EV, valuePicks, type ValuePick } from "@/lib/football/valor";
+import { bestFromOffers, consensusFromOffers, VALUE_MAX_EV, VALUE_MIN_EV, valuePicks, type ValuePick } from "@/lib/football/valor";
 import { betSlip } from "@/lib/store/bet-slip";
 
 export const Route = createFileRoute("/valor")({ component: ValorPage });
@@ -20,6 +20,28 @@ export const Route = createFileRoute("/valor")({ component: ValorPage });
 interface Row {
   match: MatchReading;
   pick: ValuePick;
+  /** Lectura de cada hora (cierre.yml), si es más reciente que la del corte. */
+  now: { readAt: string; still: boolean; house: string; odds: number; minOdds: number } | null;
+}
+
+const LOW_ODDS = 4;
+
+/** Revisa la selección con la lectura más reciente: ¿la mejor casa todavía paga por encima de lo que vale? */
+function recheck(match: MatchReading, pick: ValuePick): Row["now"] {
+  const current = match.current;
+  if (!current || !(current.readAt > (match.bestOdds?.readAt ?? ""))) return null;
+  const probs = consensusFromOffers(current.offers);
+  const best = bestFromOffers(current.offers);
+  if (!probs || !best) return null;
+  const top = best[pick.outcomeIndex];
+  const again = valuePicks(probs, best, current.offers.length).find((item) => item.outcomeIndex === pick.outcomeIndex);
+  return {
+    readAt: current.readAt,
+    still: Boolean(again),
+    house: top.house,
+    odds: top.odds,
+    minOdds: (1 + VALUE_MIN_EV) / probs[pick.outcomeIndex],
+  };
 }
 
 type Stat = { n: number; mean: number | null; low: number | null; high: number | null };
@@ -46,7 +68,10 @@ function money(stat: Stat | undefined): string {
 function ValorPage() {
   const today = useAgendaToday();
   const [matches, setMatches] = useState<MatchReading[] | null>(null);
-  const [record, setRecord] = useState<{ settled: number; roi: Stat; closed: number; evClose: Stat; verdict: string } | null>(null);
+  type PickRecord = { settled: number; roi: Stat; closed: number; evClose: Stat; verdict: string };
+  const [records, setRecords] = useState<{ all: PickRecord | null; low: PickRecord | null }>({ all: null, low: null });
+  const [low, setLow] = useState(false);
+  const record = low ? records.low : records.all;
 
   useEffect(() => {
     let live = true;
@@ -59,8 +84,8 @@ function ValorPage() {
       });
     void loadModelo()
       .then((bundle) => {
-        const review = bundle.review as unknown as { pickResults?: typeof record } | null;
-        if (live) setRecord(review?.pickResults ?? null);
+        const review = bundle.review as unknown as { pickResults?: PickRecord; pickResultsLow?: PickRecord } | null;
+        if (live) setRecords({ all: review?.pickResults ?? null, low: review?.pickResultsLow ?? null });
       })
       .catch(() => undefined);
     return () => {
@@ -76,10 +101,14 @@ function ValorPage() {
       if (!match.consensus || !match.bestOdds) continue;
       const probs = [match.consensus.home, match.consensus.draw, match.consensus.away];
       const best = [match.bestOdds.home, match.bestOdds.draw, match.bestOdds.away];
-      for (const pick of valuePicks(probs, best, match.bestOdds.houses)) out.push({ match, pick });
+      for (const pick of valuePicks(probs, best, match.bestOdds.houses)) {
+        if (low && !(pick.odds < LOW_ODDS)) continue;
+        out.push({ match, pick, now: recheck(match, pick) });
+      }
     }
-    return out.sort((a, b) => a.match.kickoff.localeCompare(b.match.kickoff));
-  }, [matches]);
+    // Primero las que siguen con valor; las que ya lo perdieron, al final.
+    return out.sort((a, b) => Number(a.now?.still === false) - Number(b.now?.still === false) || a.match.kickoff.localeCompare(b.match.kickoff));
+  }, [matches, low]);
 
   return (
     <div className="space-y-6">
@@ -89,16 +118,40 @@ function ValorPage() {
         <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted">
           Selecciones donde la casa que mejor paga da más de lo que vale el resultado según el consenso de las casas
           (entre +{pct(VALUE_MIN_EV)} y +{pct(VALUE_MAX_EV)} por apuesta). Casi siempre son equipos no favoritos: se
-          cumplen pocas veces. No es una recomendación y la ventaja todavía no está demostrada.
+          cumplen pocas veces. No es una recomendación: la decisión sobre apostar se toma al llegar a 300 selecciones
+          resueltas. Cada selección nueva llega por correo apenas el corte la encuentra, y la cuota se revisa cada hora.
         </p>
+        <div className="mt-4 flex flex-wrap gap-2" role="tablist" aria-label="Filtro de cuota">
+          {[
+            { key: false, label: "Todas" },
+            { key: true, label: `Solo cuota menor a ${LOW_ODDS}` },
+          ].map((option) => (
+            <button
+              key={String(option.key)}
+              type="button"
+              role="tab"
+              aria-selected={low === option.key}
+              onClick={() => setLow(option.key)}
+              className={`h-9 rounded-full px-4 text-sm ring-1 ring-border ${low === option.key ? "bg-fg text-bg" : "bg-elevated text-fg"}`}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+        {low ? (
+          <p className="mt-2 max-w-2xl text-xs text-muted">
+            Cuota menor a {LOW_ODDS}: se ganan cerca de 4 o 5 de cada 10, con menos ventaja por apuesta y rachas más cortas.
+            La medición de abajo es solo de estas selecciones.
+          </p>
+        ) : null}
         <div className="mt-4">
           <ExportBar
             filename="meridiano-valor-del-dia"
             title="Valor del día"
             build={() => ({
               name: "Valor del día",
-              headers: ["Inicio", "Competición", "Partido", "Selección", "Lado", "Casa", "Cuota", "Cuota mínima", "Se cumple", "Cuota justa", "Valor por $100", "Casas leídas", "Cuota leída"],
-              rows: rows.map(({ match, pick }) => [
+              headers: ["Inicio", "Competición", "Partido", "Selección", "Lado", "Casa", "Cuota", "Cuota mínima", "Se cumple", "Cuota justa", "Valor por $100", "Casas leídas", "Cuota leída", "Cuota vigente", "¿Sigue con valor?"],
+              rows: rows.map(({ match, pick, now }) => [
                 match.kickoff.slice(0, 16).replace("T", " "),
                 match.competition,
                 `${match.home} — ${match.away}`,
@@ -112,6 +165,8 @@ function ValorPage() {
                 Number((pick.ev * 100).toFixed(1)),
                 match.bestOdds?.houses ?? null,
                 match.bestOdds?.readAt?.slice(0, 16).replace("T", " ") ?? null,
+                now ? `${num(now.odds)} en ${houseName(now.house)} (${now.readAt.slice(11, 16)})` : null,
+                now ? (now.still ? "sí" : "no") : null,
               ]),
               note: `Reglas: solo en la casa indicada, a la cuota mínima o más; sola, nunca en combinada; una por partido. ${record ? `Medición: ${record.verdict}. Contra el cierre: ${money(record.evClose)}. Resultado real: ${money(record.roi)}.` : ""}`,
             })}
@@ -120,7 +175,7 @@ function ValorPage() {
       </header>
 
       <section className="rounded-xl bg-surface p-4 text-sm shadow-[var(--shadow-border)]">
-        <h2 className="font-display text-lg">¿Han ganado hasta ahora?</h2>
+        <h2 className="font-display text-lg">¿Han ganado hasta ahora?{low ? ` (cuota menor a ${LOW_ODDS})` : ""}</h2>
         {record ? (
           <div className="mt-2 space-y-1 text-muted">
             <p>
@@ -156,8 +211,11 @@ function ValorPage() {
         </p>
       ) : (
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {rows.map(({ match, pick }) => (
-            <article key={`${match.id}-${pick.outcomeIndex}`} className="rounded-xl bg-surface p-4 shadow-[var(--shadow-border)]">
+          {rows.map(({ match, pick, now }) => (
+            <article
+              key={`${match.id}-${pick.outcomeIndex}`}
+              className={`rounded-xl bg-surface p-4 shadow-[var(--shadow-border)] ${now && !now.still ? "opacity-60" : ""}`}
+            >
               <p className="text-[11px] uppercase tracking-[0.14em] text-subtle">{match.competition}</p>
               <h2 className="mt-1 font-display text-xl tracking-tight">
                 {match.home} — {match.away}
@@ -209,9 +267,16 @@ function ValorPage() {
                   </p>
                 ) : null}
               </div>
+              {now ? (
+                <p className={`mt-2 rounded-lg px-3 py-2 text-xs ${now.still ? "bg-elevated text-fg" : "bg-elevated text-danger"}`}>
+                  <strong>Cuota vigente ({now.readAt.slice(11, 16)}):</strong> {num(now.odds)} en {houseName(now.house)} ·
+                  mínima {num(now.minOdds)}.{" "}
+                  {now.still ? "Sigue con valor." : "Ya no tiene valor: no se apuesta."}
+                </p>
+              ) : null}
               <p className="mt-2 text-xs text-muted">
-                Cuota leída en el último corte{match.bestOdds?.readAt ? ` (${match.bestOdds.readAt.slice(11, 16)})` : ""}: verifica
-                que siga igual en la casa.
+                Cuota leída en el último corte{match.bestOdds?.readAt ? ` (${match.bestOdds.readAt.slice(11, 16)})` : ""}
+                {now ? "; arriba, la lectura más reciente" : "; se relee cada hora"}. Verifica que siga igual en la casa.
               </p>
               <button
                 type="button"

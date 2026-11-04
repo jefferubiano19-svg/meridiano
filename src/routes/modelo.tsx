@@ -220,10 +220,12 @@ function ModelPage() {
         </p>
       </Section>
 
-      <Section title="¿Las marcas de valor ganan?">
+      <Section title="¿«Valor del día» gana?">
         {(() => {
-          const vr = (review as { valueResults?: { settled: number; roi: Stat; closed: number; clvHouse: Stat; evClose: Stat; verdict: string } } | null)
-            ?.valueResults;
+          // Las «marcas de valor» (otra regla, más estricta) se siguen midiendo en review.json → valueResults, pero ya no se
+          // muestran: llevaban −77 % y se confundían con «Valor del día», que es la que se usa.
+          const vr = (review as { pickResults?: { settled: number; roi: Stat; closed: number; clvHouse: Stat; evClose: Stat; verdict: string } } | null)
+            ?.pickResults;
           if (!vr) return <p className="text-sm text-muted">Se mide desde el próximo corte.</p>;
           const money = (stat: Stat) =>
             stat.mean == null
@@ -240,10 +242,10 @@ function ModelPage() {
               </p>
               <p>
                 Contra el consenso de cierre (la mejor medida de si había ventaja): {money(vr.evClose)} por apuesta, en {vr.closed}{" "}
-                marcas. Contra la misma casa al cierre: {money(vr.clvHouse)}.
+                selecciones. Contra la misma casa al cierre: {money(vr.clvHouse)}.
               </p>
               <p>
-                Resultado real apostando lo mismo a cada marca: {money(vr.roi)} por apuesta, en {vr.settled} marcas ya jugadas.
+                Resultado real apostando lo mismo a cada selección: {money(vr.roi)} por apuesta, en {vr.settled} ya jugadas.
                 Con pocas apuestas este número varía muchísimo; por eso manda la comparación con el cierre.
               </p>
             </div>

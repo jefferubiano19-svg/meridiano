@@ -118,6 +118,8 @@ export interface Review {
   valueResults: { settled: number; roi: Stat; closed: number; clvHouse: Stat; evClose: Stat; verdict: string };
   /** Lo mismo para las selecciones de «Valor del día» (data/valor-registro.json). */
   pickResults: { settled: number; roi: Stat; closed: number; clvHouse: Stat; evClose: Stat; verdict: string };
+  /** Lo mismo solo con las selecciones de cuota menor a 4 (filtro de la página /valor). */
+  pickResultsLow: { settled: number; roi: Stat; closed: number; clvHouse: Stat; evClose: Stat; verdict: string };
   shadows: { key: string; label: string; n: number; diff: Stat }[];
   /** Partidos publicados con Wplay como mercado (sin 3 casas): publicada contra modelo solo. */
   wplayMarket: { n: number; rpsPublished: number | null; rpsModel: number | null; diff: Stat; excludedCopied: number };
@@ -318,6 +320,8 @@ export function buildReview(input: ReviewInput): Review {
   };
   const valueResults = resultsOf(input.marks);
   const pickResults = resultsOf(input.picks ?? []);
+  // Filtro «cuota menor a 4» de la página /valor: la misma medición solo con esas selecciones.
+  const pickResultsLow = resultsOf((input.picks ?? []).filter((pick) => Number(pick.odds) < 4));
 
   // 5. Sombras contra la publicada, en los mismos partidos.
   const shadowLabels: Record<string, string> = {
@@ -538,6 +542,7 @@ export function buildReview(input: ReviewInput): Review {
     },
     valueResults,
     pickResults,
+    pickResultsLow,
     shadows,
     wplayMarket,
     modelBlend,

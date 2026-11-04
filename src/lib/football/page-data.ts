@@ -2,6 +2,8 @@ import { AGENDA, agendaOnDay, type AgendaMatch } from "./agenda";
 import { spanishName } from "./standings";
 import { buildCombinada, buildCombinadaManana, type CombinadaLeg } from "./combinada";
 import { rivalScores } from "./engine";
+import { currentOdds } from "./vigentes";
+import { listHistory } from "./listas";
 import { agendaToday, agendaTomorrow, bogotaDay, shiftDay } from "./clock";
 import { MISSING, type ComboBoard, type ComboMatch, type ConsultaBoard, type DayBoard, type LeagueCard, type LeaguePage, type MatchReading, type ModeloBundle, type SearchBoard, type Way } from "./dto";
 import { DIXON_FETCHED_AT, DIXON_REPORT, DIXON_RULE } from "./dixon";
@@ -160,6 +162,7 @@ function seal(seed: Seed): MatchReading {
       ? { house: best.house, odds: best.odds, side: best.side, readAt: pub?.readAt ?? null }
       : null,
     bestOdds: open ? bestOdds(seed.id) : null,
+    current: open ? currentOdds(seed.id) : null,
   };
   CACHE.set(seed.id, reading);
   return reading;
@@ -325,7 +328,7 @@ export function comboBoard(which: "hoy" | "manana"): ComboBoard {
     matches.length > 0 && matches.every((match) => match.pickProbability != null)
       ? matches.reduce((product, match) => product * (match.pickProbability as number), 1)
       : null;
-  return { day, pool: ticket.today, withOdds: ticket.withOdds, joint, matches };
+  return { day, pool: ticket.today, withOdds: ticket.withOdds, joint, matches, history: which === "hoy" ? listHistory(day) : [] };
 }
 
 export function ficha(id: string): MatchReading | null {

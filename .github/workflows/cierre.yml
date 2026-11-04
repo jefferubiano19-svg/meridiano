@@ -31,14 +31,15 @@ jobs:
             try { marks = JSON.parse(fs.readFileSync("data/value-marks.json", "utf8")).marks || []; } catch {}
             try { marks = marks.concat(JSON.parse(fs.readFileSync("data/valor-registro.json", "utf8")).picks || []); } catch {}
             const now = Date.now();
+            // Cierre (10-130 min) y cuota vigente de «Valor del día» (130 min a 24 h).
             const ids = new Set(marks.filter((m) => (m.market || "1x2") === "1x2").filter((m) => {
               const left = Date.parse(m.kickoff) - now;
-              return left > 10 * 60000 && left <= 130 * 60000;
+              return left > 10 * 60000 && left <= (m.outcomeIndex != null && m.prob != null ? 24 * 3600000 : 130 * 60000);
             }).map((m) => m.matchId));
             console.log(ids.size);
           ')
           echo "n=$n" >> "$GITHUB_OUTPUT"
-          echo "Partidos con marca por empezar en 10-130 min: $n"
+          echo "Partidos por cerrar o con cuota vigente por leer: $n"
       - uses: actions/setup-node@v5
         if: steps.hay.outputs.n != '0'
         with:
@@ -52,14 +53,14 @@ jobs:
         run: npm run corte
         env:
           CORTE: cierre
-      - name: Guardar data/cierres.json
+      - name: Guardar data/cierres.json y data/vigentes.json
         if: steps.hay.outputs.n != '0'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/cierres.json
+          git add data/cierres.json data/vigentes.json
           git diff --cached --quiet && exit 0
-          git commit -m "Cuotas de cierre"
+          git commit -m "Cuotas de cierre y vigentes"
           for intento in 1 2 3; do
             git pull --rebase origin "${GITHUB_REF_NAME}" && git push && break
             echo "push falló (intento $intento); se reintenta en 15 s"

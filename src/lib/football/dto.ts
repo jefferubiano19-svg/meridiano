@@ -40,6 +40,8 @@ export interface MatchReading {
   revisar: boolean;
   value: ValueMark | null;
   /** Mejor cuota de cada resultado entre las casas leídas (solo partidos por jugar). */
+  /** Lectura 1X2 más reciente (cada hora) de un partido con selección de «Valor del día». */
+  current?: { readAt: string; offers: { house: string; odds: number[] }[] } | null;
   bestOdds?: {
     home: { house: string; odds: number };
     draw: { house: string; odds: number };
@@ -70,6 +72,8 @@ export interface ComboBoard {
   withOdds?: boolean;
   joint: number | null;
   matches: ComboMatch[];
+  /** Cómo le fue a la lista de los días anteriores (la publicada en la madrugada de cada día). */
+  history?: { day: string; savedAt: string; legs: number; settled: number; hits: number; expected: number }[];
 }
 
 export interface ConsultaBoard {

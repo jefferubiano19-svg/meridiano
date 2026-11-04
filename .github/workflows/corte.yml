@@ -17,6 +17,7 @@ on:
 
 permissions:
   contents: write
+  issues: write
 
 jobs:
   corte:
@@ -39,6 +40,7 @@ jobs:
         run: git pull --ff-only origin "${GITHUB_REF_NAME}"
       - run: npm run corte
         env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CORTE: ${{ inputs.corte }}
           FORZAR: ${{ inputs.forzar && 'si' || 'no' }}
       - name: Guardar /data

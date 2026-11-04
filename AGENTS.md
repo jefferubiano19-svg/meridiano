@@ -71,6 +71,19 @@ cerrar, la vuelta termina sin instalar nada. `review.ts` → `valueResults`: ret
 misma casa al cierre y contra el consenso de cierre (`evClose`, la medida que decide; 30 cierres para una primera
 lectura, 100 para concluir). La página Modelo lo muestra en «¿Las marcas de valor ganan?».
 
+**Aviso, cuota vigente y listas (4 nov 2026)**:
+- Aviso: tras el paso `valor-del-dia`, `notifyPicks` comenta en el issue «Valor del día: selecciones nuevas» con @dueño
+  (correo de GitHub) las selecciones nuevas que no han empezado. `corte.yml` da `issues: write` y `GITHUB_TOKEN`.
+- Cuota vigente: `cierre()` relee también, cada hora, las selecciones que empiezan entre 130 min y 24 h (25 como máximo)
+  → `data/vigentes.json`. `vigentes.ts` → `currentOdds` toma la lectura más reciente (vigentes o cierres) y `/valor`
+  dice si la selección sigue con valor (`recheck`). Solo informa: la medición sigue con `cierres.json`.
+- Filtro «Solo cuota menor a 4» en `/valor`; `review.ts` → `pickResultsLow` mide esas selecciones por separado.
+- Listas: al final de cada corte, `scripts/listas.mjs` (proceso aparte) guarda «Partido hoy» y «Partido» en
+  `data/listas.json` (una por día y corte, 30 días); `listas.ts` → `listHistory` muestra en «Partido hoy» cuántas acertó
+  la lista de la madrugada de cada día.
+- La página Modelo muestra «¿“Valor del día” gana?» (`pickResults`); las marcas de valor se siguen midiendo
+  (`valueResults`) pero no se muestran.
+
 **El rival marca** (página `/rival`): de las listas «Partido hoy» y «Partido» (mañana), la probabilidad de que el no
 favorito haga al menos un gol, con los goles esperados que reproducen la 1X2 publicada (`engine.ts` → `rivalScores`,
 `lambdasFor`). `review.ts` → `rivalGoal` la mide contra los marcadores (Brier contra la frecuencia y calibración por

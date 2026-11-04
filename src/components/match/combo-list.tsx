@@ -138,6 +138,47 @@ export function ComboList({ which }: { which: "hoy" | "manana" }) {
             <p className="mt-4 text-sm text-muted">{JOINT_NOTE}</p>
           </section>
 
+          {which === "hoy" ? (
+            <section className="rounded-xl bg-surface p-5 shadow-[var(--shadow-border)]">
+              <h2 className="font-display text-xl">¿Cómo le fue a esta lista los días anteriores?</h2>
+              {board.history && board.history.length ? (
+                <>
+                  <table className="mt-3 w-full max-w-lg text-left text-sm">
+                    <thead className="text-[11px] uppercase tracking-wide text-subtle">
+                      <tr>
+                        <th className="py-1 font-normal">Día</th>
+                        <th className="py-1 font-normal">Acertó</th>
+                        <th className="py-1 font-normal">Esperado</th>
+                        <th className="py-1 font-normal">Sin resultado</th>
+                      </tr>
+                    </thead>
+                    <tbody className="tabular-nums">
+                      {board.history.map((row) => (
+                        <tr key={row.day}>
+                          <td className="py-1">{boardDayLabel(row.day)}</td>
+                          <td className="py-1">
+                            {row.hits} de {row.settled}
+                            {row.settled ? ` (${formatPct(row.hits / row.settled, 0)})` : ""}
+                          </td>
+                          <td className="py-1">{row.expected.toFixed(1).replace(".", ",")}</td>
+                          <td className="py-1">{row.legs - row.settled}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <p className="mt-2 text-xs text-muted">
+                    Lista guardada en la madrugada de cada día (corte de la noche). «Esperado» es la suma de las probabilidades
+                    de la lista: si se acerca a lo acertado, los porcentajes dicen la verdad. Ninguna lista acierta las 20.
+                  </p>
+                </>
+              ) : (
+                <p className="mt-2 text-sm text-muted">
+                  Las listas se guardan desde el 4 de noviembre de 2026; el primer resultado aparece al día siguiente.
+                </p>
+              )}
+            </section>
+          ) : null}
+
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
