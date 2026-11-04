@@ -84,6 +84,16 @@ lectura, 100 para concluir). La página Modelo lo muestra en «¿Las marcas de v
   solo desde el 5 nov (`forward`, la prueba limpia: el corte se eligió mirando el histórico). El registro no cambia:
   se siguen guardando todas las selecciones. `pickResultsLow` (cuota < 4) se sigue calculando.
 - El aviso por correo ordena por probabilidad y marca el nivel (Alta / Media / Baja).
+- **Regla v2 de «Valor del día» (5 nov 2026, pedida por el usuario):** `valor.ts` → `VALUE_MIN_PROB = 0,40`: solo se
+  registran y muestran resultados de 40 % o más (filas nuevas con `rule: "v2"`). Además de 1X2, **doble oportunidad**
+  (`dc`: 1X, 12, X2) y **empate no válido** (`dnb`: local, visita) con la probabilidad del mismo consenso 1X2
+  (`doublePicks`; dnb: valor = p_gana × cuota + p_empate − 1). Lectura: paso `cuotas-dobles` del corte (`readDoubleMarkets`,
+  por la dirección de la pestaña `/cuotas/doble-oportunidad/` y `/cuotas/draw-no-bet/`; el clic no abre; se comprueba el
+  encabezado «1X12X2» o «12»; filas incompletas se descartan); 120 partidos con 3+ casas en las próximas 30 h, máx.
+  25 min → `combo-odds.json` `markets.dc` / `markets.dnb` y `doubleReadAt`. El cierre de cada hora también lee esos
+  mercados para las selecciones dc/dnb (cuota vigente en `vigentes.json` → `double`). `review.ts` liquida dc (dos
+  resultados) y dnb (empate = se devuelve) y mide contra el consenso 1X2 de cierre; `pickRuleV2` (total y por mercado)
+  es la prueba limpia. La página `/valor` ya no tiene filtros de nivel: muestra solo la regla v2.
 - Listas: al final de cada corte, `scripts/listas.mjs` (proceso aparte) guarda «Partido hoy» y «Partido» en
   `data/listas.json` (una por día y corte, 30 días); `listas.ts` → `listHistory` muestra en «Partido hoy» cuántas acertó
   la lista de la madrugada de cada día.

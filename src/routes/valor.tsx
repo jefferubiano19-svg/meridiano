@@ -242,7 +242,7 @@ function ValorPage() {
           Selecciones donde la casa que mejor paga da más de lo que vale el resultado según el
           consenso de las casas (entre +{pct(VALUE_MIN_EV)} y +{pct(VALUE_MAX_EV)} por apuesta).
           Desde el {VALUE_RULE_SINCE.split("-").reverse().join("/")} solo entran resultados que se
-          cumplen <strong className="text-fg">{pct(VALUE_MIN_PROB)} o más</strong> de las veces, y
+          cumplen <strong className="text-fg">{`${Math.round(VALUE_MIN_PROB * 100)} %`} o más</strong> de las veces, y
           se buscan también en <strong className="text-fg">doble oportunidad</strong> (dos
           resultados a la vez) y <strong className="text-fg">empate no válido</strong> (si empata,
           se devuelve lo apostado). No es una recomendación: la decisión sobre apostar se toma al
@@ -312,7 +312,7 @@ function ValorPage() {
                   : null,
                 row.now ? (row.now.still ? "sí" : "no") : null,
               ]),
-              note: `Reglas: ${pct(VALUE_MIN_PROB)} o más de probabilidad; solo en la casa indicada, a la cuota mínima o más; sola, nunca en combinada; una por partido. ${records.v2 ? `Regla actual: ${records.v2.verdict}. Resultado: ${money(records.v2.roi)}.` : ""}`,
+              note: `Reglas: ${`${Math.round(VALUE_MIN_PROB * 100)} %`} o más de probabilidad; solo en la casa indicada, a la cuota mínima o más; sola, nunca en combinada; una por partido. ${records.v2 ? `Regla actual: ${records.v2.verdict}. Resultado: ${money(records.v2.roi)}.` : ""}`,
             })}
           />
         </div>
@@ -339,7 +339,7 @@ function ValorPage() {
             </ul>
           ) : null}
           <p className="text-xs">
-            Antes de la regla, las de {pct(VALUE_MIN_PROB)} o más:{" "}
+            Antes de la regla, las de {`${Math.round(VALUE_MIN_PROB * 100)} %`} o más:{" "}
             {records.alta ? money(records.alta.roi) : "sin datos"}. Todas las selecciones desde el
             18/10:{" "}
             {records.all
@@ -376,7 +376,7 @@ function ValorPage() {
         <p className="text-sm text-muted">Cargando partidos de hoy y mañana…</p>
       ) : rows.length === 0 ? (
         <p className="text-sm text-muted">
-          Hoy y mañana no hay ninguna selección de {pct(VALUE_MIN_PROB)} o más con valor. No apostar
+          Hoy y mañana no hay ninguna selección de {`${Math.round(VALUE_MIN_PROB * 100)} %`} o más con valor. No apostar
           también es una decisión válida: es lo que dice la regla.
         </p>
       ) : (
