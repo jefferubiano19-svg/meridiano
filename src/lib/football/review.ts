@@ -121,6 +121,11 @@ export interface Review {
   /** Lo mismo solo con las selecciones de cuota menor a 4 (filtro de la página /valor). */
   pickResultsLow: { settled: number; roi: Stat; closed: number; clvHouse: Stat; evClose: Stat; verdict: string };
   /** «Valor del día» por nivel de probabilidad: histórico completo y solo desde que se fijó la regla (forward). */
+  /** Regla v2 de «Valor del día» (desde el 5 nov 2026): total y por mercado. */
+  pickRuleV2: {
+    all: { settled: number; roi: Stat; closed: number; clvHouse: Stat; evClose: Stat; verdict: string };
+    byMarket: { market: "1x2" | "dc" | "dnb"; results: { settled: number; roi: Stat; closed: number; clvHouse: Stat; evClose: Stat; verdict: string } }[];
+  };
   pickTiers: {
     key: string;
     label: string;
@@ -274,9 +279,10 @@ export function buildReview(input: ReviewInput): Review {
   const houseKey = (house: string | undefined) => String(house ?? "").replace(/\.(co|latam|com)$/i, "").toLowerCase();
   const resultsOf = (list: ReviewInput["marks"]) => {
     const seenMark = new Set<string>();
+    // 1X2 y, desde el 5 nov 2026, doble oportunidad (dc) y empate no válido (dnb) de «Valor del día».
     const marks1x2 = list.filter((mark) => {
-      if ((mark.market ?? "1x2") !== "1x2" || !mark.matchId || !(Number(mark.odds) > 1) || !Number.isInteger(mark.outcomeIndex)) return false;
-      const key = `${mark.matchId}|${houseKey(mark.house)}|${mark.outcomeIndex}`;
+      if (!["1x2", "dc", "dnb"].includes(mark.market ?? "1x2") || !mark.matchId || !(Number(mark.odds) > 1) || !Number.isInteger(mark.outcomeIndex)) return false;
+      const key = `${mark.matchId}|${mark.market ?? "1x2"}|${houseKey(mark.house)}|${mark.outcomeIndex}`;
       if (seenMark.has(key)) return false;
       seenMark.add(key);
       return true;
@@ -286,7 +292,18 @@ export function buildReview(input: ReviewInput): Review {
       const row = agendaById.get(mark.matchId as string);
       if (!row || row[5] !== "finalizado" || row[6] == null || row[7] == null) continue;
       const winner = row[6] > row[7] ? 0 : row[6] === row[7] ? 1 : 2;
-      pnl.push(winner === mark.outcomeIndex ? (mark.odds as number) - 1 : -1);
+      const odds = mark.odds as number;
+      const market = mark.market ?? "1x2";
+      if (market === "dc") {
+        // 0 = 1X, 1 = 12, 2 = X2.
+        const covered = [[0, 1], [0, 2], [1, 2]][mark.outcomeIndex as number];
+        pnl.push(covered.includes(winner) ? odds - 1 : -1);
+      } else if (market === "dnb") {
+        // Empate: se devuelve lo apostado.
+        pnl.push(winner === 1 ? 0 : winner === mark.outcomeIndex ? odds - 1 : -1);
+      } else {
+        pnl.push(winner === mark.outcomeIndex ? odds - 1 : -1);
+      }
     }
     const clvHouse: number[] = [];
     const evClose: number[] = [];
@@ -298,14 +315,25 @@ export function buildReview(input: ReviewInput): Review {
       if (!close.books.length) continue;
       const same = close.books.find((book) => houseKey(book.house) === houseKey(mark.house));
       const index = mark.outcomeIndex as number;
-      if (same && same.odds[index] > 1) clvHouse.push((mark.odds as number) / same.odds[index] - 1);
+      const market = mark.market ?? "1x2";
+      if (market === "1x2" && same && same.odds[index] > 1) clvHouse.push((mark.odds as number) / same.odds[index] - 1);
       const fairs = close.books.map((book) => shin(book.odds[0], book.odds[1], book.odds[2])).filter((f): f is NonNullable<typeof f> => Boolean(f));
       if (fairs.length >= 3) {
-        const key = (["home", "draw", "away"] as const)[index];
-        const sorted = fairs.map((f) => f[key]).sort((a, b) => a - b);
-        const mid = Math.floor(sorted.length / 2);
-        const p = sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
-        evClose.push((mark.odds as number) * p - 1);
+        const medianOf = (key: "home" | "draw" | "away") => {
+          const sorted = fairs.map((f) => f[key]).sort((a, b) => a - b);
+          const mid = Math.floor(sorted.length / 2);
+          return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+        };
+        if (market === "1x2") {
+          evClose.push((mark.odds as number) * medianOf((["home", "draw", "away"] as const)[index]) - 1);
+        } else {
+          // Doble oportunidad y empate no válido: con el consenso 1X2 de cierre (normalizado).
+          const raw = [medianOf("home"), medianOf("draw"), medianOf("away")];
+          const sum = raw[0] + raw[1] + raw[2];
+          const [h, d, a] = raw.map((value) => value / sum);
+          if (market === "dc") evClose.push((mark.odds as number) * [h + d, h + a, d + a][index] - 1);
+          else evClose.push((mark.odds as number) * (index === 0 ? h : a) + d - 1);
+        }
       }
     }
     const evStat = stat(evClose);
@@ -330,6 +358,12 @@ export function buildReview(input: ReviewInput): Review {
   const pickResults = resultsOf(input.picks ?? []);
   // Filtro «cuota menor a 4» de la página /valor: la misma medición solo con esas selecciones.
   const pickResultsLow = resultsOf((input.picks ?? []).filter((pick) => Number(pick.odds) < 4));
+  // Regla v2 (5 nov 2026): solo 40 %+ y, además de 1X2, doble oportunidad y empate no válido. Medición aparte y por mercado.
+  const v2 = (input.picks ?? []).filter((pick) => (pick as { rule?: string }).rule === "v2");
+  const pickRuleV2 = {
+    all: resultsOf(v2),
+    byMarket: (["1x2", "dc", "dnb"] as const).map((market) => ({ market, results: resultsOf(v2.filter((pick) => (pick.market ?? "1x2") === market)) })),
+  };
   // Niveles de probabilidad de «Valor del día» (regla fijada el 5 nov 2026): todo el histórico y, aparte, solo lo
   // registrado desde ese día, que es la prueba limpia (el corte de 40 % se eligió mirando el histórico).
   const TIER_SINCE = "2026-11-05";
@@ -570,6 +604,7 @@ export function buildReview(input: ReviewInput): Review {
     pickResults,
     pickResultsLow,
     pickTiers,
+    pickRuleV2,
     shadows,
     wplayMarket,
     modelBlend,

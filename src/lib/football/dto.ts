@@ -41,7 +41,13 @@ export interface MatchReading {
   value: ValueMark | null;
   /** Mejor cuota de cada resultado entre las casas leídas (solo partidos por jugar). */
   /** Lectura 1X2 más reciente (cada hora) de un partido con selección de «Valor del día». */
-  current?: { readAt: string; offers: { house: string; odds: number[] }[] } | null;
+  current?: {
+    readAt: string;
+    offers: { house: string; odds: number[] }[];
+    double?: { dc: { house: string; odds: number[] }[]; dnb: { house: string; odds: number[] }[] } | null;
+  } | null;
+  /** Doble oportunidad y empate no válido del último corte (casas colombianas). */
+  double?: { readAt: string | null; dc: { house: string; odds: number[] }[]; dnb: { house: string; odds: number[] }[] } | null;
   bestOdds?: {
     home: { house: string; odds: number };
     draw: { house: string; odds: number };

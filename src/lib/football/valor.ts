@@ -90,3 +90,82 @@ export function valuePicks(
   }
   return out;
 }
+
+/* ---------------------------------------------------------------------------
+ * Doble oportunidad (1X · 12 · X2) y empate no válido (local · visita) desde el 5 nov 2026: resultados que se cumplen
+ * más seguido. La probabilidad sale del mismo consenso 1X2 (no de las cuotas de estos mercados), y el valor se mide
+ * igual: mejor cuota entre 3+ casas, entre +3 % y +15 %, y 40 % o más de probabilidad.
+ *  - Doble oportunidad: prob = suma de los dos resultados cubiertos.
+ *  - Empate no válido: si empata se devuelve lo apostado. Valor = prob. de ganar × cuota + prob. de empate − 1.
+ * ------------------------------------------------------------------------- */
+
+export type DoubleMarket = "dc" | "dnb";
+
+export interface DoublePick {
+  market: DoubleMarket;
+  /** dc: 0 = 1X, 1 = 12, 2 = X2. dnb: 0 = local, 2 = visita. */
+  outcomeIndex: 0 | 1 | 2;
+  /** Probabilidad de ganar la apuesta (dc: cualquiera de los dos resultados; dnb: que gane ese equipo). */
+  prob: number;
+  /** Solo dnb: probabilidad de empate (se devuelve lo apostado). */
+  pDraw: number;
+  house: string;
+  odds: number;
+  ev: number;
+  fair: number;
+  minOdds: number;
+}
+
+function bestOf(offers: { house: string; odds: number[] }[], cells: number): { house: string; odds: number }[] | null {
+  const valid = offers.filter((offer) => offer.odds.length === cells && offer.odds.every((price) => price > 1));
+  if (valid.length < VALUE_MIN_HOUSES) return null;
+  return Array.from({ length: cells }, (_, index) => {
+    const top = valid.reduce((a, b) => (b.odds[index] > a.odds[index] ? b : a));
+    return { house: top.house, odds: top.odds[index] };
+  });
+}
+
+export function doublePicks(
+  probs: number[],
+  dc: { house: string; odds: number[] }[],
+  dnb: { house: string; odds: number[] }[],
+  minProb = VALUE_MIN_PROB,
+): DoublePick[] {
+  if (probs.length < 3) return [];
+  const [home, draw, away] = probs;
+  const out: DoublePick[] = [];
+  const bestDc = bestOf(dc, 3);
+  if (bestDc) {
+    const covered = [home + draw, home + away, draw + away];
+    for (const index of [0, 1, 2] as const) {
+      const prob = covered[index];
+      const { house, odds } = bestDc[index];
+      const ev = prob * odds - 1;
+      if (!(prob > 0) || prob < minProb || ev < VALUE_MIN_EV || ev > VALUE_MAX_EV) continue;
+      out.push({ market: "dc", outcomeIndex: index, prob, pDraw: 0, house, odds, ev, fair: 1 / prob, minOdds: (1 + VALUE_MIN_EV) / prob });
+    }
+  }
+  const bestDnb = bestOf(dnb, 2);
+  if (bestDnb) {
+    for (const [slot, index, win] of [[0, 0, home], [1, 2, away]] as const) {
+      const { house, odds } = bestDnb[slot];
+      const ev = win * odds + draw - 1;
+      if (!(win > 0) || win < minProb || ev < VALUE_MIN_EV || ev > VALUE_MAX_EV) continue;
+      out.push({ market: "dnb", outcomeIndex: index, prob: win, pDraw: draw, house, odds, ev, fair: (1 - draw) / win, minOdds: (1 + VALUE_MIN_EV - draw) / win });
+    }
+  }
+  return out;
+}
+
+/** Nombre de la selección para mostrar. */
+export function pickLabel(market: "1x2" | DoubleMarket, outcomeIndex: number, home: string, away: string): string {
+  if (market === "dc") return outcomeIndex === 0 ? `${home} o empate` : outcomeIndex === 1 ? `${home} o ${away} (no empate)` : `Empate o ${away}`;
+  if (market === "dnb") return `${outcomeIndex === 0 ? home : away} (empate no válido)`;
+  return outcomeIndex === 0 ? home : outcomeIndex === 2 ? away : "Empate";
+}
+
+export const MARKET_NAME: Record<"1x2" | DoubleMarket, string> = {
+  "1x2": "Resultado (1X2)",
+  dc: "Doble oportunidad",
+  dnb: "Empate no válido",
+};

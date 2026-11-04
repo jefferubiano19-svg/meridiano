@@ -2,7 +2,7 @@ import { AGENDA, agendaOnDay, type AgendaMatch } from "./agenda";
 import { spanishName } from "./standings";
 import { buildCombinada, buildCombinadaManana, type CombinadaLeg } from "./combinada";
 import { rivalScores } from "./engine";
-import { currentOdds } from "./vigentes";
+import { currentOdds, doubleOffers } from "./vigentes";
 import { listHistory } from "./listas";
 import { agendaToday, agendaTomorrow, bogotaDay, shiftDay } from "./clock";
 import { MISSING, type ComboBoard, type ComboMatch, type ConsultaBoard, type DayBoard, type LeagueCard, type LeaguePage, type MatchReading, type ModeloBundle, type SearchBoard, type Way } from "./dto";
@@ -163,6 +163,7 @@ function seal(seed: Seed): MatchReading {
       : null,
     bestOdds: open ? bestOdds(seed.id) : null,
     current: open ? currentOdds(seed.id) : null,
+    double: open ? doubleOffers(seed.id) : null,
   };
   CACHE.set(seed.id, reading);
   return reading;

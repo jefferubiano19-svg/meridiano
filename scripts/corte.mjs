@@ -436,6 +436,45 @@ async function readOdds(page, markets = READ_MARKETS) {
   return { books };
 }
 
+/**
+ * Doble oportunidad (1X · 12 · X2) y empate no válido (1 · 2). Se abren por la dirección de su pestaña
+ * (/cuotas/doble-oportunidad/ y /cuotas/draw-no-bet/; hacer clic en la pestaña no abre). Se comprueba el encabezado
+ * de la tabla («1X12X2» o «12») para no guardar la 1X2 con otro nombre. Filas incompletas (una casa sin alguna
+ * cuota) se descartan: sin la posición no se sabe qué precio falta. Diagnóstico del 4 nov 2026 (diag.yml).
+ */
+const DOUBLE_MARKETS = [
+  { label: "Doble oportunidad", id: "dc", head: "1X12X2", cells: 3 },
+  { label: "Apuesta sin empate", id: "dnb", head: "12", cells: 2 },
+];
+
+async function readDoubleMarkets(page) {
+  const links = await page
+    .evaluate(() =>
+      [...document.querySelectorAll("a")]
+        .map((el) => ({ text: (el.textContent || "").trim(), href: el.getAttribute("href") }))
+        .filter((item) => item.href && /^(Doble oportunidad|Apuesta sin empate)$/.test(item.text)),
+    )
+    .catch(() => []);
+  const books = [];
+  for (const market of DOUBLE_MARKETS) {
+    const link = links.find((item) => item.text === market.label);
+    if (!link) continue;
+    const target = new URL(link.href, page.url()).toString();
+    if (!(await allowed(target))) continue;
+    await pause();
+    await page.goto(target, { waitUntil: "domcontentloaded", timeout: 20000 }).catch(() => undefined);
+    await page.waitForSelector(".oddsCell__odds .ui-table__row", { timeout: 8000 }).catch(() => undefined);
+    const head = await page
+      .evaluate(() => (document.querySelector(".oddsCell__odds .ui-table__header") || document.querySelector(".ui-table__header"))?.textContent || "")
+      .catch(() => "");
+    if (head.replace(/\s+/g, "").replace(/^Casa?de?Apuestas/i, "").replace(/^CasadeApuestas/i, "") !== market.head) continue;
+    for (const row of await readOddsTable(page)) {
+      if (row.odds.length === market.cells) books.push({ ...row, market: market.id });
+    }
+  }
+  return books;
+}
+
 /** Lee la tabla general de una liga: equipo, PJ, G, E, P y goles "GF:GC". Solo filas que cuadran (PJ = G + E + P). */
 async function readStandings(page) {
   await page.waitForSelector(".ui-table__row", { timeout: 12000 }).catch(() => undefined);
@@ -519,7 +558,17 @@ async function notifyPicks(picks) {
     return text ? JSON.parse(text) : null;
   };
   const TITLE = "Valor del día: selecciones nuevas";
-  const side = (pick) => (pick.outcomeIndex === 0 ? pick.home : pick.outcomeIndex === 2 ? pick.away : "Empate");
+  const side = (pick) =>
+    pick.market === "dc"
+      ? `Doble oportunidad: ${pick.outcomeIndex === 0 ? `${pick.home} o empate` : pick.outcomeIndex === 1 ? `${pick.home} o ${pick.away}` : `empate o ${pick.away}`}`
+      : pick.market === "dnb"
+        ? `Empate no válido: ${pick.outcomeIndex === 0 ? pick.home : pick.away}`
+        : pick.outcomeIndex === 0
+          ? pick.home
+          : pick.outcomeIndex === 2
+            ? pick.away
+            : "Empate";
+  const minOf = (pick) => (pick.market === "dnb" ? (1.03 - (pick.pDraw ?? 0)) / pick.prob : 1.03 / pick.prob);
   const num = (value) => Number(value).toFixed(2).replace(".", ",");
   const pct = (value) => `${(value * 100).toFixed(1).replace(".", ",")} %`;
   // De mayor a menor probabilidad de cumplirse; «Alta» (40 % o más) es el nivel por defecto de la página.
@@ -527,7 +576,7 @@ async function notifyPicks(picks) {
   const tier = (prob) => (prob >= 0.4 ? "**Alta**" : prob >= 0.25 ? "Media" : "Baja");
   const lines = sorted.map(
     (pick) =>
-      `| ${pick.kickoff.slice(5, 10).split("-").reverse().join("/")} ${pick.kickoff.slice(11, 16)} | ${pick.home} – ${pick.away} | **${side(pick)}** | ${pick.house} | ${num(pick.odds)} | **${num((1 + 0.03) / pick.prob)}** | ${pct(pick.prob)} | ${tier(pick.prob)} |`,
+      `| ${pick.kickoff.slice(5, 10).split("-").reverse().join("/")} ${pick.kickoff.slice(11, 16)} | ${pick.home} – ${pick.away} | **${side(pick)}** | ${pick.house} | ${num(pick.odds)} | **${num(minOf(pick))}** | ${pct(pick.prob)} | ${tier(pick.prob)} |`,
   );
   const owner = repo.split("/")[0];
   const body = [
@@ -585,8 +634,35 @@ function storeOdds(results, started) {
         // Una lectura solo de 1X2 no borra las líneas de goles que ya se tenían.
         overUnder: overUnder.length ? overUnder : (previous.overUnder ?? []),
         btts: btts.length ? btts : (previous.btts ?? []),
+        // Doble oportunidad y empate no válido se leen en su propio paso (storeDouble): se conservan.
+        ...(previous.dc ? { dc: previous.dc } : {}),
+        ...(previous.dnb ? { dnb: previous.dnb } : {}),
       },
+      ...(byId.get(result.id)?.doubleReadAt ? { doubleReadAt: byId.get(result.id).doubleReadAt } : {}),
     });
+    stored += 1;
+  }
+  file.matches = [...byId.values()];
+  writeJson("combo-odds.json", file);
+  return stored;
+}
+
+/** Guarda doble oportunidad y empate no válido en data/combo-odds.json, junto a la 1X2 del mismo partido. */
+function storeDouble(results, started) {
+  const file = readJsonOptional("combo-odds.json", { matches: [] });
+  const byId = new Map((file.matches ?? []).map((item) => [item.id, item]));
+  let stored = 0;
+  for (const result of results ?? []) {
+    const books = (result?.books ?? []).filter(colombian);
+    const item = byId.get(result?.id);
+    if (!item || books.length === 0) continue;
+    const cells = (book) => book.odds.map((price) => ({ text: Number(price).toFixed(2), withdrawn: Boolean(book.struck) }));
+    item.markets = {
+      ...(item.markets ?? {}),
+      dc: books.filter((book) => book.market === "dc").map((book) => ({ house: book.book, cells: cells(book) })),
+      dnb: books.filter((book) => book.market === "dnb").map((book) => ({ house: book.book, cells: cells(book) })),
+    };
+    item.doubleReadAt = result.at ?? started;
     stored += 1;
   }
   file.matches = [...byId.values()];
@@ -961,6 +1037,28 @@ async function main() {
   const consensusStored = storeOdds(consensusRead, started);
   const readById = new Map(consensusRead.filter((row) => row.books).map((row) => [row.id, row]));
 
+  // Doble oportunidad y empate no válido (5 nov 2026): solo partidos con 3+ casas colombianas en 1X2, por empezar en
+  // las próximas 30 h, de lo más próximo a lo más lejano; máximo 120 y 25 min, sin pasar el presupuesto del corte.
+  const doubleTargets = consensusRead
+    .filter((row) => (row.books ?? []).filter(colombian).filter((book) => book.market === "1x2" && !book.struck).length >= 3)
+    .filter((row) => {
+      const left = Date.parse(row.kickoff ?? "") - Date.now();
+      return left > 30 * 60 * 1000 && left <= 30 * 3600 * 1000;
+    })
+    .sort((a, b) => String(a.kickoff).localeCompare(String(b.kickoff)))
+    .slice(0, 120);
+  const doubleStartedMs = Date.now();
+  const doubleRead = (await step("cuotas-dobles", () => browserPages(doubleTargets.map((row) => ({
+    id: row.id,
+    home: row.home,
+    away: row.away,
+    kickoff: row.kickoff,
+    kind: "cuotas",
+    url: `https://www.flashscore.co/partido/${row.id}/`,
+    read: async (page) => ({ books: await readDoubleMarkets(page) }),
+  })), () => Date.now() - doubleStartedMs >= 25 * 60 * 1000 || overBudget()))) ?? [];
+  const doubleStored = storeDouble(doubleRead, started);
+
   // Cuotas 1X2 de Wplay (Lite) de partidos por empezar: la app las usa como mercado cuando no hay 3 casas.
   const wplayFile = readJsonOptional("wplay-odds.json", { byId: {} });
   const keepWplay = Date.now() - 3 * 24 * 3600 * 1000;
@@ -1135,13 +1233,15 @@ async function main() {
   let valuePicksAdded = 0;
   const newPicks = [];
   await step("valor-del-dia", async () => {
-    const { consensusFromOffers, bestFromOffers, valuePicks } = await import("../src/lib/football/valor.ts");
+    const { consensusFromOffers, bestFromOffers, valuePicks, doublePicks } = await import("../src/lib/football/valor.ts");
     const stored = readJsonOptional("combo-odds.json", { matches: [] }).matches ?? [];
     const registro = readJsonOptional("valor-registro.json", { picks: [] });
     registro.rule =
       "Selecciones de «Valor del día» (mejor cuota de 3+ casas entre +3 % y +15 % sobre el consenso de las casas; desde el 5 nov 2026, regla v2: solo resultados de 40 % o más). Una fila por partido, mercado y resultado, guardada la primera vez que aparece; no se edita.";
     registro.picks = Array.isArray(registro.picks) ? registro.picks : [];
-    const seen = new Set(registro.picks.map((pick) => `${pick.matchId}|${pick.outcomeIndex}`));
+    // Clave: partido y resultado (1X2, como antes) o partido, mercado y resultado (doble oportunidad, empate no válido).
+    const keyOf = (pick) => (pick.market && pick.market !== "1x2" ? `${pick.matchId}|${pick.market}|${pick.outcomeIndex}` : `${pick.matchId}|${pick.outcomeIndex}`);
+    const seen = new Set(registro.picks.map(keyOf));
     for (const item of stored) {
       const row = byId.get(item.id);
       if (!row || row[5] !== "por-jugar" || !(Date.parse(row[1]) - Date.now() > PREMATCH_MS)) continue;
@@ -1173,6 +1273,21 @@ async function main() {
           // v2 (5 nov 2026): solo 40 % o más de probabilidad (valor.ts → VALUE_MIN_PROB).
           rule: "v2",
         });
+        valuePicksAdded += 1;
+      }
+      // Doble oportunidad y empate no válido, con el mismo consenso 1X2.
+      const doubleOffers = (key, cells) =>
+        (item.markets?.[key] ?? [])
+          .filter(colombian)
+          .filter((book) => Array.isArray(book.cells) && book.cells.length === cells && !book.cells.some((cell) => cell.withdrawn))
+          .map((book) => ({ house: String(book.house).replace(/\.(co|latam|com)$/i, ""), odds: book.cells.map((cell) => Number(cell.text)) }));
+      for (const pick of doublePicks(probs, doubleOffers("dc", 3), doubleOffers("dnb", 2))) {
+        const key = keyOf({ matchId: item.id, market: pick.market, outcomeIndex: pick.outcomeIndex });
+        if (seen.has(key)) continue;
+        seen.add(key);
+        const base = { matchId: item.id, home: row[3], away: row[4], competition: row[2], kickoff: row[1], market: pick.market, outcomeIndex: pick.outcomeIndex, prob: pick.prob, pDraw: pick.pDraw, house: pick.house, odds: pick.odds, ev: pick.ev };
+        newPicks.push(base);
+        registro.picks.push({ ...base, readAt: item.doubleReadAt ?? item.readAtBogota ?? null, savedAt: started, rule: "v2" });
         valuePicksAdded += 1;
       }
     }
@@ -1292,6 +1407,8 @@ async function main() {
     consensusTomorrowTargets: tomorrowTargets,
     consensusTomorrowRead: consensusRead.filter((row) => row.books && String(row.kickoff ?? "").startsWith(tomorrowName)).length,
     consensusRead: consensusStored,
+    doubleTargets: doubleTargets.length,
+    doubleStored,
     oddsAttempted: consensusRead.length,
     oddsNoTab: consensusRead.filter((row) => row.noOddsTab).length,
     oddsFailed: consensusRead.filter((row) => row.failed).length,
@@ -1462,7 +1579,7 @@ async function cierre() {
   const targets = [
     ...new Map(
       [...(registry.marks ?? []), ...picks]
-        .filter((mark) => (mark.market ?? "1x2") === "1x2")
+        .filter((mark) => ["1x2", "dc", "dnb"].includes(mark.market ?? "1x2"))
         .filter((mark) => {
           const left = Date.parse(mark.kickoff) - now;
           return left > PREMATCH_MS && left <= 130 * 60 * 1000;
@@ -1487,12 +1604,18 @@ async function cierre() {
   ].slice(0, 15);
   console.log(`cierre: ${targets.length} partidos por empezar en 10-130 min; ${refresh.length} selecciones para cuota vigente.`);
   if (targets.length === 0 && refresh.length === 0) return;
+  // Partidos con selección de doble oportunidad o empate no válido: también esos mercados (para la cuota vigente).
+  const doubleIds = new Set(picks.filter((pick) => pick.market === "dc" || pick.market === "dnb").map((pick) => pick.matchId));
   const job = (mark) => ({
     id: mark.matchId,
     kickoff: mark.kickoff,
     kind: "cuotas",
     url: `https://www.flashscore.co/partido/${mark.matchId}/`,
-    read: async (page) => readOdds(page, ONLY_1X2),
+    read: async (page) => {
+      const result = await readOdds(page, ONLY_1X2);
+      if (!doubleIds.has(mark.matchId) || result.noOddsTab) return result;
+      return { ...result, books: [...(result.books ?? []), ...(await readDoubleMarkets(page))] };
+    },
   });
   const goodRead = (row) => (row?.books ?? []).filter(colombian).filter((book) => book.market === "1x2" && !book.struck).length >= 3;
   const all = [...targets, ...refresh];
@@ -1519,7 +1642,20 @@ async function cierre() {
       .filter((book) => book.market === "1x2" && Array.isArray(book.odds) && book.odds.length === 3 && !book.struck)
       .map((book) => ({ house: book.book, odds: book.odds }));
     if (!books.length) continue;
-    current.byMatch[row.id] = { kickoff: row.kickoff, readAt: started, books };
+    const doubles = (row.books ?? []).filter(colombian).filter((book) => (book.market === "dc" || book.market === "dnb") && !book.struck);
+    current.byMatch[row.id] = {
+      kickoff: row.kickoff,
+      readAt: started,
+      books,
+      ...(doubles.length
+        ? {
+            double: {
+              dc: doubles.filter((book) => book.market === "dc").map((book) => ({ house: book.book, odds: book.odds })),
+              dnb: doubles.filter((book) => book.market === "dnb").map((book) => ({ house: book.book, odds: book.odds })),
+            },
+          }
+        : {}),
+    };
     refreshed += 1;
     if (!closingIds.has(row.id)) continue;
     file.byMatch[row.id] = { kickoff: row.kickoff, readAt: started, books };
@@ -1595,40 +1731,9 @@ async function diagCuotas() {
           .catch((error) => ({ error: String(error) }));
         const title = await page.title().catch(() => "");
         const result = await readOdds(page, ONLY_1X2);
-        // Mercados extra (doble oportunidad, empate no válido): pestaña, dirección y filas tal como se leen.
-        const extra = [];
-        const hrefs = await page
-          .evaluate(() =>
-            [...document.querySelectorAll("a,button")]
-              .filter((el) => /Doble oportunidad|Apuesta sin empate/i.test(el.textContent || ""))
-              .map((el) => ({ tag: el.tagName, text: (el.textContent || "").trim(), href: el.getAttribute("href"), visible: el.getBoundingClientRect().width > 0 })),
-          )
-          .catch(() => []);
-        extra.push({ label: "hrefs", opened: null, url: JSON.stringify(hrefs).slice(0, 600), head: [], rows: [] });
-        for (const label of ["Doble oportunidad", "Apuesta sin empate"]) {
-          const found = hrefs.find((item) => item.text === label && item.href);
-          let opened = false;
-          if (found) {
-            const base = page.url().split("#")[0];
-            const target = found.href.startsWith("http") ? found.href : found.href.startsWith("#") ? `${base}${found.href}` : new URL(found.href, page.url()).toString();
-            await page.goto(target, { waitUntil: "domcontentloaded", timeout: 20000 }).catch(() => undefined);
-            opened = true;
-          } else {
-            opened = await page.evaluate((text) => {
-              const el = [...document.querySelectorAll("a,button")].find((node) => (node.textContent || "").trim() === text);
-              if (!el) return false;
-              el.click();
-              return true;
-            }, label).catch(() => false);
-          }
-          await page.waitForTimeout(1500);
-          await page.waitForSelector(".oddsCell__odds .ui-table__row", { timeout: 6000 }).catch(() => undefined);
-          const rows = await readOddsTable(page).catch(() => []);
-          const head = await page
-            .evaluate(() => [...document.querySelectorAll(".oddsCell__odds .ui-table__header, .ui-table__header")].map((el) => (el.textContent || "").replace(/\s+/g, " ").trim()).slice(0, 3))
-            .catch(() => []);
-          extra.push({ label, opened, url: page.url(), head, rows: rows.map((row) => `${row.book}:${row.odds.join("/")}${row.struck ? "x" : ""}`) });
-        }
+        // Mercados dobles con el mismo lector del corte (readDoubleMarkets).
+        const doubles = await readDoubleMarkets(page).catch((error) => [{ error: String(error) }]);
+        const extra = [{ label: "dobles", opened: true, url: page.url(), head: [], rows: doubles.map((book) => (book.error ? book.error : `${book.market} ${book.book}:${book.odds.join("/")}${book.struck ? "x" : ""}`)) }];
         const seen = await page
           .evaluate(() => ({
             hasOddsTable: Boolean(document.querySelector(".oddsCell__odds")),

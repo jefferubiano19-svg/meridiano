@@ -32,7 +32,7 @@ jobs:
             try { marks = marks.concat(JSON.parse(fs.readFileSync("data/valor-registro.json", "utf8")).picks || []); } catch {}
             const now = Date.now();
             // Cierre (10-130 min) y cuota vigente de «Valor del día» (130 min a 24 h).
-            const ids = new Set(marks.filter((m) => (m.market || "1x2") === "1x2").filter((m) => {
+            const ids = new Set(marks.filter((m) => ["1x2", "dc", "dnb"].includes(m.market || "1x2")).filter((m) => {
               const left = Date.parse(m.kickoff) - now;
               return left > 10 * 60000 && left <= (m.outcomeIndex != null && m.prob != null ? 24 * 3600000 : 130 * 60000);
             }).map((m) => m.matchId));

@@ -6,100 +6,160 @@ import { ExportBar } from "@/components/export-bar";
 import { kickLabel } from "@/components/match/reading-block";
 import { loadDay, loadModelo } from "@/lib/football/pages";
 import { useAgendaToday } from "@/lib/football/use-today";
-import { bestFromOffers, consensusFromOffers, VALUE_MAX_EV, VALUE_MIN_EV, valuePicks, type ValuePick } from "@/lib/football/valor";
+import {
+  bestFromOffers,
+  consensusFromOffers,
+  doublePicks,
+  MARKET_NAME,
+  pickLabel,
+  VALUE_MAX_EV,
+  VALUE_MIN_EV,
+  VALUE_MIN_PROB,
+  VALUE_RULE_SINCE,
+  valuePicks,
+  type DoubleMarket,
+} from "@/lib/football/valor";
 import { betSlip } from "@/lib/store/bet-slip";
 
 export const Route = createFileRoute("/valor")({ component: ValorPage });
 
 /* ---------------------------------------------------------------------------
- * «Valor del día»: selecciones de hoy y mañana donde la mejor cuota de las casas paga más de lo que
- * vale el resultado según el consenso de esas mismas casas (reglas en src/lib/football/valor.ts).
- * Cada selección queda guardada por el corte (data/valor-registro.json) y la página Modelo mide si ganan.
+ * «Valor del día»: selecciones de hoy y mañana donde la mejor cuota de las casas paga más de lo que vale el
+ * resultado según el consenso de las casas (reglas en src/lib/football/valor.ts). Regla v2 (5 nov 2026): solo
+ * resultados de 40 % o más, y además de 1X2, doble oportunidad y empate no válido. El corte guarda cada selección
+ * (data/valor-registro.json) y la revisión automática la mide; la lectura de cada hora dice si sigue con valor.
  * ------------------------------------------------------------------------- */
+
+type Market = "1x2" | DoubleMarket;
+
+interface Pick {
+  market: Market;
+  outcomeIndex: 0 | 1 | 2;
+  prob: number;
+  pDraw: number;
+  house: string;
+  odds: number;
+  ev: number;
+  fair: number;
+  minOdds: number;
+}
 
 interface Row {
   match: MatchReading;
-  pick: ValuePick;
-  /** Puesto por probabilidad entre las que siguen con valor (1 = la más probable). */
+  pick: Pick;
   rank?: number | null;
   total?: number;
   /** Lectura de cada hora (cierre.yml), si es más reciente que la del corte. */
   now: { readAt: string; still: boolean; house: string; odds: number; minOdds: number } | null;
 }
 
-/**
- * Niveles por probabilidad de cumplirse (regla del 5 nov 2026). Con 195 selecciones resueltas: 40 % o más se
- * cumplió 22 de 39 (+17 % en plata, +5,2 % contra el cierre); menos de 20 %, 5 de 73 (−42 % en plata). Todas
- * tienen ventaja contra el cierre: el nivel no cambia el valor, cambia cuántas se ganan y lo largas que son las rachas.
- */
-const TIERS = [
-  { key: "alta", label: "Alta · 40 % o más", min: 0.4 },
-  { key: "media", label: "25 % o más", min: 0.25 },
-  { key: "todas", label: "Todas", min: 0 },
-] as const;
-type TierKey = (typeof TIERS)[number]["key"];
-
-function tierOf(prob: number): { label: string; tone: string } {
-  if (prob >= 0.4) return { label: "Alta", tone: "text-value" };
-  if (prob >= 0.25) return { label: "Media", tone: "text-fg" };
-  return { label: "Baja", tone: "text-warn" };
-}
-
-/** Revisa la selección con la lectura más reciente: ¿la mejor casa todavía paga por encima de lo que vale? */
-function recheck(match: MatchReading, pick: ValuePick): Row["now"] {
-  const current = match.current;
-  if (!current || !(current.readAt > (match.bestOdds?.readAt ?? ""))) return null;
-  const probs = consensusFromOffers(current.offers);
-  const best = bestFromOffers(current.offers);
-  if (!probs || !best) return null;
-  const top = best[pick.outcomeIndex];
-  // Para decir si sigue con valor solo cuenta el valor, no el nivel de probabilidad.
-  const again = valuePicks(probs, best, current.offers.length, 0).find((item) => item.outcomeIndex === pick.outcomeIndex);
-  return {
-    readAt: current.readAt,
-    still: Boolean(again),
-    house: top.house,
-    odds: top.odds,
-    minOdds: (1 + VALUE_MIN_EV) / probs[pick.outcomeIndex],
-  };
-}
-
 type Stat = { n: number; mean: number | null; low: number | null; high: number | null };
+type Result = { settled: number; roi: Stat; closed: number; evClose: Stat; verdict: string };
 
 const pct = (value: number) => `${(value * 100).toFixed(1).replace(".", ",")} %`;
 const num = (value: number) => value.toFixed(2).replace(".", ",");
-const SIDE = ["local", "empate", "visita"] as const;
-const MARKET = ["home", "draw", "away"] as const;
 const houseName = (house: string) => house.replace(/\.(co|latam)$/i, "");
-
-function team(match: MatchReading, index: number): string {
-  if (index === 0) return match.homeEs || match.home;
-  if (index === 2) return match.awayEs || match.away;
-  return "Empate";
-}
+const SLIP = ["home", "draw", "away"] as const;
+const SLIP_DC = ["1X", "12", "X2"] as const;
 
 function money(stat: Stat | undefined): string {
   if (!stat || stat.mean == null) return "sin datos todavía";
-  const base = `${stat.mean >= 0 ? "+" : "−"}${Math.abs(stat.mean * 100).toFixed(1).replace(".", ",")} % por apuesta`;
-  if (stat.n < 20 || stat.low == null || stat.high == null) return `${base} en ${stat.n} (muy pocas para concluir)`;
+  const base = `${stat.mean >= 0 ? "+" : "−"}${Math.abs(stat.mean * 100)
+    .toFixed(1)
+    .replace(".", ",")} % por apuesta`;
+  if (stat.n < 20 || stat.low == null || stat.high == null)
+    return `${base} en ${stat.n} (muy pocas para concluir)`;
   return `${base} (IC 95 % ${(stat.low * 100).toFixed(1).replace(".", ",")} % a ${(stat.high * 100).toFixed(1).replace(".", ",")} %, ${stat.n} selecciones)`;
+}
+
+/** Todas las selecciones con valor de un partido, con las ofertas dadas (1X2 y, si hay, mercados dobles). */
+function picksOf(
+  offers1x2: { house: string; odds: number[] }[],
+  double:
+    | { dc: { house: string; odds: number[] }[]; dnb: { house: string; odds: number[] }[] }
+    | null
+    | undefined,
+  minProb: number,
+): { probs: number[]; picks: Pick[] } | null {
+  const probs = consensusFromOffers(offers1x2);
+  const best = bestFromOffers(offers1x2);
+  if (!probs || !best) return null;
+  const picks: Pick[] = valuePicks(probs, best, offers1x2.length, minProb).map((pick) => ({
+    ...pick,
+    market: "1x2",
+    pDraw: 0,
+  }));
+  if (double) picks.push(...doublePicks(probs, double.dc, double.dnb, minProb));
+  return { probs, picks };
+}
+
+/** Revisa la selección con la lectura más reciente: ¿la mejor casa todavía paga por encima de lo que vale? */
+function recheck(match: MatchReading, pick: Pick): Row["now"] {
+  const current = match.current;
+  const base = pick.market === "1x2" ? match.bestOdds?.readAt : match.double?.readAt;
+  if (!current || !(current.readAt > (base ?? ""))) return null;
+  if (pick.market !== "1x2" && !current.double) return null;
+  // Para decir si sigue con valor solo cuenta el valor, no el nivel de probabilidad.
+  const again = picksOf(current.offers, current.double, 0);
+  if (!again) return null;
+  const same = again.picks.find(
+    (item) => item.market === pick.market && item.outcomeIndex === pick.outcomeIndex,
+  );
+  const [home, draw, away] = again.probs;
+  const prob =
+    pick.market === "1x2"
+      ? again.probs[pick.outcomeIndex]
+      : pick.market === "dc"
+        ? [home + draw, home + away, draw + away][pick.outcomeIndex]
+        : pick.outcomeIndex === 0
+          ? home
+          : away;
+  const minOdds =
+    pick.market === "dnb" ? (1 + VALUE_MIN_EV - draw) / prob : (1 + VALUE_MIN_EV) / prob;
+  const offers =
+    pick.market === "1x2"
+      ? current.offers
+      : pick.market === "dc"
+        ? (current.double?.dc ?? [])
+        : (current.double?.dnb ?? []);
+  const slot = pick.market === "dnb" ? (pick.outcomeIndex === 0 ? 0 : 1) : pick.outcomeIndex;
+  const top = offers.reduce<{ house: string; odds: number } | null>(
+    (acc, offer) =>
+      offer.odds[slot] > (acc?.odds ?? 0) ? { house: offer.house, odds: offer.odds[slot] } : acc,
+    null,
+  );
+  if (!top) return null;
+  return {
+    readAt: current.readAt,
+    still: Boolean(same),
+    house: top.house,
+    odds: top.odds,
+    minOdds,
+  };
 }
 
 function ValorPage() {
   const today = useAgendaToday();
   const [matches, setMatches] = useState<MatchReading[] | null>(null);
-  type PickRecord = { settled: number; roi: Stat; closed: number; evClose: Stat; verdict: string };
-  type TierRecord = { key: string; label: string; since: string; all: PickRecord; forward: PickRecord };
-  const [records, setRecords] = useState<{ all: PickRecord | null; tiers: TierRecord[] }>({ all: null, tiers: [] });
-  const [tier, setTier] = useState<TierKey>("alta");
+  const [records, setRecords] = useState<{
+    all: Result | null;
+    v2: Result | null;
+    byMarket: { market: Market; results: Result }[];
+    alta: Result | null;
+  }>({
+    all: null,
+    v2: null,
+    byMarket: [],
+    alta: null,
+  });
   const [order, setOrder] = useState<"rank" | "time">("rank");
-  const tierRecord = records.tiers.find((item) => item.key === tier) ?? null;
-  const record = tierRecord?.all ?? (tier === "todas" ? records.all : null);
-  const minProb = TIERS.find((item) => item.key === tier)?.min ?? 0;
 
   useEffect(() => {
     let live = true;
-    void Promise.all([loadDay({ data: { day: today } }), loadDay({ data: { day: shiftDay(today, 1) } })])
+    void Promise.all([
+      loadDay({ data: { day: today } }),
+      loadDay({ data: { day: shiftDay(today, 1) } }),
+    ])
       .then(([a, b]) => {
         if (live) setMatches([...a.matches, ...b.matches]);
       })
@@ -108,8 +168,18 @@ function ValorPage() {
       });
     void loadModelo()
       .then((bundle) => {
-        const review = bundle.review as unknown as { pickResults?: PickRecord; pickTiers?: TierRecord[] } | null;
-        if (live) setRecords({ all: review?.pickResults ?? null, tiers: review?.pickTiers ?? [] });
+        const review = bundle.review as unknown as {
+          pickResults?: Result;
+          pickRuleV2?: { all: Result; byMarket: { market: Market; results: Result }[] };
+          pickTiers?: { key: string; all: Result }[];
+        } | null;
+        if (live)
+          setRecords({
+            all: review?.pickResults ?? null,
+            v2: review?.pickRuleV2?.all ?? null,
+            byMarket: review?.pickRuleV2?.byMarket ?? [],
+            alta: review?.pickTiers?.find((tier) => tier.key === "alta")?.all ?? null,
+          });
       })
       .catch(() => undefined);
     return () => {
@@ -117,73 +187,68 @@ function ValorPage() {
     };
   }, [today]);
 
-  // Cuántas hay en cada nivel (para los botones), antes de filtrar.
-  const counts = useMemo(() => {
-    const now = Date.now();
-    const probs: number[] = [];
-    for (const match of matches ?? []) {
-      if (match.status !== "por-jugar" || !(Date.parse(match.kickoff) - now > 10 * 60 * 1000)) continue;
-      if (!match.consensus || !match.bestOdds) continue;
-      const probsOf = [match.consensus.home, match.consensus.draw, match.consensus.away];
-      const best = [match.bestOdds.home, match.bestOdds.draw, match.bestOdds.away];
-      for (const pick of valuePicks(probsOf, best, match.bestOdds.houses)) {
-        if (recheck(match, pick)?.still === false) continue;
-        probs.push(pick.prob);
-      }
-    }
-    return Object.fromEntries(TIERS.map((item) => [item.key, probs.filter((prob) => prob >= item.min).length])) as Record<TierKey, number>;
-  }, [matches]);
-
   const rows = useMemo(() => {
     const now = Date.now();
     const out: Row[] = [];
     for (const match of matches ?? []) {
-      if (match.status !== "por-jugar" || !(Date.parse(match.kickoff) - now > 10 * 60 * 1000)) continue;
+      if (match.status !== "por-jugar" || !(Date.parse(match.kickoff) - now > 10 * 60 * 1000))
+        continue;
       if (!match.consensus || !match.bestOdds) continue;
+      // Ofertas 1X2 con la mejor cuota de cada resultado (la página no tiene cada casa por separado).
       const probs = [match.consensus.home, match.consensus.draw, match.consensus.away];
       const best = [match.bestOdds.home, match.bestOdds.draw, match.bestOdds.away];
-      for (const pick of valuePicks(probs, best, match.bestOdds.houses)) {
-        if (pick.prob < minProb) continue;
-        out.push({ match, pick, now: recheck(match, pick) });
-      }
+      const picks: Pick[] = valuePicks(probs, best, match.bestOdds.houses).map((pick) => ({
+        ...pick,
+        market: "1x2",
+        pDraw: 0,
+      }));
+      if (match.double) picks.push(...doublePicks(probs, match.double.dc, match.double.dnb));
+      for (const pick of picks) out.push({ match, pick, now: recheck(match, pick) });
     }
-    // Puesto 1 a N: entre las que siguen con valor, 1 es la que más probabilidad tiene de cumplirse. Las que ya
+    // Puesto 1 a N: entre las que siguen con valor, 1 es la que más probabilidad tiene de ganarse. Las que ya
     // perdieron el valor no llevan puesto y van al final.
     const ranked = out
       .filter((row) => row.now?.still !== false)
       .sort((a, b) => b.pick.prob - a.pick.prob || a.match.kickoff.localeCompare(b.match.kickoff));
     const rank = new Map(ranked.map((row, index) => [row, index + 1]));
     const gone = out.filter((row) => row.now?.still === false);
-    const live = order === "rank" ? ranked : [...ranked].sort((a, b) => a.match.kickoff.localeCompare(b.match.kickoff));
-    return [...live, ...gone].map((row) => ({ ...row, rank: rank.get(row) ?? null, total: ranked.length }));
-  }, [matches, minProb, order]);
+    const live =
+      order === "rank"
+        ? ranked
+        : [...ranked].sort((a, b) => a.match.kickoff.localeCompare(b.match.kickoff));
+    return [...live, ...gone].map((row) => ({
+      ...row,
+      rank: rank.get(row) ?? null,
+      total: ranked.length,
+    }));
+  }, [matches, order]);
+
+  const label = (row: Row) =>
+    pickLabel(
+      row.pick.market,
+      row.pick.outcomeIndex,
+      row.match.homeEs || row.match.home,
+      row.match.awayEs || row.match.away,
+    );
 
   return (
     <div className="space-y-6">
       <header>
-        <p className="text-[11px] uppercase tracking-[0.18em] text-subtle">Cada día · hoy y mañana</p>
+        <p className="text-[11px] uppercase tracking-[0.18em] text-subtle">
+          Cada día · hoy y mañana
+        </p>
         <h1 className="mt-2 font-display text-4xl tracking-tight">Valor del día</h1>
         <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted">
-          Selecciones donde la casa que mejor paga da más de lo que vale el resultado según el consenso de las casas
-          (entre +{pct(VALUE_MIN_EV)} y +{pct(VALUE_MAX_EV)} por apuesta). Casi siempre son equipos no favoritos: se
-          cumplen pocas veces. No es una recomendación: la decisión sobre apostar se toma al llegar a 300 selecciones
-          resueltas. Cada selección nueva llega por correo apenas el corte la encuentra, y la cuota se revisa cada hora.
+          Selecciones donde la casa que mejor paga da más de lo que vale el resultado según el
+          consenso de las casas (entre +{pct(VALUE_MIN_EV)} y +{pct(VALUE_MAX_EV)} por apuesta).
+          Desde el {VALUE_RULE_SINCE.split("-").reverse().join("/")} solo entran resultados que se
+          cumplen <strong className="text-fg">{pct(VALUE_MIN_PROB)} o más</strong> de las veces, y
+          se buscan también en <strong className="text-fg">doble oportunidad</strong> (dos
+          resultados a la vez) y <strong className="text-fg">empate no válido</strong> (si empata,
+          se devuelve lo apostado). No es una recomendación: la decisión sobre apostar se toma al
+          llegar a 300 selecciones resueltas.
         </p>
-        <div className="mt-4 flex flex-wrap gap-2" role="tablist" aria-label="Nivel de probabilidad">
-          {TIERS.map((option) => (
-            <button
-              key={option.key}
-              type="button"
-              role="tab"
-              aria-selected={tier === option.key}
-              onClick={() => setTier(option.key)}
-              className={`h-9 rounded-full px-4 text-sm ring-1 ring-border ${tier === option.key ? "bg-fg text-bg" : "bg-elevated text-fg"}`}
-            >
-              {option.label} ({counts[option.key] ?? 0})
-            </button>
-          ))}
-        </div>
-        <div className="mt-2 flex flex-wrap gap-2" role="tablist" aria-label="Orden">
+        <div className="mt-4 flex flex-wrap gap-2" role="tablist" aria-label="Orden">
           {[
             { key: "rank" as const, label: "Por probabilidad (1 primero)" },
             { key: "time" as const, label: "Por hora" },
@@ -201,15 +266,9 @@ function ValorPage() {
           ))}
         </div>
         <p className="mt-2 max-w-2xl text-xs text-muted">
-          #1 es la selección con más probabilidad de cumplirse entre las que tienen valor. Todas tienen valor; el puesto
-          solo dice cuál se cumple más seguido. Juntarlas en combinada multiplica las probabilidades hacia abajo.
-        </p>
-        <p className="mt-2 max-w-2xl text-xs text-muted">
-          {tier === "alta"
-            ? "Alta: solo selecciones que se cumplen 40 % o más de las veces. Hasta hoy se ganó más de la mitad (22 de 39). Es la opción por defecto."
-            : tier === "media"
-              ? "25 % o más: se suman las de probabilidad media; se gana cerca de 1 de cada 3, con rachas de pérdidas más largas."
-              : "Todas: incluye las de baja probabilidad (cuota alta). Tienen valor, pero se pierden casi siempre: solo para muchas apuestas iguales."}
+          #1 es la selección con más probabilidad de ganarse entre las que siguen con valor. Cada
+          selección nueva llega por correo y la cuota se revisa cada hora. Juntarlas en combinada
+          multiplica las probabilidades hacia abajo.
         </p>
         <div className="mt-4">
           <ExportBar
@@ -217,67 +276,99 @@ function ValorPage() {
             title="Valor del día"
             build={() => ({
               name: "Valor del día",
-              headers: ["Puesto", "Nivel", "Inicio", "Competición", "Partido", "Selección", "Lado", "Casa", "Cuota", "Cuota mínima", "Se cumple", "Cuota justa", "Valor por $100", "Casas leídas", "Cuota leída", "Cuota vigente", "¿Sigue con valor?"],
-              rows: rows.map(({ match, pick, now, rank }) => [
-                rank ?? null,
-                tierOf(pick.prob).label,
-                match.kickoff.slice(0, 16).replace("T", " "),
-                match.competition,
-                `${match.home} — ${match.away}`,
-                team(match, pick.outcomeIndex),
-                SIDE[pick.outcomeIndex],
-                houseName(pick.house),
-                Number(pick.odds.toFixed(2)),
-                Number(pick.minOdds.toFixed(2)),
-                pct(pick.prob),
-                Number(pick.fair.toFixed(2)),
-                Number((pick.ev * 100).toFixed(1)),
-                match.bestOdds?.houses ?? null,
-                match.bestOdds?.readAt?.slice(0, 16).replace("T", " ") ?? null,
-                now ? `${num(now.odds)} en ${houseName(now.house)} (${now.readAt.slice(11, 16)})` : null,
-                now ? (now.still ? "sí" : "no") : null,
+              headers: [
+                "Puesto",
+                "Inicio",
+                "Competición",
+                "Partido",
+                "Mercado",
+                "Selección",
+                "Casa",
+                "Cuota",
+                "Cuota mínima",
+                "Se gana",
+                "Empate (se devuelve)",
+                "Cuota justa",
+                "Valor por $100",
+                "Cuota vigente",
+                "¿Sigue con valor?",
+              ],
+              rows: rows.map((row) => [
+                row.rank ?? null,
+                row.match.kickoff.slice(0, 16).replace("T", " "),
+                row.match.competition,
+                `${row.match.home} — ${row.match.away}`,
+                MARKET_NAME[row.pick.market],
+                label(row),
+                houseName(row.pick.house),
+                Number(row.pick.odds.toFixed(2)),
+                Number(row.pick.minOdds.toFixed(2)),
+                pct(row.pick.prob),
+                row.pick.market === "dnb" ? pct(row.pick.pDraw) : null,
+                Number(row.pick.fair.toFixed(2)),
+                Number((row.pick.ev * 100).toFixed(1)),
+                row.now
+                  ? `${num(row.now.odds)} en ${houseName(row.now.house)} (${row.now.readAt.slice(11, 16)})`
+                  : null,
+                row.now ? (row.now.still ? "sí" : "no") : null,
               ]),
-              note: `Reglas: solo en la casa indicada, a la cuota mínima o más; sola, nunca en combinada; una por partido. ${record ? `Medición: ${record.verdict}. Contra el cierre: ${money(record.evClose)}. Resultado real: ${money(record.roi)}.` : ""}`,
+              note: `Reglas: ${pct(VALUE_MIN_PROB)} o más de probabilidad; solo en la casa indicada, a la cuota mínima o más; sola, nunca en combinada; una por partido. ${records.v2 ? `Regla actual: ${records.v2.verdict}. Resultado: ${money(records.v2.roi)}.` : ""}`,
             })}
           />
         </div>
       </header>
 
       <section className="rounded-xl bg-surface p-4 text-sm shadow-[var(--shadow-border)]">
-        <h2 className="font-display text-lg">
-          ¿Han ganado hasta ahora? ({TIERS.find((item) => item.key === tier)?.label.toLowerCase()})
-        </h2>
-        {record ? (
-          <div className="mt-2 space-y-1 text-muted">
-            <p>
-              <strong className="text-fg">Veredicto:</strong> {record.verdict}.
-            </p>
-            <p>Contra el consenso de cierre: {money(record.evClose)}.</p>
-            <p>Resultado real: {money(record.roi)}.</p>
-            {tierRecord && tier !== "todas" ? (
-              <p className="pt-1 text-xs">
-                Prueba limpia (solo selecciones registradas desde el {tierRecord.since.split("-").reverse().join("/")}, cuando se
-                fijó esta regla): {tierRecord.forward.settled} resueltas · resultado {money(tierRecord.forward.roi)} · contra el
-                cierre {money(tierRecord.forward.evClose)}. El corte de 40 % se eligió mirando el histórico; por eso lo que
-                vale es esta prueba hacia adelante.
-              </p>
-            ) : null}
-          </div>
-        ) : (
-          <p className="mt-2 text-muted">Se empieza a medir desde el próximo corte.</p>
-        )}
+        <h2 className="font-display text-lg">¿Han ganado hasta ahora?</h2>
+        <div className="mt-2 space-y-2 text-muted">
+          <p>
+            <strong className="text-fg">Regla actual</strong> (desde el{" "}
+            {VALUE_RULE_SINCE.split("-").reverse().join("/")}, la prueba limpia):{" "}
+            {records.v2
+              ? `${records.v2.settled} resueltas · resultado ${money(records.v2.roi)} · contra el cierre ${money(records.v2.evClose)}.`
+              : "se mide desde el próximo corte."}
+          </p>
+          {records.byMarket.length ? (
+            <ul className="list-disc space-y-0.5 pl-5 text-xs">
+              {records.byMarket.map((item) => (
+                <li key={item.market}>
+                  {MARKET_NAME[item.market]}: {item.results.settled} resueltas ·{" "}
+                  {money(item.results.roi)}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          <p className="text-xs">
+            Antes de la regla, las de {pct(VALUE_MIN_PROB)} o más:{" "}
+            {records.alta ? money(records.alta.roi) : "sin datos"}. Todas las selecciones desde el
+            18/10:{" "}
+            {records.all
+              ? `${money(records.all.roi)}; contra el cierre ${money(records.all.evClose)}`
+              : "sin datos"}
+            .
+          </p>
+        </div>
       </section>
 
       <section className="rounded-xl bg-surface p-4 text-sm leading-relaxed text-muted shadow-[var(--shadow-border)]">
         <h2 className="font-display text-lg text-fg">Cómo usarlo</h2>
         <ol className="mt-2 list-decimal space-y-1 pl-5">
-          <li>Busca el partido en la casa indicada (no en otra) y confirma la hora y el equipo local.</li>
-          <li>Apuesta solo si esa casa paga la cuota mínima o más. Si paga menos, ya no tiene valor: no se apuesta.</li>
           <li>
-            <strong className="text-fg">Cada selección sola, nunca en combinada</strong>, una por partido y siempre la misma
-            cantidad pequeña. Una combinada de 4 selecciones de 13–20 % se cumple menos de 1 vez en 400.
+            Busca el partido en la casa indicada (no en otra) y el mercado indicado: resultado,
+            doble oportunidad o empate no válido.
           </li>
-          <li>Cuenta con perder la mayoría: el valor solo aparece después de muchas apuestas.</li>
+          <li>
+            Apuesta solo si esa casa paga la cuota mínima o más. Si paga menos, ya no tiene valor:
+            no se apuesta.
+          </li>
+          <li>
+            <strong className="text-fg">Cada selección sola, nunca en combinada</strong>, una por
+            partido y siempre la misma cantidad pequeña.
+          </li>
+          <li>
+            Aun con 40 % o más se pierden varias: el valor aparece después de muchas apuestas
+            iguales.
+          </li>
         </ol>
       </section>
 
@@ -285,100 +376,146 @@ function ValorPage() {
         <p className="text-sm text-muted">Cargando partidos de hoy y mañana…</p>
       ) : rows.length === 0 ? (
         <p className="text-sm text-muted">
-          {tier !== "todas" && (counts.todas ?? 0) > 0
-            ? `Hoy y mañana no hay selecciones con valor de este nivel. Hay ${counts.todas} de probabilidad más baja en «Todas». No apostar también es una decisión válida.`
-            : "Hoy y mañana ninguna casa paga por encima de lo que vale ningún resultado (con 3 o más casas leídas). Es lo normal: en ese caso no hay apuesta con valor."}
+          Hoy y mañana no hay ninguna selección de {pct(VALUE_MIN_PROB)} o más con valor. No apostar
+          también es una decisión válida: es lo que dice la regla.
         </p>
       ) : (
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {rows.map(({ match, pick, now, rank, total }) => (
-            <article
-              key={`${match.id}-${pick.outcomeIndex}`}
-              className={`rounded-xl bg-surface p-4 shadow-[var(--shadow-border)] ${now && !now.still ? "opacity-60" : ""}`}
-            >
-              <div className="flex items-start justify-between gap-3">
-                <p className="text-[11px] uppercase tracking-[0.14em] text-subtle">{match.competition}</p>
-                {rank ? (
-                  <span
-                    className="shrink-0 rounded-full bg-accent px-2.5 py-1 text-xs font-semibold tabular-nums text-accent-fg"
-                    title={`Puesto ${rank} de ${total} por probabilidad de cumplirse`}
-                  >
-                    #{rank}
-                  </span>
-                ) : null}
-              </div>
-              <h2 className="mt-1 font-display text-xl tracking-tight">
-                {match.home} — {match.away}
-              </h2>
-              <p className="mt-1 text-xs text-muted">{kickLabel(match.kickoff)}</p>
-              <p className="mt-3 text-base text-fg">
-                <strong>{team(match, pick.outcomeIndex)}</strong>{" "}
-                <span className="text-muted">({SIDE[pick.outcomeIndex]})</span>
-              </p>
-              <dl className="mt-3 grid grid-cols-2 gap-2 text-sm">
-                <div>
-                  <dt className="text-[10px] uppercase tracking-wide text-subtle">Se cumple</dt>
-                  <dd>
-                    {pct(pick.prob)} <span className={`text-xs ${tierOf(pick.prob).tone}`}>· {tierOf(pick.prob).label}</span>
-                  </dd>
+          {rows.map((row) => {
+            const { match, pick, now, rank, total } = row;
+            const sameMatch = rows.filter((other) => other.match.id === match.id).length;
+            return (
+              <article
+                key={`${match.id}-${pick.market}-${pick.outcomeIndex}`}
+                className={`rounded-xl bg-surface p-4 shadow-[var(--shadow-border)] ${now && !now.still ? "opacity-60" : ""}`}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <p className="text-[11px] uppercase tracking-[0.14em] text-subtle">
+                    {match.competition}
+                  </p>
+                  {rank ? (
+                    <span
+                      className="shrink-0 rounded-full bg-accent px-2.5 py-1 text-xs font-semibold tabular-nums text-accent-fg"
+                      title={`Puesto ${rank} de ${total} por probabilidad de ganarse`}
+                    >
+                      #{rank}
+                    </span>
+                  ) : null}
                 </div>
-                <div>
-                  <dt className="text-[10px] uppercase tracking-wide text-subtle">Cuota justa</dt>
-                  <dd>{num(pick.fair)}</dd>
-                </div>
-                <div>
-                  <dt className="text-[10px] uppercase tracking-wide text-subtle">Mejor cuota</dt>
-                  <dd>
-                    {num(pick.odds)} · {houseName(pick.house)}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-[10px] uppercase tracking-wide text-subtle">Cuota mínima</dt>
-                  <dd className="text-value">{num(pick.minOdds)}</dd>
-                </div>
-                <div>
-                  <dt className="text-[10px] uppercase tracking-wide text-subtle">Por cada $100</dt>
-                  <dd className="text-value">+${(pick.ev * 100).toFixed(1).replace(".", ",")}</dd>
-                </div>
-                <div>
-                  <dt className="text-[10px] uppercase tracking-wide text-subtle">Casas leídas</dt>
-                  <dd>{match.bestOdds?.houses ?? "—"}</dd>
-                </div>
-              </dl>
-              <div className="mt-3 rounded-lg bg-elevated p-3 text-xs leading-relaxed text-fg ring-1 ring-border">
-                <p>
-                  <strong>Solo en {houseName(pick.house)}, a {num(pick.minOdds)} o más.</strong> En otra casa o con menos cuota
-                  ya no tiene valor: no se apuesta.
+                <h2 className="mt-1 font-display text-xl tracking-tight">
+                  {match.home} — {match.away}
+                </h2>
+                <p className="mt-1 text-xs text-muted">{kickLabel(match.kickoff)}</p>
+                <p className="mt-3 text-[11px] uppercase tracking-wide text-subtle">
+                  {MARKET_NAME[pick.market]}
                 </p>
-                <p className="mt-1">
-                  <strong>Sola, nunca en combinada.</strong> El valor medido es de apuestas sueltas; en combinada se pierde.
+                <p className="text-base text-fg">
+                  <strong>{label(row)}</strong>
                 </p>
-                {rows.filter((row) => row.match.id === match.id).length > 1 ? (
+                <dl className="mt-3 grid grid-cols-2 gap-2 text-sm">
+                  <div>
+                    <dt className="text-[10px] uppercase tracking-wide text-subtle">Se gana</dt>
+                    <dd>
+                      {pct(pick.prob)}
+                      {pick.market === "dnb" ? (
+                        <span className="text-xs text-muted">
+                          {" "}
+                          · empate {pct(pick.pDraw)} (se devuelve)
+                        </span>
+                      ) : null}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-[10px] uppercase tracking-wide text-subtle">Cuota justa</dt>
+                    <dd>{num(pick.fair)}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-[10px] uppercase tracking-wide text-subtle">Mejor cuota</dt>
+                    <dd>
+                      {num(pick.odds)} · {houseName(pick.house)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-[10px] uppercase tracking-wide text-subtle">
+                      Cuota mínima
+                    </dt>
+                    <dd className="text-value">{num(pick.minOdds)}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-[10px] uppercase tracking-wide text-subtle">
+                      Por cada $100
+                    </dt>
+                    <dd className="text-value">+${(pick.ev * 100).toFixed(1).replace(".", ",")}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-[10px] uppercase tracking-wide text-subtle">
+                      Casas leídas
+                    </dt>
+                    <dd>
+                      {pick.market === "1x2"
+                        ? (match.bestOdds?.houses ?? "—")
+                        : ((pick.market === "dc"
+                            ? match.double?.dc.length
+                            : match.double?.dnb.length) ?? "—")}
+                    </dd>
+                  </div>
+                </dl>
+                <div className="mt-3 rounded-lg bg-elevated p-3 text-xs leading-relaxed text-fg ring-1 ring-border">
+                  <p>
+                    <strong>
+                      Solo en {houseName(pick.house)}, mercado «{MARKET_NAME[pick.market]}», a{" "}
+                      {num(pick.minOdds)} o más.
+                    </strong>{" "}
+                    En otra casa o con menos cuota ya no tiene valor: no se apuesta.
+                  </p>
                   <p className="mt-1">
-                    <strong>Este partido tiene {rows.filter((row) => row.match.id === match.id).length} selecciones: juega solo una.</strong>
+                    <strong>Sola, nunca en combinada.</strong> El valor medido es de apuestas
+                    sueltas.
+                  </p>
+                  {sameMatch > 1 ? (
+                    <p className="mt-1">
+                      <strong>
+                        Este partido tiene {sameMatch} selecciones: juega solo una (la de puesto más
+                        alto).
+                      </strong>
+                    </p>
+                  ) : null}
+                </div>
+                {now ? (
+                  <p
+                    className={`mt-2 rounded-lg px-3 py-2 text-xs ${now.still ? "bg-elevated text-fg" : "bg-elevated text-danger"}`}
+                  >
+                    <strong>Cuota vigente ({now.readAt.slice(11, 16)}):</strong> {num(now.odds)} en{" "}
+                    {houseName(now.house)} · mínima {num(now.minOdds)}.{" "}
+                    {now.still ? "Sigue con valor." : "Ya no tiene valor: no se apuesta."}
                   </p>
                 ) : null}
-              </div>
-              {now ? (
-                <p className={`mt-2 rounded-lg px-3 py-2 text-xs ${now.still ? "bg-elevated text-fg" : "bg-elevated text-danger"}`}>
-                  <strong>Cuota vigente ({now.readAt.slice(11, 16)}):</strong> {num(now.odds)} en {houseName(now.house)} ·
-                  mínima {num(now.minOdds)}.{" "}
-                  {now.still ? "Sigue con valor." : "Ya no tiene valor: no se apuesta."}
+                <p className="mt-2 text-xs text-muted">
+                  Cuota leída en el último corte
+                  {(pick.market === "1x2" ? match.bestOdds?.readAt : match.double?.readAt)
+                    ? ` (${String(pick.market === "1x2" ? match.bestOdds?.readAt : match.double?.readAt).slice(11, 16)})`
+                    : ""}
+                  {now ? "; arriba, la lectura más reciente" : "; se relee cada hora"}. Verifica que
+                  siga igual en la casa.
                 </p>
-              ) : null}
-              <p className="mt-2 text-xs text-muted">
-                Cuota leída en el último corte{match.bestOdds?.readAt ? ` (${match.bestOdds.readAt.slice(11, 16)})` : ""}
-                {now ? "; arriba, la lectura más reciente" : "; se relee cada hora"}. Verifica que siga igual en la casa.
-              </p>
-              <button
-                type="button"
-                className="mt-3 h-9 rounded-full bg-elevated px-3 text-xs text-fg ring-1 ring-border"
-                onClick={() => betSlip.put(match.id, MARKET[pick.outcomeIndex], `${match.home} — ${match.away}`)}
-              >
-                Revisar en Apuesta
-              </button>
-            </article>
-          ))}
+                {pick.market === "dnb" ? null : (
+                  <button
+                    type="button"
+                    className="mt-3 h-9 rounded-full bg-elevated px-3 text-xs text-fg ring-1 ring-border"
+                    onClick={() =>
+                      betSlip.put(
+                        match.id,
+                        pick.market === "dc" ? SLIP_DC[pick.outcomeIndex] : SLIP[pick.outcomeIndex],
+                        `${match.home} — ${match.away}`,
+                      )
+                    }
+                  >
+                    Revisar en Apuesta
+                  </button>
+                )}
+              </article>
+            );
+          })}
         </div>
       )}
     </div>
