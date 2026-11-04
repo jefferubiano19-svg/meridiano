@@ -40,6 +40,8 @@ export interface MatchReading {
   revisar: boolean;
   value: ValueMark | null;
   /** Mejor cuota de cada resultado entre las casas leídas (solo partidos por jugar). */
+  /** Insignias del partido: «Valor del día», «El rival marca 70 %+», «Favorito con valor (prueba)». */
+  badges?: { key: "valor" | "rival" | "favorito"; label: string }[];
   /** Lectura 1X2 más reciente (cada hora) de un partido con selección de «Valor del día». */
   current?: {
     readAt: string;
@@ -73,6 +75,8 @@ export interface ComboMatch extends MatchReading {
 export interface DayBoard {
   day: string;
   matches: MatchReading[];
+  /** Ayer: cuántas veces ganó el favorito de cada partido contra lo esperado. */
+  yesterday?: { day: string; n: number; hits: number; expected: number } | null;
 }
 
 export interface ComboBoard {

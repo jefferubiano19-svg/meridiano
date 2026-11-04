@@ -21,6 +21,8 @@ function Home() {
   const [query, setQuery] = useState("");
   const [onlyReview, setOnlyReview] = useState(false);
   const [onlyOdds, setOnlyOdds] = useState(true);
+  // 3+ casas (consenso): es lo más confiable (favorito de 65 %+ acertó 79,3 % contra 76,7 % con solo modelo).
+  const [onlyConsensus, setOnlyConsensus] = useState(true);
   const [count, setCount] = useState(24);
   const [view, setView] = useState<"todos" | "top">("todos");
   const [level, setLevel] = useState<string>("todos");
@@ -42,6 +44,7 @@ function Home() {
   }, [today]);
 
   const withOddsCount = useMemo(() => (board?.matches ?? []).filter((match) => match.withOdds).length, [board]);
+  const consensusCount = useMemo(() => (board?.matches ?? []).filter((match) => match.consensus).length, [board]);
   // Los 20 partidos del día de las competiciones de mayor nivel (top-leagues.ts), en el orden del tablero.
   const topIds = useMemo(() => new Set(topMatches(board?.matches ?? [], 20).map((match) => match.id)), [board]);
   const base = useMemo(
@@ -55,10 +58,13 @@ function Home() {
   }, [base]);
   // Si el corte todavía no leyó cuotas de ningún partido, se muestran todos. En «Mejores ligas» no aplica.
   const oddsFilter = view === "todos" && onlyOdds && withOddsCount > 0;
+  // Si hay menos de 10 partidos con 3+ casas (cuotas aún sin leer), el filtro no se aplica.
+  const consensusFilter = view === "todos" && onlyConsensus && consensusCount >= 10;
   const filtered = useMemo(() => {
     const q = query.trim();
     return base.filter((match) => {
       if (oddsFilter && !match.withOdds) return false;
+      if (consensusFilter && !match.consensus) return false;
       if (level !== "todos" && match.level !== level) return false;
       if (onlyReview && !match.revisar && !match.value) return false;
       if (!q) return true;
@@ -67,7 +73,7 @@ function Home() {
         searchText([match.home, match.away, match.competition, match.homeEs, match.awayEs]),
       );
     });
-  }, [base, query, onlyReview, oddsFilter, level]);
+  }, [base, query, onlyReview, oddsFilter, consensusFilter, level]);
 
   const shown = filtered.slice(0, count);
 
@@ -98,6 +104,21 @@ function Home() {
           }
         />
       </section>
+
+      {board?.yesterday ? (
+        <section className="rounded-xl bg-surface px-4 py-3 text-sm shadow-[var(--shadow-border)]">
+          <strong>Ayer ({boardDayLabel(board.yesterday.day)}):</strong> el favorito de cada partido ganó{" "}
+          {board.yesterday.hits} de {board.yesterday.n} ({Math.round((board.yesterday.hits / board.yesterday.n) * 100)} %);
+          Meridiano esperaba {board.yesterday.expected.toFixed(0)} ({Math.round((board.yesterday.expected / board.yesterday.n) * 100)} %).{" "}
+          <span className="text-muted">
+            {Math.abs(board.yesterday.hits - board.yesterday.expected) <= 2 * Math.sqrt(board.yesterday.expected * (1 - board.yesterday.expected / board.yesterday.n))
+              ? "Dentro de lo normal: los porcentajes se cumplieron."
+              : board.yesterday.hits > board.yesterday.expected
+                ? "Ganaron más favoritos de lo esperado."
+                : "Ganaron menos favoritos de lo esperado."}
+          </span>
+        </section>
+      ) : null}
 
       <div className="flex flex-wrap gap-2" role="tablist" aria-label="Qué partidos ver">
         <FilterChip
@@ -163,6 +184,17 @@ function Home() {
           aria-label="Buscar equipo o competición"
         />
         <div className="flex flex-wrap gap-2">
+          {view === "todos" ? (
+            <FilterChip
+              active={consensusFilter}
+              onClick={() => {
+                setOnlyConsensus(!onlyConsensus);
+                setCount(24);
+              }}
+            >
+              {consensusCount >= 10 ? `Con 3+ casas · más confiable (${consensusCount})` : "Con 3+ casas (aún sin leer)"}
+            </FilterChip>
+          ) : null}
           {view === "todos" ? (
           <FilterChip
             active={oddsFilter}

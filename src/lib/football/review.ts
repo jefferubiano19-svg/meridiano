@@ -70,6 +70,8 @@ export interface ReviewInput {
   }[];
   /** data/valor-registro.json → picks: selecciones de «Valor del día». */
   picks?: { matchId?: string; house?: string; outcomeIndex?: number; odds?: number; kickoff?: string; market?: string | null }[];
+  /** «Favorito con valor» en prueba (data/favoritos-registro.json). */
+  favorites?: { matchId?: string; house?: string; outcomeIndex?: number; odds?: number; kickoff?: string; market?: string | null }[];
   /** data/cierres.json → byMatch: cuotas 1X2 de las casas leídas poco antes del inicio. */
   closings?: Record<string, { readAt?: string; kickoff?: string; books?: { house: string; odds: number[] }[] }>;
   agenda: [string, string, string, string, string, string, number | null, number | null, unknown, unknown][];
@@ -127,6 +129,8 @@ export interface Review {
     all: { settled: number; roi: Stat; closed: number; clvHouse: Stat; evClose: Stat; verdict: string };
     byMarket: { market: "1x2" | "dc" | "dnb"; results: { settled: number; roi: Stat; closed: number; clvHouse: Stat; evClose: Stat; verdict: string } }[];
   };
+  /** «Favorito con valor» en prueba: lo que manda es el resultado real (roi). */
+  favoriteResults: { settled: number; roi: Stat; closed: number; clvHouse: Stat; evClose: Stat; verdict: string };
   pickTiers: {
     key: string;
     label: string;
@@ -358,6 +362,8 @@ export function buildReview(input: ReviewInput): Review {
   const valueResults = resultsOf(input.marks);
   const pickResults = resultsOf(input.picks ?? []);
   // Filtro «cuota menor a 4» de la página /valor: la misma medición solo con esas selecciones.
+  // «Favorito con valor» (en prueba): resultado real apostando lo mismo a cada uno.
+  const favoriteResults = resultsOf(input.favorites ?? []);
   const pickResultsLow = resultsOf((input.picks ?? []).filter((pick) => Number(pick.odds) < 4));
   // Regla v2 (5 nov 2026): solo 40 %+ y, además de 1X2, doble oportunidad y empate no válido. Medición aparte y por mercado.
   const v2 = (input.picks ?? []).filter((pick) => (pick as { rule?: string }).rule === "v2");
@@ -626,6 +632,7 @@ export function buildReview(input: ReviewInput): Review {
     pickResultsLow,
     pickTiers,
     pickRuleV2,
+    favoriteResults,
     shadows,
     wplayMarket,
     modelBlend,

@@ -116,6 +116,18 @@ Congelamiento de parámetros hasta 500 partidos comparables con el consenso.
 
 ## Agenda
 
+Mejoras del 5 nov 2026:
+- Resumen arriba (`dayBoard` → `yesterday`): cuántas veces ganó ayer el favorito de cada partido contra lo esperado.
+- Insignias por partido (`withBadges` en page-data.ts): «Valor del día» (regla v2), «El rival marca NN %» (70 %+) y
+  «Favorito con valor (en prueba)»; también en «Partido hoy» y «Partido».
+- Filtro «Con 3+ casas · más confiable», activo por defecto cuando hay 10+ partidos con consenso.
+- «Partido hoy» usa la **lista fija** de la madrugada (`listas.ts` → `savedList`; `frozenPick`) con ✔/✘ y avance del
+  día; si aún no hay lista guardada, la calcula. Cada partido muestra «favorito o empate» (calibrado: 85–90 % → 89 %,
+  90–95 % → 94 %).
+- «Favorito con valor» EN PRUEBA (`valor.ts` → `favoritePick`, 65 %+ con la corrección de favoritos y +3 a +15 % de
+  valor): registro aparte `data/favoritos-registro.json` (lo escribe el corte), medido en `review.ts` →
+  `favoriteResults`; no entra en «Valor del día» ni en el aviso hasta tener 100 jugados con resultado positivo.
+
 Filtros: «Con cuota en casas», «revisar o valor», «Nivel» (A, B, C, M, selecciones) y la vista «Mejores ligas»:
 los 20 partidos del día de las competiciones de `top-leagues.ts` (continentales UEFA/CONMEBOL por jerarquía oficial;
 ligas por el ranking de Opta de julio 2026, con fuente y advertencia en el archivo). Actualizar la lista cuando Opta publique otro ranking.

@@ -246,6 +246,14 @@ function ModelPage() {
               </p>
               <p>
                 Resultado real apostando lo mismo a cada selección: {money(vr.roi)} por apuesta, en {vr.settled} ya jugadas.
+              </p>
+              <p>
+                <strong className="text-fg">Favorito con valor (en prueba desde el 05/11/2026):</strong>{" "}
+                {(() => {
+                  const fr = (review as { favoriteResults?: { settled: number; roi: Stat } } | null)?.favoriteResults;
+                  return fr && fr.settled > 0 ? `${money(fr.roi)} por apuesta en ${fr.settled} ya jugados.` : "todavía sin partidos jugados.";
+                })()}{" "}
+                No entra en «Valor del día» hasta que tenga 100 jugados con resultado positivo.
                 Con pocas apuestas este número varía muchísimo; por eso manda la comparación con el cierre.
               </p>
             </div>

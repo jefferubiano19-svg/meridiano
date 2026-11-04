@@ -2,6 +2,7 @@ import { AGENDA, agendaOnDay, type AgendaMatch } from "./agenda";
 import { spanishName } from "./standings";
 import { buildCombinada, buildCombinadaManana, type CombinadaLeg } from "./combinada";
 import { rivalScores } from "./engine";
+import { doublePicks, favoritePick, valuePicks } from "./valor";
 import { currentOdds, doubleOffers } from "./vigentes";
 import { listHistory, savedList } from "./listas";
 import { agendaToday, agendaTomorrow, bogotaDay, shiftDay } from "./clock";
@@ -284,10 +285,34 @@ export function dayBoard(day: string): DayBoard {
   return {
     day: chosen,
     matches: rows.map((match) => {
-      const reading = readingOf(match);
+      const reading = withBadges(readingOf(match));
       return waiting(match) ? { ...reading, status: "empezó, sin resultado aún" } : reading;
     }),
+    yesterday: chosen === today ? yesterdaySummary(shiftDay(today, -1)) : null,
   };
+}
+
+/** Cómo le fue al favorito de cada partido de un día ya jugado: aciertos contra lo esperado (probabilidad publicada). */
+function yesterdaySummary(day: string): { day: string; n: number; hits: number; expected: number } | null {
+  let n = 0;
+  let hits = 0;
+  let expected = 0;
+  for (const match of agendaOnDay(day)) {
+    if (match.status !== "finalizado" || match.homeScore == null || match.awayScore == null) continue;
+    const published = readingOf(match).published;
+    if (!published) continue;
+    const sides = [
+      ["home", published.home],
+      ["draw", published.draw],
+      ["away", published.away],
+    ] as const;
+    const [key, p] = [...sides].sort((a, b) => b[1] - a[1])[0];
+    const actual = match.homeScore > match.awayScore ? "home" : match.homeScore === match.awayScore ? "draw" : "away";
+    n += 1;
+    expected += p;
+    if (actual === key) hits += 1;
+  }
+  return n ? { day, n, hits, expected } : null;
 }
 
 function withPick(leg: CombinadaLeg): ComboMatch {
@@ -310,16 +335,38 @@ function withPick(leg: CombinadaLeg): ComboMatch {
       { key: "away" as const, name: leg.away, p: base.published.away },
     ].sort((a, b) => b.p - a.p);
     const rival = rivalScores(base.published);
-    return {
+    return withBadges({
       ...base,
       pick: sides[0].name,
       pickKey: sides[0].key,
       pickProbability: sides[0].p,
       favOrDraw: favOrDraw(base.published, sides[0].key),
       rival: rival ? { team: rival.side === "home" ? leg.home : leg.away, side: rival.side, p: rival.p } : null,
-    };
+    });
   }
   return { ...base, pick: leg.pick, pickKey: leg.key, pickProbability: null };
+}
+
+/** Insignias de un partido por jugar (con 3+ casas): valor del día, rival que marca, favorito con valor (prueba). */
+function withBadges<T extends MatchReading>(reading: T): T {
+  if (reading.status !== "por-jugar" || !reading.consensus || !reading.bestOdds) {
+    const rival = reading.published ? rivalScores(reading.published) : null;
+    return rival && rival.p >= 0.7 && reading.status === "por-jugar"
+      ? { ...reading, badges: [{ key: "rival", label: `El rival marca ${Math.round(rival.p * 100)} %` }] }
+      : reading;
+  }
+  const probs = [reading.consensus.home, reading.consensus.draw, reading.consensus.away];
+  const best = [reading.bestOdds.home, reading.bestOdds.draw, reading.bestOdds.away];
+  const badges: NonNullable<MatchReading["badges"]> = [];
+  const value = [
+    ...valuePicks(probs, best, reading.bestOdds.houses),
+    ...(reading.double ? doublePicks(probs, reading.double.dc, reading.double.dnb) : []),
+  ];
+  if (value.length) badges.push({ key: "valor", label: "Valor del día" });
+  const rival = reading.published ? rivalScores(reading.published) : null;
+  if (rival && rival.p >= 0.7) badges.push({ key: "rival", label: `El rival marca ${Math.round(rival.p * 100)} %` });
+  if (favoritePick(probs, best, reading.bestOdds.houses, reading)) badges.push({ key: "favorito", label: "Favorito con valor (en prueba)" });
+  return badges.length ? { ...reading, badges } : reading;
 }
 
 /** Probabilidad de «favorito o empate» del lado elegido (si el lado es el empate, no aplica). */
@@ -349,7 +396,7 @@ function frozenPick(leg: { id: string; key: "home" | "draw" | "away"; probabilit
     outcome = actual === leg.key ? "acierto" : "fallo";
   }
   const rival = base.published ? rivalScores(base.published) : null;
-  return {
+  return withBadges({
     ...base,
     pick: leg.pick ?? (leg.key === "home" ? base.home : leg.key === "away" ? base.away : "Empate"),
     pickKey: leg.key,
@@ -357,7 +404,7 @@ function frozenPick(leg: { id: string; key: "home" | "draw" | "away"; probabilit
     outcome,
     favOrDraw: favOrDraw(base.published, leg.key),
     rival: rival ? { team: rival.side === "home" ? base.home : base.away, side: rival.side, p: rival.p } : null,
-  };
+  });
 }
 
 export function comboBoard(which: "hoy" | "manana"): ComboBoard {

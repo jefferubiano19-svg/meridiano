@@ -12,6 +12,7 @@
  * ------------------------------------------------------------------------- */
 
 import { shin } from "./engine";
+import { adjustFavorite } from "./favorites";
 
 export const VALUE_MIN_EV = 0.03;
 export const VALUE_MAX_EV = 0.15;
@@ -169,3 +170,42 @@ export const MARKET_NAME: Record<"1x2" | DoubleMarket, string> = {
   dc: "Doble oportunidad",
   dnb: "Empate no válido",
 };
+
+/* ---------------------------------------------------------------------------
+ * «Favorito con valor» (EN PRUEBA desde el 5 nov 2026; no entra en «Valor del día» ni en el aviso).
+ * Con la corrección de favoritos fuertes (favorites.ts), el favorito vale más de lo que dice el consenso. Si la mejor
+ * cuota del favorito paga entre +3 % y +15 % sobre la probabilidad corregida, y esa probabilidad es de 65 % o más, se
+ * registra aparte (data/favoritos-registro.json) y se mide con el resultado real (review.ts → favoriteResults).
+ * ------------------------------------------------------------------------- */
+
+
+export const FAVORITE_MIN_PROB = 0.65;
+
+export interface FavoritePick {
+  outcomeIndex: 0 | 2;
+  /** Probabilidad corregida. */
+  prob: number;
+  /** Probabilidad del consenso (sin corregir). */
+  probConsensus: number;
+  house: string;
+  odds: number;
+  ev: number;
+  minOdds: number;
+}
+
+export function favoritePick(
+  probs: number[],
+  best: { house: string; odds: number }[],
+  houses: number,
+  info: { home?: string; away?: string; competition?: string },
+): FavoritePick | null {
+  if (houses < VALUE_MIN_HOUSES || probs.length < 3 || best.length < 3) return null;
+  const adjusted = adjustFavorite({ home: probs[0], draw: probs[1], away: probs[2] }, info);
+  const index: 0 | 2 = adjusted.home >= adjusted.away ? 0 : 2;
+  const prob = index === 0 ? adjusted.home : adjusted.away;
+  if (prob < FAVORITE_MIN_PROB) return null;
+  const { house, odds } = best[index];
+  const ev = prob * odds - 1;
+  if (ev < VALUE_MIN_EV || ev > VALUE_MAX_EV) return null;
+  return { outcomeIndex: index, prob, probConsensus: probs[index], house, odds, ev, minOdds: (1 + VALUE_MIN_EV) / prob };
+}

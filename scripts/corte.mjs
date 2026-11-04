@@ -1231,9 +1231,16 @@ async function main() {
   // «Valor del día»: cada selección se guarda la primera vez que aparece (no se edita), para medir si gana.
   // Mismas reglas que la página /valor (src/lib/football/valor.ts), con las cuotas guardadas en combo-odds.json.
   let valuePicksAdded = 0;
+  let favoritesAdded = 0;
   const newPicks = [];
   await step("valor-del-dia", async () => {
-    const { consensusFromOffers, bestFromOffers, valuePicks, doublePicks } = await import("../src/lib/football/valor.ts");
+    const { consensusFromOffers, bestFromOffers, valuePicks, doublePicks, favoritePick } = await import("../src/lib/football/valor.ts");
+    // «Favorito con valor» (en prueba): registro aparte, no se mezcla con «Valor del día».
+    const favFile = readJsonOptional("favoritos-registro.json", { picks: [] });
+    favFile.rule =
+      "«Favorito con valor» EN PRUEBA (5 nov 2026): favorito de 65 %+ según la corrección de favoritos fuertes (favorites.ts) cuya mejor cuota paga entre +3 % y +15 % sobre esa probabilidad. Una fila por partido, la primera vez que aparece; no se edita. No es «Valor del día».";
+    favFile.picks = Array.isArray(favFile.picks) ? favFile.picks : [];
+    const favSeen = new Set(favFile.picks.map((pick) => pick.matchId));
     const stored = readJsonOptional("combo-odds.json", { matches: [] }).matches ?? [];
     const registro = readJsonOptional("valor-registro.json", { picks: [] });
     registro.rule =
@@ -1275,6 +1282,12 @@ async function main() {
         });
         valuePicksAdded += 1;
       }
+      const fav = favoritePick(probs, best, offers.length, { home: row[3], away: row[4], competition: row[2] });
+      if (fav && !favSeen.has(item.id)) {
+        favSeen.add(item.id);
+        favFile.picks.push({ matchId: item.id, home: row[3], away: row[4], competition: row[2], kickoff: row[1], market: "1x2", ...fav, readAt: item.readAtBogota ?? null, savedAt: started });
+        favoritesAdded += 1;
+      }
       // Doble oportunidad y empate no válido, con el mismo consenso 1X2.
       const doubleOffers = (key, cells) =>
         (item.markets?.[key] ?? [])
@@ -1292,6 +1305,7 @@ async function main() {
       }
     }
     writeJson("valor-registro.json", registro);
+    writeJson("favoritos-registro.json", favFile);
   });
   // Aviso por correo apenas hay selecciones nuevas (la ventaja se pierde si la cuota baja antes de apostar).
   await step("aviso-valor", () => notifyPicks(newPicks));
@@ -1384,6 +1398,7 @@ async function main() {
     oddsKept: Object.keys(keptOdds).length,
     wplayCopiedDropped: wplayCleaned.dropped.length,
     valuePicksAdded,
+    favoritesAdded,
     wplayWithdrawn,
     oddsDiscardedByTest: discardedOdds,
     predictionsSaved: fresh.length,
@@ -1473,6 +1488,7 @@ async function finishCut(coverage, previous = null) {
       marks: readJsonOptional("value-marks.json", { marks: [] }).marks ?? [],
       closings: readJsonOptional("cierres.json", { byMatch: {} }).byMatch ?? {},
       picks: readJsonOptional("valor-registro.json", { picks: [] }).picks ?? [],
+      favorites: readJsonOptional("favoritos-registro.json", { picks: [] }).picks ?? [],
       agenda: readJsonOptional("agenda.json", { matches: [] }).matches ?? [],
       standings: readJsonOptional("standings-auto.json", { leagues: [] }).leagues ?? [],
     });

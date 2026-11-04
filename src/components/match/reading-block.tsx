@@ -140,6 +140,24 @@ export function MatchReadingCard({
         {score ? ` · ${score}` : ""}
         {match.status ? ` · ${match.status}` : ""}
       </p>
+      {match.badges?.length ? (
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {match.badges.map((badge) => (
+            <span
+              key={badge.key}
+              className={`rounded-full px-2 py-0.5 text-[11px] ring-1 ${
+                badge.key === "valor"
+                  ? "bg-accent text-accent-fg ring-transparent"
+                  : badge.key === "favorito"
+                    ? "bg-elevated text-warn ring-border"
+                    : "bg-elevated text-fg ring-border"
+              }`}
+            >
+              {badge.label}
+            </span>
+          ))}
+        </div>
+      ) : null}
       {extra ? <p className="mt-2 text-sm text-fg">{extra}</p> : null}
       <ReadingBlock match={match} />
     </>
