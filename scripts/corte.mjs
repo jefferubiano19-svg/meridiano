@@ -1055,7 +1055,13 @@ async function main() {
     kickoff: row.kickoff,
     kind: "cuotas",
     url: `https://www.flashscore.co/partido/${row.id}/`,
-    read: async (page) => ({ books: await readDoubleMarkets(page) }),
+    // Los enlaces de doble oportunidad y empate no válido aparecen solo con la pestaña Cuotas abierta (corte del 5 nov:
+    // 0 de 120 leídos sin abrirla): primero se abre con el lector 1X2 y luego se leen los mercados dobles.
+    read: async (page) => {
+      const opened = await readOdds(page, ONLY_1X2);
+      if (opened.noOddsTab) return { books: [] };
+      return { books: await readDoubleMarkets(page) };
+    },
   })), () => Date.now() - doubleStartedMs >= 25 * 60 * 1000 || overBudget()))) ?? [];
   const doubleStored = storeDouble(doubleRead, started);
 
