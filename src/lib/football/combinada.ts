@@ -19,6 +19,8 @@ export interface CombinadaLeg {
   key: "home" | "draw" | "away";
   pick: string;
   probability: number;
+  /** Probabilidad de empate (para «favorito o empate»). */
+  drawProbability: number;
   /** Cuota de casa solo si está publicada. Null no se sustituye. */
   odds: number | null;
   fairOdds: number;
@@ -67,6 +69,7 @@ function toLeg(match: AgendaMatch): CombinadaLeg | null {
       key: side.key,
       pick: side.name,
       probability: side.probability,
+      drawProbability: analysis.p1x2.draw,
       odds: typeof side.odds === "number" && side.odds > 1 ? side.odds : null,
       fairOdds: side.fair,
       games: 0,
@@ -85,11 +88,14 @@ function toLeg(match: AgendaMatch): CombinadaLeg | null {
     key: side.key,
     pick: side.name,
     probability: side.probability,
+    drawProbability: (analysis as unknown as RecentAnalysis).p1x2.draw,
     odds: null,
     fairOdds: side.fair,
     games: 0,
   };
 }
+
+export const LIST_MIN_PROBABILITY = 0.6;
 
 /** Cupón de un solo día. No se rellena con otra fecha ni con un partido ya empezado. */
 function buildTicket(day: string, limit: number): CombinadaTicket {
@@ -110,7 +116,9 @@ function buildTicket(day: string, limit: number): CombinadaTicket {
   });
   const offered = all.filter((leg) => hasMarketOdds(leg.id));
   const usable = offered.length > 0 ? offered : all;
-  const legs = [...usable]
+  // Desde el 6 nov 2026: favoritos de 60 % o más. Si quedan menos de 20, la lista es más corta: un favorito de
+  // 40 % falla 6 de cada 10 y no sirve para «Partido hoy» (la lista del 4 nov tenía 9 así: acertó 10 de 20).
+  const legs = [...usable.filter((leg) => leg.probability >= LIST_MIN_PROBABILITY)]
     .sort((a, b) => b.probability - a.probability || a.kickoff.localeCompare(b.kickoff))
     .slice(0, limit)
     .sort((a, b) => a.kickoff.localeCompare(b.kickoff));

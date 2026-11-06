@@ -376,7 +376,7 @@ function favOrDraw(published: Way | null | undefined, key: "home" | "draw" | "aw
 }
 
 /** Fila de la lista fija: el lado y la probabilidad quedan como se publicaron; el estado y el marcador, los de ahora. */
-function frozenPick(leg: { id: string; key: "home" | "draw" | "away"; probability: number; home?: string; away?: string; competition?: string; kickoff?: string; pick?: string }): ComboMatch {
+function frozenPick(leg: { id: string; key: "home" | "draw" | "away"; probability: number; draw?: number; home?: string; away?: string; competition?: string; kickoff?: string; pick?: string }): ComboMatch {
   const base =
     readingById(leg.id) ??
     blank({
@@ -391,9 +391,11 @@ function frozenPick(leg: { id: string; key: "home" | "draw" | "away"; probabilit
       awayScore: null,
     });
   let outcome: ComboMatch["outcome"] = null;
+  let outcomeSafe: ComboMatch["outcomeSafe"] = null;
   if (base.status === "finalizado" && base.homeScore != null && base.awayScore != null) {
     const actual = base.homeScore > base.awayScore ? "home" : base.homeScore === base.awayScore ? "draw" : "away";
     outcome = actual === leg.key ? "acierto" : "fallo";
+    outcomeSafe = actual === leg.key || actual === "draw" ? "acierto" : "fallo";
   }
   const rival = base.published ? rivalScores(base.published) : null;
   return withBadges({
@@ -402,7 +404,8 @@ function frozenPick(leg: { id: string; key: "home" | "draw" | "away"; probabilit
     pickKey: leg.key,
     pickProbability: leg.probability,
     outcome,
-    favOrDraw: favOrDraw(base.published, leg.key),
+    outcomeSafe,
+    favOrDraw: leg.draw != null && leg.key !== "draw" ? leg.probability + leg.draw : favOrDraw(base.published, leg.key),
     rival: rival ? { team: rival.side === "home" ? base.home : base.away, side: rival.side, p: rival.p } : null,
   });
 }
@@ -427,6 +430,8 @@ export function comboBoard(which: "hoy" | "manana"): ComboBoard {
         settled: done.length,
         hits: done.filter((match) => match.outcome === "acierto").length,
         expected: done.reduce((sum, match) => sum + (match.pickProbability ?? 0), 0),
+        hitsSafe: done.filter((match) => match.outcomeSafe === "acierto").length,
+        expectedSafe: done.reduce((sum, match) => sum + (match.favOrDraw ?? match.pickProbability ?? 0), 0),
       },
       history: listHistory(day),
     };

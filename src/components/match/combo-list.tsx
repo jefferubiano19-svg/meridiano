@@ -3,7 +3,7 @@ import { ExportBar } from "@/components/export-bar";
 import { MatchReadingCard } from "@/components/match/reading-block";
 import { readingsSheet } from "@/lib/export/reading-rows";
 import { boardDayLabel, formatPct } from "@/lib/football/format";
-import { MISSING, type ComboBoard } from "@/lib/football/dto";
+import { MISSING, type ComboBoard, type ComboMatch } from "@/lib/football/dto";
 import { loadCombo } from "@/lib/football/pages";
 
 const JOINT_NOTE =
@@ -49,6 +49,9 @@ export function ComboList({ which }: { which: "hoy" | "manana" }) {
   const [failed, setFailed] = useState(false);
   const [query, setQuery] = useState("");
   const [order, setOrder] = useState<"rank" | "time">("rank");
+  // «Seguro»: cada partido como «favorito o empate» (doble oportunidad). Es lo que más se acierta.
+  const [mode, setMode] = useState<"seguro" | "gana">("seguro");
+  const probOf = (match: ComboMatch) => (mode === "seguro" ? match.favOrDraw ?? match.pickProbability : match.pickProbability);
 
   useEffect(() => {
     let live = true;
@@ -69,10 +72,10 @@ export function ComboList({ which }: { which: "hoy" | "manana" }) {
   // Puesto de 1 a 20: 1 es el lado más probable de la lista (probabilidad publicada). Sin probabilidad, al final.
   const ranks = useMemo(() => {
     const sorted = [...(board?.matches ?? [])].sort(
-      (a, b) => (b.pickProbability ?? -1) - (a.pickProbability ?? -1) || a.kickoff.localeCompare(b.kickoff),
+      (a, b) => (probOf(b) ?? -1) - (probOf(a) ?? -1) || a.kickoff.localeCompare(b.kickoff),
     );
     return new Map(sorted.map((match, index) => [match.id, index + 1]));
-  }, [board]);
+  }, [board, mode]);
 
   const matches = useMemo(() => {
     if (!board) return [];
@@ -149,7 +152,9 @@ export function ComboList({ which }: { which: "hoy" | "manana" }) {
               <p className="mt-2 text-base">
                 {board.frozen.settled === 0
                   ? "Todavía no termina ningún partido."
-                  : `Van ${board.frozen.hits} aciertos de ${board.frozen.settled} terminados (esperado ${board.frozen.expected.toFixed(1).replace(".", ",")}).`}
+                  : mode === "seguro"
+                    ? `Favorito o empate: van ${board.frozen.hitsSafe} aciertos de ${board.frozen.settled} terminados (esperado ${board.frozen.expectedSafe.toFixed(1).replace(".", ",")}).`
+                    : `Gana el favorito: van ${board.frozen.hits} aciertos de ${board.frozen.settled} terminados (esperado ${board.frozen.expected.toFixed(1).replace(".", ",")}).`}
               </p>
             </section>
           ) : null}
@@ -187,8 +192,9 @@ export function ComboList({ which }: { which: "hoy" | "manana" }) {
                     <thead className="text-[11px] uppercase tracking-wide text-subtle">
                       <tr>
                         <th className="py-1 font-normal">Día</th>
-                        <th className="py-1 font-normal">Acertó</th>
+                        <th className="py-1 font-normal">Gana el favorito</th>
                         <th className="py-1 font-normal">Esperado</th>
+                        <th className="py-1 font-normal">Favorito o empate</th>
                         <th className="py-1 font-normal">Sin resultado</th>
                       </tr>
                     </thead>
@@ -201,6 +207,10 @@ export function ComboList({ which }: { which: "hoy" | "manana" }) {
                             {row.settled ? ` (${formatPct(row.hits / row.settled, 0)})` : ""}
                           </td>
                           <td className="py-1">{row.expected.toFixed(1).replace(".", ",")}</td>
+                          <td className="py-1">
+                            {row.hitsSafe} de {row.settled}
+                            {row.expectedSafe != null ? ` (esp. ${row.expectedSafe.toFixed(1).replace(".", ",")})` : ""}
+                          </td>
                           <td className="py-1">{row.legs - row.settled}</td>
                         </tr>
                       ))}
@@ -219,6 +229,23 @@ export function ComboList({ which }: { which: "hoy" | "manana" }) {
             </section>
           ) : null}
 
+          <div className="flex flex-wrap items-center gap-2" role="tablist" aria-label="Qué se apuesta en cada partido">
+            {[
+              { key: "seguro" as const, label: "Favorito o empate (más seguro)" },
+              { key: "gana" as const, label: "Gana el favorito" },
+            ].map((option) => (
+              <button
+                key={option.key}
+                type="button"
+                role="tab"
+                aria-selected={mode === option.key}
+                onClick={() => setMode(option.key)}
+                className={`h-9 rounded-full px-4 text-sm ring-1 ring-border ${mode === option.key ? "bg-accent text-accent-fg" : "bg-elevated text-fg"}`}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
           <div className="flex flex-wrap items-center gap-2" role="tablist" aria-label="Orden de la lista">
             {[
               { key: "rank" as const, label: "Por probabilidad (1 a 20)" },
@@ -256,7 +283,11 @@ export function ComboList({ which }: { which: "hoy" | "manana" }) {
                 match={match}
                 rank={ranks.has(match.id) ? { position: ranks.get(match.id) as number, total: board.matches.length } : null}
                 extra={[
-                  match.outcome === "acierto" ? "✔ Acertó" : match.outcome === "fallo" ? "✘ Falló" : "",
+                  (mode === "seguro" ? match.outcomeSafe : match.outcome) === "acierto"
+                    ? "✔ Acertó"
+                    : (mode === "seguro" ? match.outcomeSafe : match.outcome) === "fallo"
+                      ? "✘ Falló"
+                      : "",
                   match.pickProbability == null
                     ? `Lado ${match.pick}: ${MISSING}`
                     : `Lado ${match.pick}: ${formatPct(match.pickProbability, 1)} · cuota justa ${(1 / match.pickProbability).toFixed(2).replace(".", ",")}`,

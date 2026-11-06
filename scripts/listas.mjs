@@ -43,6 +43,7 @@ for (const [day, ticket] of [
       key: leg.key,
       pick: leg.pick,
       probability: Number(leg.probability.toFixed(4)),
+      draw: Number((leg.drawProbability ?? 0).toFixed(4)),
     })),
   };
 }
