@@ -116,9 +116,10 @@ function buildTicket(day: string, limit: number): CombinadaTicket {
   });
   const offered = all.filter((leg) => hasMarketOdds(leg.id));
   const usable = offered.length > 0 ? offered : all;
-  // Desde el 6 nov 2026: favoritos de 60 % o más. Si quedan menos de 20, la lista es más corta: un favorito de
-  // 40 % falla 6 de cada 10 y no sirve para «Partido hoy» (la lista del 4 nov tenía 9 así: acertó 10 de 20).
-  const legs = [...usable.filter((leg) => leg.probability >= LIST_MIN_PROBABILITY)]
+  // Siempre los 20 más probables (9 nov 2026, a pedido del usuario). Los de 60 % o más son «confiables» y los de menos
+  // se muestran aparte como «menos seguros» (LIST_MIN_PROBABILITY): del 6 al 8 nov, con solo 60 %+, el favorito ganó
+  // 50 de 56; la lista del 4 nov, con 9 favoritos de 37–50 %, acertó 10 de 20.
+  const legs = [...usable]
     .sort((a, b) => b.probability - a.probability || a.kickoff.localeCompare(b.kickoff))
     .slice(0, limit)
     .sort((a, b) => a.kickoff.localeCompare(b.kickoff));

@@ -30,6 +30,8 @@ export interface ListResult {
   /** «Favorito o empate»: aciertos y esperado (esperado solo si la lista guardó el empate, desde el 6 nov). */
   hitsSafe: number;
   expectedSafe: number | null;
+  /** Solo los «confiables» (favorito de 60 % o más). */
+  strong: { settled: number; hits: number; hitsSafe: number };
 }
 
 const byDay = ((listasFile as { byDay?: Record<string, Record<string, Slot>> }).byDay ?? {}) as Record<string, Record<string, Slot>>;
@@ -50,6 +52,7 @@ export function listHistory(beforeDay: string, days = 7): ListResult[] {
     let expected = 0;
     let hitsSafe = 0;
     let expectedSafe: number | null = 0;
+    const strong = { settled: 0, hits: 0, hitsSafe: 0 };
     for (const leg of slot.legs) {
       const match = results.get(leg.id);
       if (!match || match.status !== "finalizado" || match.homeScore == null || match.awayScore == null) continue;
@@ -58,9 +61,14 @@ export function listHistory(beforeDay: string, days = 7): ListResult[] {
       const actual = match.homeScore > match.awayScore ? "home" : match.homeScore === match.awayScore ? "draw" : "away";
       if (actual === leg.key) hits += 1;
       if (actual === leg.key || actual === "draw") hitsSafe += 1;
+      if (leg.probability >= 0.6) {
+        strong.settled += 1;
+        if (actual === leg.key) strong.hits += 1;
+        if (actual === leg.key || actual === "draw") strong.hitsSafe += 1;
+      }
       expectedSafe = expectedSafe == null || leg.draw == null ? null : expectedSafe + leg.probability + (leg.key === "draw" ? 0 : leg.draw);
     }
-    out.push({ day, savedAt: slot.savedAt, legs: slot.legs.length, settled, hits, expected, hitsSafe, expectedSafe });
+    out.push({ day, savedAt: slot.savedAt, legs: slot.legs.length, settled, hits, expected, hitsSafe, expectedSafe, strong });
   }
   return out;
 }

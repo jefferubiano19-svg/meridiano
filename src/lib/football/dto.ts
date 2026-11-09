@@ -91,7 +91,17 @@ export interface ComboBoard {
   /** Lista fija del día (la guardada por el primer corte del día), si existe. */
   frozen?: { savedAt: string; settled: number; hits: number; expected: number; hitsSafe: number; expectedSafe: number } | null;
   /** Cómo le fue a la lista de los días anteriores (la publicada en la madrugada de cada día). */
-  history?: { day: string; savedAt: string; legs: number; settled: number; hits: number; expected: number; hitsSafe: number; expectedSafe: number | null }[];
+  history?: {
+    day: string;
+    savedAt: string;
+    legs: number;
+    settled: number;
+    hits: number;
+    expected: number;
+    hitsSafe: number;
+    expectedSafe: number | null;
+    strong: { settled: number; hits: number; hitsSafe: number };
+  }[];
 }
 
 export interface ConsultaBoard {

@@ -123,8 +123,7 @@ Mejoras del 5 nov 2026:
 - Filtro «Con 3+ casas · más confiable», activo por defecto cuando hay 10+ partidos con consenso.
 - 6 nov 2026: «Partido hoy» y «Partido» muestran por defecto el modo **«Favorito o empate (más seguro)»** (puesto,
   ✔/✘ y avance con doble oportunidad; botón para «Gana el favorito»). Listas del 4 y 5 nov: gana el favorito 10/20 y
-  15/20 (esperado 10,6 y 15,8: calibradas); favorito o empate 14/20 y 18/20. La lista solo toma favoritos de 60 %+
-  (`combinada.ts` → `LIST_MIN_PROBABILITY`; puede tener menos de 20) y guarda la probabilidad de empate (`draw`).
+  15/20 (esperado 10,6 y 15,8: calibradas); favorito o empate 14/20 y 18/20. Desde el 9 nov 2026 la lista vuelve a tener siempre 20, separados en «Confiables» (favorito de 60 %+, `LIST_MIN_PROBABILITY`) y «Menos seguros», con aciertos de los confiables aparte en el historial; guarda la probabilidad de empate (`draw`).
 - «Partido hoy» usa la **lista fija** de la madrugada (`listas.ts` → `savedList`; `frozenPick`) con ✔/✘ y avance del
   día; si aún no hay lista guardada, la calcula. Cada partido muestra «favorito o empate» (calibrado: 85–90 % → 89 %,
   90–95 % → 94 %).

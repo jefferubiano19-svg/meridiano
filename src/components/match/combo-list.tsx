@@ -156,6 +156,11 @@ export function ComboList({ which }: { which: "hoy" | "manana" }) {
                     ? `Favorito o empate: van ${board.frozen.hitsSafe} aciertos de ${board.frozen.settled} terminados (esperado ${board.frozen.expectedSafe.toFixed(1).replace(".", ",")}).`
                     : `Gana el favorito: van ${board.frozen.hits} aciertos de ${board.frozen.settled} terminados (esperado ${board.frozen.expected.toFixed(1).replace(".", ",")}).`}
               </p>
+              {(() => {
+                const strong = board.matches.filter((match) => (match.pickProbability ?? 0) >= 0.6 && (mode === "seguro" ? match.outcomeSafe : match.outcome) != null);
+                const ok = strong.filter((match) => (mode === "seguro" ? match.outcomeSafe : match.outcome) === "acierto").length;
+                return strong.length ? <p className="mt-1 text-sm text-muted">Solo confiables (60 %+): {ok} de {strong.length}.</p> : null;
+              })()}
             </section>
           ) : null}
           <section className="rounded-xl bg-surface p-5 shadow-[var(--shadow-border)]">
@@ -165,7 +170,7 @@ export function ComboList({ which }: { which: "hoy" | "manana" }) {
                 ? `En el día hay ${board.pool} partidos por jugar con cuota en casas de apuestas.`
                 : `Para este día todavía no hay cuotas leídas: se toman los ${board.pool} partidos por jugar con probabilidad.`}{" "}
               Aquí se listan los {board.matches.length} con el favorito más probable, numerados de 1 a {board.matches.length} por
-              probabilidad. Cada
+              probabilidad y separados en «confiables» (favorito de 60 % o más) y «menos seguros». Cada
               probabilidad es de ese partido solo.
             </p>
             <dl className="mt-5 grid gap-3 sm:grid-cols-2">
@@ -195,6 +200,7 @@ export function ComboList({ which }: { which: "hoy" | "manana" }) {
                         <th className="py-1 font-normal">Gana el favorito</th>
                         <th className="py-1 font-normal">Esperado</th>
                         <th className="py-1 font-normal">Favorito o empate</th>
+                        <th className="py-1 font-normal">Confiables (60 %+)</th>
                         <th className="py-1 font-normal">Sin resultado</th>
                       </tr>
                     </thead>
@@ -210,6 +216,9 @@ export function ComboList({ which }: { which: "hoy" | "manana" }) {
                           <td className="py-1">
                             {row.hitsSafe} de {row.settled}
                             {row.expectedSafe != null ? ` (esp. ${row.expectedSafe.toFixed(1).replace(".", ",")})` : ""}
+                          </td>
+                          <td className="py-1">
+                            {row.strong.settled ? `${row.strong.hits} de ${row.strong.settled} · con empate ${row.strong.hitsSafe}` : "—"}
                           </td>
                           <td className="py-1">{row.legs - row.settled}</td>
                         </tr>
@@ -276,30 +285,55 @@ export function ComboList({ which }: { which: "hoy" | "manana" }) {
             aria-label="Filtrar equipo o liga"
             className="h-11 w-full max-w-xs rounded-lg bg-elevated px-3 text-sm outline-none"
           />
-          <div className="grid gap-3 md:grid-cols-2">
-            {matches.map((match) => (
+          {[
+            {
+              key: "fuertes",
+              title: "Confiables · favorito de 60 % o más",
+              note: "Del 6 al 8 nov el favorito de este grupo ganó 50 de 56; con «favorito o empate», 54 de 56.",
+              list: matches.filter((match) => (match.pickProbability ?? 0) >= 0.6),
+            },
+            {
+              key: "debiles",
+              title: "Menos seguros · favorito de menos de 60 %",
+              note: "Completan los 20. Aquí el favorito falla cerca de la mitad de las veces: úsalos con cuidado.",
+              list: matches.filter((match) => (match.pickProbability ?? 0) < 0.6),
+            },
+          ].map((group) =>
+            group.list.length === 0 ? null : (
+              <section key={group.key} className="space-y-3">
+                <div>
+                  <h2 className="font-display text-2xl tracking-tight">
+                    {group.title} <span className="text-muted">({group.list.length})</span>
+                  </h2>
+                  <p className="text-sm text-muted">{group.note}</p>
+                </div>
+                <div className={`grid gap-3 md:grid-cols-2 ${group.key === "debiles" ? "opacity-80" : ""}`}>
+                  {group.list.map((match) => (
               <MatchReadingCard
-                key={match.id}
-                match={match}
-                rank={ranks.has(match.id) ? { position: ranks.get(match.id) as number, total: board.matches.length } : null}
-                extra={[
-                  (mode === "seguro" ? match.outcomeSafe : match.outcome) === "acierto"
-                    ? "✔ Acertó"
-                    : (mode === "seguro" ? match.outcomeSafe : match.outcome) === "fallo"
-                      ? "✘ Falló"
-                      : "",
-                  match.pickProbability == null
-                    ? `Lado ${match.pick}: ${MISSING}`
-                    : `Lado ${match.pick}: ${formatPct(match.pickProbability, 1)} · cuota justa ${(1 / match.pickProbability).toFixed(2).replace(".", ",")}`,
-                  match.favOrDraw != null
-                    ? `${match.pick} o empate: ${formatPct(match.favOrDraw, 1)} · cuota justa ${(1 / match.favOrDraw).toFixed(2).replace(".", ",")}`
-                    : "",
-                ]
-                  .filter(Boolean)
-                  .join(" · ")}
-              />
-            ))}
-          </div>
+                      key={match.id}
+                      match={match}
+                      rank={ranks.has(match.id) ? { position: ranks.get(match.id) as number, total: board.matches.length } : null}
+                      extra={[
+                        (mode === "seguro" ? match.outcomeSafe : match.outcome) === "acierto"
+                          ? "✔ Acertó"
+                          : (mode === "seguro" ? match.outcomeSafe : match.outcome) === "fallo"
+                            ? "✘ Falló"
+                            : "",
+                        match.pickProbability == null
+                          ? `Lado ${match.pick}: ${MISSING}`
+                          : `Lado ${match.pick}: ${formatPct(match.pickProbability, 1)} · cuota justa ${(1 / match.pickProbability).toFixed(2).replace(".", ",")}`,
+                        match.favOrDraw != null
+                          ? `${match.pick} o empate: ${formatPct(match.favOrDraw, 1)} · cuota justa ${(1 / match.favOrDraw).toFixed(2).replace(".", ",")}`
+                          : "",
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    />
+                  ))}
+                </div>
+              </section>
+            ),
+          )}
           {matches.length === 0 ? <p className="text-sm text-muted">Ningún partido coincide con el filtro.</p> : null}
         </>
       )}
