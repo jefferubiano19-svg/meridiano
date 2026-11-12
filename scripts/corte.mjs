@@ -1944,10 +1944,19 @@ async function diagCuotas() {
       url: `https://www.flashscore.co/partido/${r[0]}/`,
       read: async (page) => {
         const requests = [];
-        page.on("request", (req) => {
-          const url = req.url();
-          if (/odds|geo|bookmaker|lsapp|graphql/i.test(url)) requests.push(url.slice(0, 300));
-        });
+        const onResponse = async (res) => {
+          const url = res.url();
+          if (!/odds|geo|bookmaker|lsapp|graphql|feed/i.test(url)) return;
+          let body = "";
+          try {
+            body = (await res.text()).slice(0, 240);
+          } catch {
+            body = "?";
+          }
+          requests.push({ t: Date.now(), url: url.slice(0, 260), status: res.status(), body });
+        };
+        page.on("response", onResponse);
+        const t0 = Date.now();
         const env = await page
           .evaluate(() => {
             const out = {};
@@ -1982,7 +1991,8 @@ async function diagCuotas() {
           seen,
           env: null,
           extra,
-          requests: [],
+          ms: Date.now() - t0,
+          requests: (page.off("response", onResponse), requests.map((item) => ({ ...item, t: item.t - t0 }))),
         };
       },
     })),
