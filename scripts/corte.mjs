@@ -1975,9 +1975,35 @@ async function diagCuotas() {
         const api = (await allowed(apiUrl))
           ? await page.request
               .get(apiUrl, { headers: { Referer: page.url() } })
-              .then(async (res) => ({ status: res.status(), body: (await res.text()).slice(0, 12000) }))
+              .then(async (res) => {
+                const text = await res.text();
+                let summary = null;
+                try {
+                  const data = JSON.parse(text).data.findOddsByEventId;
+                  const full = data.odds.filter((item) => item.bettingScope === "FULL_TIME");
+                  summary = {
+                    types: [...new Set(full.map((item) => item.bettingType))],
+                    sample: Object.fromEntries(
+                      [...new Set(full.map((item) => item.bettingType))].map((type) => [
+                        type,
+                        full.filter((item) => item.bettingType === type).slice(0, 2).map((item) => ({
+                          bookmakerId: item.bookmakerId,
+                          odds: item.odds.map((o) => [o.eventParticipantId, o.value, o.active, o.selection, o.handicap?.value ?? o.handicap ?? null]),
+                        })),
+                      ]),
+                    ),
+                  };
+                } catch (error) {
+                  summary = { error: String(error) };
+                }
+                return { status: res.status(), length: text.length, summary };
+              })
               .catch((error) => ({ error: String(error) }))
           : { error: "robots" };
+        const eventUrl = `https://202.ds.lsapp.eu/pq_graphql?_hash=dsof&eventId=${r[0]}&projectId=202`;
+        const event = (await allowed(eventUrl))
+          ? await page.request.get(eventUrl, { headers: { Referer: page.url() } }).then(async (res) => (await res.text()).slice(0, 3000)).catch((error) => String(error))
+          : "robots";
         const result = await readOdds(page, ONLY_1X2);
         // Mercados dobles con el mismo lector del corte (readDoubleMarkets).
         const doubles = await readDoubleMarkets(page).catch((error) => [{ error: String(error) }]);
@@ -2001,6 +2027,7 @@ async function diagCuotas() {
           extra,
           ms: Date.now() - t0,
           api,
+          event,
           requests: (page.off("response", onResponse), requests.map((item) => ({ ...item, t: item.t - t0 }))),
         };
       },
