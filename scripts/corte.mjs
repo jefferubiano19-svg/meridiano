@@ -1970,6 +1970,14 @@ async function diagCuotas() {
           })
           .catch((error) => ({ error: String(error) }));
         const title = await page.title().catch(() => "");
+        // Comparador de cuotas por la API que usa la propia página (vista de Colombia).
+        const apiUrl = `https://global.ds.lsapp.eu/odds/pq_graphql?_hash=oce&eventId=${r[0]}&projectId=202&geoIpCode=CO&geoIpSubdivisionCode=CODC`;
+        const api = (await allowed(apiUrl))
+          ? await page.request
+              .get(apiUrl, { headers: { Referer: page.url() } })
+              .then(async (res) => ({ status: res.status(), body: (await res.text()).slice(0, 12000) }))
+              .catch((error) => ({ error: String(error) }))
+          : { error: "robots" };
         const result = await readOdds(page, ONLY_1X2);
         // Mercados dobles con el mismo lector del corte (readDoubleMarkets).
         const doubles = await readDoubleMarkets(page).catch((error) => [{ error: String(error) }]);
@@ -1992,6 +2000,7 @@ async function diagCuotas() {
           env: null,
           extra,
           ms: Date.now() - t0,
+          api,
           requests: (page.off("response", onResponse), requests.map((item) => ({ ...item, t: item.t - t0 }))),
         };
       },
