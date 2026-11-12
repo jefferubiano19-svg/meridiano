@@ -420,6 +420,59 @@ const ONLY_1X2 = [ALL_MARKETS[0]];
  */
 const READ_MARKETS = ONLY_1X2;
 
+/**
+ * Comparador de cuotas por la API que usa la propia página (vista de Colombia), para partidos en los que Flashscore
+ * no muestra la pestaña Cuotas desde EE. UU. Diagnóstico del 12 nov 2026 (diag.yml): en Colombia, Uruguay, CAN y
+ * otras ligas la pestaña no aparece (aunque la API trae las 5 casas colombianas) y el 40 % de las lecturas del
+ * cierre salían vacías. Local y visita salen de `findEventById` (`side`), no del orden de la lista: en Curazao–Panamá
+ * la API pone primero a la visita. Doble oportunidad: sin equipo = 12; con equipo = ese equipo o empate.
+ * Devuelve filas como las de la tabla: { book, odds, struck, market } (1x2: local/empate/visita; dc: 1X/12/X2;
+ * dnb: local/visita).
+ */
+async function readOddsApi(page, matchId) {
+  const eventUrl = `https://202.ds.lsapp.eu/pq_graphql?_hash=dsof&eventId=${matchId}&projectId=202`;
+  const oddsUrl = `https://global.ds.lsapp.eu/odds/pq_graphql?_hash=oce&eventId=${matchId}&projectId=202&geoIpCode=CO&geoIpSubdivisionCode=CODC`;
+  if (!(await allowed(eventUrl)) || !(await allowed(oddsUrl))) return [];
+  const get = async (url) => {
+    const response = await page.request.get(url, { headers: { Referer: page.url() }, timeout: 20000 });
+    reads.push({ url, at: bogotaStamp(), status: response.status() });
+    if (!response.ok()) return null;
+    return response.json();
+  };
+  try {
+    const event = (await get(eventUrl))?.data?.findEventById;
+    const sides = Object.fromEntries((event?.eventParticipants ?? []).map((item) => [item?.type?.side, item?.id]));
+    const home = sides.HOME;
+    const away = sides.AWAY;
+    if (!home || !away) return [];
+    const data = (await get(oddsUrl))?.data?.findOddsByEventId;
+    const names = new Map((data?.settings?.bookmakers ?? []).map((item) => [item?.bookmaker?.id, item?.bookmaker?.name]));
+    const rows = [];
+    for (const item of data?.odds ?? []) {
+      if (item?.bettingScope !== "FULL_TIME") continue;
+      const book = names.get(item.bookmakerId);
+      if (!book) continue;
+      const items = item.odds ?? [];
+      const find = (participant) => items.find((odd) => (odd.eventParticipantId ?? null) === participant);
+      const order =
+        item.bettingType === "HOME_DRAW_AWAY"
+          ? { market: "1x2", cells: [find(home), find(null), find(away)] }
+          : item.bettingType === "DOUBLE_CHANCE"
+            ? { market: "dc", cells: [find(home), find(null), find(away)] }
+            : item.bettingType === "DRAW_NO_BET"
+              ? { market: "dnb", cells: [find(home), find(away)] }
+              : null;
+      if (!order || order.cells.some((cell) => !cell)) continue;
+      const odds = order.cells.map((cell) => Number(cell.value));
+      if (!odds.every((value) => Number.isFinite(value) && value > 1)) continue;
+      rows.push({ book, line: null, odds, struck: order.cells.some((cell) => cell.active === false), market: order.market, viaApi: true });
+    }
+    return rows;
+  } catch {
+    return [];
+  }
+}
+
 async function readOdds(page, markets = READ_MARKETS) {
   const tab = page.locator("a,button").filter({ hasText: /^Cuotas$/ }).first();
   try {
@@ -432,7 +485,15 @@ async function readOdds(page, markets = READ_MARKETS) {
     const base = page.url().split("#")[0];
     await page.goto(`${base}#/comparacion-de-cuotas/1x2-cuotas/partido`, { waitUntil: "domcontentloaded", timeout: 20000 }).catch(() => undefined);
     const shown = await page.waitForSelector(".oddsCell__odds .ui-table__row", { timeout: 8000 }).then(() => true).catch(() => false);
-    if (!shown) return { books: [], noOddsTab: true };
+    if (!shown) {
+      // Sin tabla: la API del comparador (vista de Colombia). Los mercados dobles van aparte, en `doubles`.
+      const url = new URL(page.url());
+      const id = url.searchParams.get("mid") || (url.pathname.match(/^\/partido\/([A-Za-z0-9]{8})\/?$/) ?? [])[1];
+      const api = id ? await readOddsApi(page, id) : [];
+      const main = api.filter((row) => row.market === "1x2");
+      if (!main.length) return { books: [], noOddsTab: true };
+      return { books: main, doubles: api.filter((row) => row.market !== "1x2"), viaApi: true };
+    }
     const rows = (await readOddsTable(page)).filter((row) => row.odds.length === 3);
     return { books: rows.map((row) => ({ ...row, market: "1x2" })), viaHash: true };
   }
@@ -1139,6 +1200,7 @@ async function main() {
     // 0 de 120 leídos sin abrirla): primero se abre con el lector 1X2 y luego se leen los mercados dobles.
     read: async (page) => {
       const opened = await readOdds(page, ONLY_1X2);
+      if (opened.viaApi) return { books: opened.doubles ?? [] };
       if (opened.noOddsTab) return { books: [] };
       return { books: await readDoubleMarkets(page) };
     },
@@ -1739,6 +1801,7 @@ async function cierre() {
     url: `https://www.flashscore.co/partido/${mark.matchId}/`,
     read: async (page) => {
       const result = await readOdds(page, ONLY_1X2);
+      if (result.viaApi) return { ...result, books: [...result.books, ...(doubleIds.has(mark.matchId) ? result.doubles ?? [] : [])] };
       if (!doubleIds.has(mark.matchId) || result.noOddsTab) return result;
       return { ...result, books: [...(result.books ?? []), ...(await readDoubleMarkets(page))] };
     },
