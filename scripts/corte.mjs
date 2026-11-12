@@ -264,7 +264,13 @@ function median(values) {
   return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
 }
 
-async function browserPages(jobs, stop) {
+/**
+ * Abre las páginas de `jobs` en un solo navegador, una tras otra. `again` (opcional): al final, con el navegador ya
+ * caliente, vuelve a leer una vez las que no lo cumplan. Revisión del 12 nov 2026 con `cierres.json` → `lastRun`: las
+ * páginas de cuotas llegan vacías sobre todo en los primeros minutos de cada navegador (p. ej. 7 primeras vacías y
+ * luego 12 de 13 bien); un reintento con navegador nuevo vuelve a caer en esos primeros minutos.
+ */
+async function browserPages(jobs, stop, again) {
   const out = [];
   let browser = null;
   try {
@@ -307,6 +313,24 @@ async function browserPages(jobs, stop) {
         reads.push({ url: page.url(), at: bogotaStamp(), kind: job.kind });
       } catch (error) {
         out.push({ ...job, failed: error instanceof Error ? error.message : String(error) });
+      }
+    }
+    if (typeof again === "function") {
+      for (let index = 0; index < out.length; index += 1) {
+        const first = out[index];
+        if (!again(first) || first.failed === "prohibido por robots.txt" || first.failed === "empieza en menos de 10 minutos") continue;
+        if (typeof stop === "function" && stop()) break;
+        const job = jobs.find((item) => item.id === first.id && item.url === first.url) ?? jobs.find((item) => item.id === first.id);
+        if (!job || (job.kind === "cuotas" && job.kickoff && Date.parse(job.kickoff) - Date.now() < PREMATCH_MS)) continue;
+        await pause();
+        try {
+          await page.goto(job.url, { waitUntil: "domcontentloaded", timeout: 30000 });
+          const result = await job.read(page);
+          out[index] = { ...job, ...result, url: page.url(), at: bogotaStamp(), retried: true };
+          reads.push({ url: page.url(), at: bogotaStamp(), kind: job.kind });
+        } catch (error) {
+          out[index] = { ...first, retried: true, failed: error instanceof Error ? error.message : String(error) };
+        }
       }
     }
   } finally {
@@ -1723,9 +1747,9 @@ async function cierre() {
   const all = [...targets, ...refresh, ...scan];
   // Tope de 15 min para la vuelta principal (el cierre va primero; la búsqueda, al final, es lo que se recorta).
   const t0 = Date.now();
-  let read = await browserPages(all.map(job), () => Date.now() - t0 > 15 * 60 * 1000);
-  // La página de cuotas a veces llega vacía (sobre todo la primera de cada navegador): hasta 2 intentos más,
-  // con un navegador nuevo, para los partidos que no trajeron 3 casas colombianas.
+  // Las lecturas sin 3 casas se repiten una vez al final con el navegador ya caliente (ver browserPages).
+  let read = await browserPages(all.map(job), () => Date.now() - t0 > 18 * 60 * 1000, (row) => !goodRead(row));
+  // Si el cierre sigue sin 3 casas: hasta 2 intentos más con un navegador nuevo.
   for (let attempt = 1; attempt <= 2; attempt += 1) {
     // Los reintentos son solo para el cierre (la medición); la cuota vigente se vuelve a leer en una hora.
     const missing = targets.filter((mark) => !goodRead(read.find((row) => row.id === mark.matchId)));
@@ -1837,7 +1861,8 @@ async function cierre() {
         const pool = market === "1x2" ? offers : market === "dc" ? dc : dnb;
         const slot = market === "dnb" ? (pick.outcomeIndex === 0 ? 0 : 1) : pick.outcomeIndex;
         const top = pool.reduce((acc, offer) => (offer.odds[slot] > (acc?.odds ?? 0) ? { house: offer.house, odds: offer.odds[slot] } : acc), null);
-        if (!top || top.odds >= nowMin) continue;
+        // Con la mínima redondeada a 2 decimales, como se muestra: 1,14 contra 1,1401 no se avisa (12 nov 2026).
+        if (!top || top.odds + 0.005 >= nowMin) continue;
         avisos.lost[key] = { kickoff: pick.kickoff, at: started, odds: top.odds, minOdds: Number(nowMin.toFixed(3)) };
         lost.push({ ...pick, market, readAt: started, nowHouse: top.house, nowOdds: top.odds, nowMin });
       }
@@ -1872,12 +1897,15 @@ async function cierre() {
     refresh: refresh.length,
     refreshed,
     scan: scan.length,
+    retried: read.filter((row) => row.retried).length,
+    retriedOk: read.filter((row) => row.retried && goodRead(row)).length,
     added,
     lost: lostCount,
     rows: read.map((row) => ({
       id: row.id,
       failed: row.failed ?? null,
       noOddsTab: Boolean(row.noOddsTab),
+      ...(row.retried ? { retried: true } : {}),
       books: (row.books ?? []).map((book) => `${book.book}:${book.market}:${(book.odds ?? []).join("/")}${book.struck ? "x" : ""}`),
     })),
   };

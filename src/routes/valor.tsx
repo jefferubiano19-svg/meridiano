@@ -136,7 +136,7 @@ function recheck(match: MatchReading, pick: Pick, readAt?: string): Row["now"] {
   return {
     readAt: current.readAt,
     // Sigue con valor si la mejor cuota de ahora llega a la mínima de ahora (también cuando pasa del +15 %).
-    still: Boolean(same) || top.odds >= minOdds,
+    still: Boolean(same) || top.odds + 0.005 >= minOdds,
     house: top.house,
     odds: top.odds,
     minOdds,
