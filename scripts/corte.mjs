@@ -293,6 +293,25 @@ async function browserPages(jobs, stop, again) {
       return route.continue({ url: url.toString() });
     })
     .catch(() => undefined);
+  // La pestaña Cuotas la decide el campo DX del feed dc_1_<partido> según la ubicación: desde EE. UU. no trae «OD»
+  // en ligas que bet365.us no ofrece (Colombia, Uruguay, CAN…), aunque las casas colombianas sí las tengan; sin esa
+  // pestaña la página no carga su comparador y la tabla sale vacía. Diagnóstico del 12 nov 2026 (diag.yml):
+  // Pasto–Junior y Llaneros–Chicó con DX «PS,MC,HH,LT,TA,TV,DTF,SP», Curazao–Panamá con «PS,OD,HH,…». Se agrega «OD»
+  // (lo que ve un usuario en Colombia); las cuotas siguen saliendo de la API con la vista de Colombia.
+  await page
+    .route(/flashscore\.ninja\/\d+\/x\/feed\/dc_1_/, async (route) => {
+      try {
+        const response = await route.fetch();
+        const body = await response.text();
+        const fixed = body.replace(/DX÷([^¬]*)/, (whole, list) =>
+          list.split(",").includes("OD") ? whole : `DX÷${list ? `${list.split(",")[0]},OD${list.includes(",") ? `,${list.split(",").slice(1).join(",")}` : ""}` : "OD"}`,
+        );
+        await route.fulfill({ response, body: fixed });
+      } catch {
+        await route.continue().catch(() => undefined);
+      }
+    })
+    .catch(() => undefined);
   try {
     for (const job of jobs) {
       if (typeof stop === "function" && stop()) break;
