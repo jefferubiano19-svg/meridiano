@@ -115,10 +115,14 @@ una mediana de 14,7 h del inicio y solo 73 de 187 (39 %) seguían con valor al c
   selección v2 registrada, sin empezar, cuya mejor cuota colombiana de ahora queda debajo de la mínima calculada con
   el consenso de ahora (+3 %); solo con 3+ casas leídas; una vez por selección (`data/avisos.json`, 3 días).
   `/valor` usa la misma regla (`still` = mejor cuota ≥ mínima), también cuando el valor pasa del +15 %.
-- Revisión del 12 nov 2026 (21 vueltas, todas bien, 1–5 min): las páginas de cuotas llegaban vacías sobre todo en los
-  primeros minutos de cada navegador (hasta 16 de 24 en una vuelta; también los reintentos con navegador nuevo).
-  `browserPages(jobs, stop, again)` relee una vez al final, con el navegador caliente, las que no traen 3 casas
-  (`lastRun.retried`, `retriedOk`, fila `retried`); tope de la vuelta principal 18 min. Avisos «ya no tiene valor»
+- Revisión del 12 nov 2026 (21 vueltas, todas bien, 1–5 min): ~40 % de las lecturas del cierre salían vacías. Causa
+  (diag.yml): desde EE. UU. Flashscore no muestra la pestaña Cuotas en Colombia, Uruguay, CAN, Liga MX Femenil,
+  etc., aunque la API del comparador trae las 5 casas colombianas; dependía del servidor (a veces sí, a veces no).
+  Arreglo: `readOddsApi` — si no hay pestaña ni tabla, `readOdds` pide `oce` (comparador, vista de Colombia) y
+  `dsof` (local/visita por `side`; la API no pone siempre al local primero) con `page.request` (robots.txt revisado)
+  → filas 1X2 (`viaApi`) y `doubles` (dc 1X/12/X2, dnb). Primera vuelta con el arreglo: 3 de 3 bien, cierre guardado.
+  Además `browserPages(jobs, stop, again)` relee una vez al final las que no traen 3 casas (`lastRun.retried`,
+  `retriedOk`); tope de la vuelta principal 18 min. Avisos «ya no tiene valor»
   con la mínima redondeada (`+ 0,005`): 1,14 contra 1,1401 ya no se avisa; `/valor` igual.
 - `cierre.yml`: `issues: write`, `GITHUB_TOKEN`, timeout 35 min; el paso «¿Hay…?» cuenta también los partidos de la
   búsqueda; guarda `cierres.json`, `vigentes.json`, `valor-hora.json` y `avisos.json`. `lastRun` agrega `scan`, `added`, `lost`.
