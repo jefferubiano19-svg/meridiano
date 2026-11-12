@@ -40,14 +40,25 @@ export interface MatchReading {
   revisar: boolean;
   value: ValueMark | null;
   /** Mejor cuota de cada resultado entre las casas leídas (solo partidos por jugar). */
-  /** Insignias del partido: «Valor del día», «El rival marca 70 %+», «Favorito con valor (prueba)». */
-  badges?: { key: "valor" | "rival" | "favorito"; label: string }[];
+  /** Insignias del partido: «Valor del día» y «El rival marca 70 %+». */
+  badges?: { key: "valor" | "rival"; label: string }[];
   /** Lectura 1X2 más reciente (cada hora) de un partido con selección de «Valor del día». */
   current?: {
     readAt: string;
     offers: { house: string; odds: number[] }[];
     double?: { dc: { house: string; odds: number[] }[]; dnb: { house: string; odds: number[] }[] } | null;
   } | null;
+  /** Selecciones de «Valor del día» que encontró la búsqueda de cada hora (data/valor-hora.json). */
+  hourPicks?: {
+    market: "1x2" | "dc" | "dnb";
+    outcomeIndex: 0 | 1 | 2;
+    prob: number;
+    pDraw: number;
+    house: string;
+    odds: number;
+    ev: number;
+    readAt: string;
+  }[];
   /** Doble oportunidad y empate no válido del último corte (casas colombianas). */
   double?: { readAt: string | null; dc: { house: string; odds: number[] }[]; dnb: { house: string; odds: number[] }[] } | null;
   bestOdds?: {

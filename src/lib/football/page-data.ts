@@ -2,8 +2,8 @@ import { AGENDA, agendaOnDay, type AgendaMatch } from "./agenda";
 import { spanishName } from "./standings";
 import { buildCombinada, buildCombinadaManana, type CombinadaLeg } from "./combinada";
 import { rivalScores } from "./engine";
-import { doublePicks, favoritePick, valuePicks } from "./valor";
-import { currentOdds, doubleOffers } from "./vigentes";
+import { doublePicks, valuePicks } from "./valor";
+import { currentOdds, doubleOffers, hourPicks } from "./vigentes";
 import { listHistory, savedList } from "./listas";
 import { agendaToday, agendaTomorrow, bogotaDay, shiftDay } from "./clock";
 import { MISSING, type ComboBoard, type ComboMatch, type ConsultaBoard, type DayBoard, type LeagueCard, type LeaguePage, type MatchReading, type ModeloBundle, type SearchBoard, type Way } from "./dto";
@@ -165,6 +165,7 @@ function seal(seed: Seed): MatchReading {
     bestOdds: open ? bestOdds(seed.id) : null,
     current: open ? currentOdds(seed.id) : null,
     double: open ? doubleOffers(seed.id) : null,
+    hourPicks: open ? hourPicks(seed.id) : [],
   };
   CACHE.set(seed.id, reading);
   return reading;
@@ -347,7 +348,7 @@ function withPick(leg: CombinadaLeg): ComboMatch {
   return { ...base, pick: leg.pick, pickKey: leg.key, pickProbability: null };
 }
 
-/** Insignias de un partido por jugar (con 3+ casas): valor del día, rival que marca, favorito con valor (prueba). */
+/** Insignias de un partido por jugar (con 3+ casas): valor del día y rival que marca. */
 function withBadges<T extends MatchReading>(reading: T): T {
   if (reading.status !== "por-jugar" || !reading.consensus || !reading.bestOdds) {
     const rival = reading.published ? rivalScores(reading.published) : null;
@@ -365,7 +366,7 @@ function withBadges<T extends MatchReading>(reading: T): T {
   if (value.length) badges.push({ key: "valor", label: "Valor del día" });
   const rival = reading.published ? rivalScores(reading.published) : null;
   if (rival && rival.p >= 0.7) badges.push({ key: "rival", label: `El rival marca ${Math.round(rival.p * 100)} %` });
-  if (favoritePick(probs, best, reading.bestOdds.houses, reading)) badges.push({ key: "favorito", label: "Favorito con valor (en prueba)" });
+  // «Favorito con valor» ya no se muestra (11 nov 2026): −1,6 % en 92 partidos. Se sigue midiendo en favoritos-registro.json.
   return badges.length ? { ...reading, badges } : reading;
 }
 

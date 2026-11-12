@@ -1,7 +1,9 @@
 name: cierre
 
-# Cuotas de cierre de los partidos con marca de valor o de «Valor del día» (entre 10 y 130 min antes del inicio) → data/cierres.json.
-# Sirve para medir si las marcas le ganan al precio de cierre. No toca nada más. Ver cierre() en scripts/corte.mjs.
+# Cada hora: cuotas de cierre (10-130 min antes) de los partidos con marca o «Valor del día» → data/cierres.json; cuota vigente
+# de las selecciones (130 min a 24 h) → data/vigentes.json; búsqueda de valor (130 min a 6 h) → data/valor-hora.json, con
+# aviso por correo de selecciones nuevas y de las que ya no tienen valor (data/avisos.json).
+# Ver cierre() en scripts/corte.mjs.
 on:
   schedule:
     # Minuto 23 de cada hora (lejos de la hora en punto, cuando GitHub se atrasa más).
@@ -10,6 +12,8 @@ on:
 
 permissions:
   contents: write
+  # Aviso por correo (comentario en el issue «Valor del día: selecciones nuevas»).
+  issues: write
 
 concurrency:
   group: cierre
@@ -18,7 +22,7 @@ concurrency:
 jobs:
   cierre:
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v5
       # Sin partidos con marca por empezar pronto no se instala nada: la vuelta dura segundos.
@@ -36,6 +40,21 @@ jobs:
               const left = Date.parse(m.kickoff) - now;
               return left > 10 * 60000 && left <= (m.outcomeIndex != null && m.prob != null ? 24 * 3600000 : 130 * 60000);
             }).map((m) => m.matchId));
+            // Búsqueda de valor de cada hora: partidos con 3+ casas colombianas que empiezan entre 130 min y 6 h.
+            const houses = /^(wplay\.co|betano\.co|stake\.latam|bwin\.co|betplay)$/i;
+            let combo = [];
+            let agenda = [];
+            try { combo = JSON.parse(fs.readFileSync("data/combo-odds.json", "utf8")).matches || []; } catch {}
+            try { agenda = JSON.parse(fs.readFileSync("data/agenda.json", "utf8")).matches || []; } catch {}
+            const rows = new Map(agenda.map((r) => [r[0], r]));
+            for (const item of combo) {
+              const r = rows.get(item.id);
+              if (!r || r[5] !== "por-jugar") continue;
+              const left = Date.parse(r[1]) - now;
+              if (left <= 130 * 60000 || left > 6 * 3600000) continue;
+              const n = ((item.markets || {})["1X2"] || []).filter((b) => houses.test(String(b.house || "").trim()) && Array.isArray(b.cells) && b.cells.length >= 3 && !b.cells.some((c) => c.withdrawn)).length;
+              if (n >= 3) ids.add(item.id);
+            }
             console.log(ids.size);
           ')
           echo "n=$n" >> "$GITHUB_OUTPUT"
@@ -53,14 +72,15 @@ jobs:
         run: npm run corte
         env:
           CORTE: cierre
-      - name: Guardar data/cierres.json y data/vigentes.json
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Guardar cierres, vigentes, valor-hora y avisos
         if: steps.hay.outputs.n != '0'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/cierres.json data/vigentes.json
+          git add data/cierres.json data/vigentes.json data/valor-hora.json data/avisos.json
           git diff --cached --quiet && exit 0
-          git commit -m "Cuotas de cierre y vigentes"
+          git commit -m "Cuotas de cierre, vigentes y búsqueda de valor"
           for intento in 1 2 3; do
             git pull --rebase origin "${GITHUB_REF_NAME}" && git push && break
             echo "push falló (intento $intento); se reintenta en 15 s"

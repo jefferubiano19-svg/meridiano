@@ -17,6 +17,7 @@ import { Route as CombinadaRouteImport } from './routes/combinada'
 import { Route as ConsultaRouteImport } from './routes/consulta'
 import { Route as LigasRouteImport } from './routes/ligas'
 import { Route as MananaRouteImport } from './routes/manana'
+import { Route as MisApuestasRouteImport } from './routes/mis-apuestas'
 import { Route as ModeloRouteImport } from './routes/modelo'
 import { Route as ResponsableRouteImport } from './routes/responsable'
 import { Route as RiesgoRouteImport } from './routes/riesgo'
@@ -64,6 +65,11 @@ const LigasRoute = LigasRouteImport.update({
 const MananaRoute = MananaRouteImport.update({
   id: '/manana',
   path: '/manana',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MisApuestasRoute = MisApuestasRouteImport.update({
+  id: '/mis-apuestas',
+  path: '/mis-apuestas',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ModeloRoute = ModeloRouteImport.update({
@@ -116,6 +122,7 @@ export interface FileRoutesByFullPath {
   '/consulta': typeof ConsultaRoute
   '/ligas': typeof LigasRouteWithChildren
   '/manana': typeof MananaRoute
+  '/mis-apuestas': typeof MisApuestasRoute
   '/modelo': typeof ModeloRoute
   '/responsable': typeof ResponsableRoute
   '/riesgo': typeof RiesgoRoute
@@ -134,6 +141,7 @@ export interface FileRoutesByTo {
   '/consulta': typeof ConsultaRoute
   '/ligas': typeof LigasRouteWithChildren
   '/manana': typeof MananaRoute
+  '/mis-apuestas': typeof MisApuestasRoute
   '/modelo': typeof ModeloRoute
   '/responsable': typeof ResponsableRoute
   '/riesgo': typeof RiesgoRoute
@@ -153,6 +161,7 @@ export interface FileRoutesById {
   '/consulta': typeof ConsultaRoute
   '/ligas': typeof LigasRouteWithChildren
   '/manana': typeof MananaRoute
+  '/mis-apuestas': typeof MisApuestasRoute
   '/modelo': typeof ModeloRoute
   '/responsable': typeof ResponsableRoute
   '/riesgo': typeof RiesgoRoute
@@ -173,6 +182,7 @@ export interface FileRouteTypes {
     | '/consulta'
     | '/ligas'
     | '/manana'
+    | '/mis-apuestas'
     | '/modelo'
     | '/responsable'
     | '/riesgo'
@@ -191,6 +201,7 @@ export interface FileRouteTypes {
     | '/consulta'
     | '/ligas'
     | '/manana'
+    | '/mis-apuestas'
     | '/modelo'
     | '/responsable'
     | '/riesgo'
@@ -209,6 +220,7 @@ export interface FileRouteTypes {
     | '/consulta'
     | '/ligas'
     | '/manana'
+    | '/mis-apuestas'
     | '/modelo'
     | '/responsable'
     | '/riesgo'
@@ -228,6 +240,7 @@ export interface RootRouteChildren {
   ConsultaRoute: typeof ConsultaRoute
   LigasRoute: typeof LigasRouteWithChildren
   MananaRoute: typeof MananaRoute
+  MisApuestasRoute: typeof MisApuestasRoute
   ModeloRoute: typeof ModeloRoute
   ResponsableRoute: typeof ResponsableRoute
   RiesgoRoute: typeof RiesgoRoute
@@ -293,6 +306,13 @@ declare module '@tanstack/react-router' {
       path: '/manana'
       fullPath: '/manana'
       preLoaderRoute: typeof MananaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/mis-apuestas': {
+      id: '/mis-apuestas'
+      path: '/mis-apuestas'
+      fullPath: '/mis-apuestas'
+      preLoaderRoute: typeof MisApuestasRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/modelo': {
@@ -373,6 +393,7 @@ const rootRouteChildren: RootRouteChildren = {
   ConsultaRoute: ConsultaRoute,
   LigasRoute: LigasRouteWithChildren,
   MananaRoute: MananaRoute,
+  MisApuestasRoute: MisApuestasRoute,
   ModeloRoute: ModeloRoute,
   ResponsableRoute: ResponsableRoute,
   RiesgoRoute: RiesgoRoute,

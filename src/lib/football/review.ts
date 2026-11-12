@@ -7,7 +7,6 @@
  * ------------------------------------------------------------------------- */
 
 import { rivalScores, shin } from "./engine";
-import { adjustFavorite, FAVORITE_ADJUST } from "./favorites";
 
 export type Light = "verde" | "amarillo" | "rojo" | "gris";
 
@@ -128,6 +127,8 @@ export interface Review {
   pickRuleV2: {
     all: { settled: number; roi: Stat; closed: number; clvHouse: Stat; evClose: Stat; verdict: string };
     byMarket: { market: "1x2" | "dc" | "dnb"; results: { settled: number; roi: Stat; closed: number; clvHouse: Stat; evClose: Stat; verdict: string } }[];
+    /** Por origen: el corte (3 al día) o la búsqueda de cada hora (desde el 11 nov 2026, 130 min a 6 h antes). */
+    bySource: { source: "corte" | "hora"; results: { settled: number; roi: Stat; closed: number; clvHouse: Stat; evClose: Stat; verdict: string } }[];
   };
   /** «Favorito con valor» en prueba: lo que manda es el resultado real (roi). */
   favoriteResults: { settled: number; roi: Stat; closed: number; clvHouse: Stat; evClose: Stat; verdict: string };
@@ -370,6 +371,10 @@ export function buildReview(input: ReviewInput): Review {
   const pickRuleV2 = {
     all: resultsOf(v2),
     byMarket: (["1x2", "dc", "dnb"] as const).map((market) => ({ market, results: resultsOf(v2.filter((pick) => (pick.market ?? "1x2") === market)) })),
+    bySource: (["corte", "hora"] as const).map((source) => ({
+      source,
+      results: resultsOf(v2.filter((pick) => ((pick as { source?: string }).source === "hora" ? "hora" : "corte") === source)),
+    })),
   };
   // Niveles de probabilidad de «Valor del día» (regla fijada el 5 nov 2026): todo el histórico y, aparte, solo lo
   // registrado desde ese día, que es la prueba limpia (el corte de 40 % se eligió mirando el histórico).
@@ -413,25 +418,8 @@ export function buildReview(input: ReviewInput): Review {
     };
   });
 
-  // Sombra «favoritos» (5 nov 2026): corrección de favoritos fuertes (favorites.ts), solo partidos jugados desde esa
-  // fecha (los parámetros se ajustaron con lo anterior). RPS corregida − publicada; negativa = la corrección acierta más.
-  {
-    const rowsById = new Map(input.predictions.map((row) => [row.id, row]));
-    const rpsOf = (p: { home: number; draw: number; away: number }, actual: "home" | "draw" | "away") => {
-      const o = { home: actual === "home" ? 1 : 0, draw: actual === "draw" ? 1 : 0 };
-      const c1 = p.home - o.home;
-      const c2 = p.home + p.draw - o.home - o.draw;
-      return (c1 * c1 + c2 * c2) / 2;
-    };
-    const diffs: number[] = [];
-    for (const ev of byMatch) {
-      const row = ev.rowId ? rowsById.get(ev.rowId) : undefined;
-      if (!row?.published || String(row.kickoff) < FAVORITE_ADJUST.since) continue;
-      const meta = row as unknown as { home?: string; away?: string; competition?: string };
-      diffs.push(rpsOf(adjustFavorite(row.published, meta), ev.actual) - rpsOf(row.published, ev.actual));
-    }
-    shadows.push({ key: "favoritos", label: "Corrección de favoritos", n: diffs.length, diff: stat(diffs) });
-  }
+  // La sombra «favoritos» (corrección de favoritos fuertes, 5 nov 2026) se quitó el 11 nov 2026: en 3.419 partidos no
+  // mejoró la RPS publicada. favorites.ts queda solo para el registro en prueba de favoritos-registro.json.
 
   // Fuera las predicciones cuyas cuotas de Wplay eran copiadas de otro partido (lector anterior al 14 oct 2026):
   // misma hora de lectura y mismas 3 cuotas en partidos distintos. Medirlas sería medir un error de lectura.

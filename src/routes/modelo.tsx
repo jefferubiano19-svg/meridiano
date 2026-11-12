@@ -248,7 +248,7 @@ function ModelPage() {
                 Resultado real apostando lo mismo a cada selección: {money(vr.roi)} por apuesta, en {vr.settled} ya jugadas.
               </p>
               <p>
-                <strong className="text-fg">Favorito con valor (en prueba desde el 05/11/2026):</strong>{" "}
+                <strong className="text-fg">Favorito con valor (medición interna desde el 05/11/2026; ya no se muestra en la Agenda):</strong>{" "}
                 {(() => {
                   const fr = (review as { favoriteResults?: { settled: number; roi: Stat } } | null)?.favoriteResults;
                   return fr && fr.settled > 0 ? `${money(fr.roi)} por apuesta en ${fr.settled} ya jugados.` : "todavía sin partidos jugados.";

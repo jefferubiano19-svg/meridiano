@@ -100,6 +100,33 @@ lectura, 100 para concluir). La página Modelo lo muestra en «¿Las marcas de v
 - La página Modelo muestra «¿“Valor del día” gana?» (`pickResults`); las marcas de valor se siguen midiendo
   (`valueResults`) pero no se muestran.
 
+**Búsqueda de valor de cada hora y aviso «ya no tiene valor» (11 nov 2026):** base: las selecciones se registraban a
+una mediana de 14,7 h del inicio y solo 73 de 187 (39 %) seguían con valor al cierre en la misma casa.
+- `cierre()` lee además hasta 25 partidos con 3+ casas colombianas en `combo-odds.json` que empiezan entre 130 min y
+  6 h (`SCAN_HOURS`) y que no están ya en cierre o cuota vigente; primero los que llevan más tiempo sin leerse
+  (`vigentes.json`). Tope de 15 min para la vuelta principal (`stop` de `browserPages`; la búsqueda va al final).
+  Las lecturas van a `vigentes.json`.
+- Con cada lectura a más de 130 min del inicio (búsqueda y cuota vigente) aplica la regla v2 (`valuePicks`,
+  `doublePicks`) y registra lo nuevo en **`data/valor-hora.json`** (`rule: "v2"`, `source: "hora"`), archivo aparte de
+  `valor-registro.json` para que el corte y el cierre, que pueden correr a la vez, no choquen al hacer push.
+  `readPicks()` junta los dos (revisión, objetivos del cierre, duplicados del corte); `pickKey` es la clave común.
+  No registra dentro de la ventana de cierre: la lectura del registro no puede ser la misma con que se mide.
+- Aviso: `notifyPicks(picks, origen)` y `notifyLost` comentan en el issue #3 vía `commentValor`. «Ya no tiene valor»:
+  selección v2 registrada, sin empezar, cuya mejor cuota colombiana de ahora queda debajo de la mínima calculada con
+  el consenso de ahora (+3 %); solo con 3+ casas leídas; una vez por selección (`data/avisos.json`, 3 días).
+  `/valor` usa la misma regla (`still` = mejor cuota ≥ mínima), también cuando el valor pasa del +15 %.
+- `cierre.yml`: `issues: write`, `GITHUB_TOKEN`, timeout 35 min; el paso «¿Hay…?» cuenta también los partidos de la
+  búsqueda; guarda `cierres.json`, `vigentes.json`, `valor-hora.json` y `avisos.json`. `lastRun` agrega `scan`, `added`, `lost`.
+- `/valor` muestra las selecciones de `valor-hora.json` (`vigentes.ts` → `hourPicks`, `MatchReading.hourPicks`) que
+  no salen con la cuota del corte. `review.ts` → `pickRuleV2.bySource` (corte / hora).
+
+**Mis apuestas** (página `/mis-apuestas`, 11 nov 2026): el usuario anota sus apuestas reales (fecha, partido, mercado,
+selección, casa, cuota, monto, resultado, combinada). Solo en el navegador (`src/lib/store/mis-apuestas.ts`,
+localStorage `meridiano-mis-apuestas`, con try/catch); nada va al repositorio. Separa «siguiendo las reglas» (sola, casa
+indicada, cuota ≥ mínima de «Valor del día»; `followedRules`) de «sin seguir las reglas», compara con `pickRuleV2.all`
+y avisa de combinadas y cuotas debajo de la mínima. Botón «Anotar mi apuesta» en cada tarjeta de `/valor` (borrador en
+memoria, `setDraft`/`takeDraft`). Exporta a PDF y Excel.
+
 **El rival marca** (página `/rival`): de las listas «Partido hoy» y «Partido» (mañana), la probabilidad de que el no
 favorito haga al menos un gol, con los goles esperados que reproducen la 1X2 publicada (`engine.ts` → `rivalScores`,
 `lambdasFor`). `review.ts` → `rivalGoal` la mide contra los marcadores (Brier contra la frecuencia y calibración por
@@ -107,9 +134,9 @@ tramos; 28 oct 2026: 9.247 partidos, 0,2180 contra 0,2236; por encima de 80 % ex
 recalibrar: la recalibración logística no mejoró fuera de muestra (IC de la mejora −0,0006 a +0,0012).
 `lambdasFor` busca en rejilla cuando Newton no converge (favoritos de ~90 % terminaban en 4,0 y 4,0).
 
-**Sombras** (se guardan, no se publican): xG, Elo de clubes, temporada Liga BetPlay (`season.ts`) y, desde el 5 nov
-2026, la **corrección de favoritos fuertes** (`favorites.ts` → `adjustFavorite`; review.ts → sombra «favoritos», solo
-partidos desde el 5 nov). Base: con favorito de 65 %+, ganó 77,9 % contra 74,4 % dicho (femenino 87,4 / 78,0; copas
+**Sombras** (se guardan, no se publican): xG, Elo de clubes, temporada Liga BetPlay (`season.ts`). La sombra
+«favoritos» (corrección de favoritos fuertes, `favorites.ts` → `adjustFavorite`, 5 nov 2026) se quitó el 11 nov 2026:
+en 3.419 partidos no mejoró la RPS publicada. Base: con favorito de 65 %+, ganó 77,9 % contra 74,4 % dicho (femenino 87,4 / 78,0; copas
 84,2 / 75,8), estable antes y después del 24 oct; prueba fuera de muestra −0,0002 de RPS (IC −0,0006 a +0,0002).
 Una sombra se publica solo con ≥ 500 partidos comparados y el IC 95 % de la diferencia de RPS entero bajo cero.
 Congelamiento de parámetros hasta 500 partidos comparables con el consenso.
@@ -118,8 +145,9 @@ Congelamiento de parámetros hasta 500 partidos comparables con el consenso.
 
 Mejoras del 5 nov 2026:
 - Resumen arriba (`dayBoard` → `yesterday`): cuántas veces ganó ayer el favorito de cada partido contra lo esperado.
-- Insignias por partido (`withBadges` en page-data.ts): «Valor del día» (regla v2), «El rival marca NN %» (70 %+) y
-  «Favorito con valor (en prueba)»; también en «Partido hoy» y «Partido».
+- Insignias por partido (`withBadges` en page-data.ts): «Valor del día» (regla v2) y «El rival marca NN %» (70 %+);
+  también en «Partido hoy» y «Partido». «Favorito con valor (en prueba)» se quitó el 11 nov 2026 (−1,6 % en 92
+  partidos); se sigue midiendo en `favoritos-registro.json`.
 - Filtro «Con 3+ casas · más confiable», activo por defecto cuando hay 10+ partidos con consenso.
 - 6 nov 2026: «Partido hoy» y «Partido» muestran por defecto el modo **«Favorito o empate (más seguro)»** (puesto,
   ✔/✘ y avance con doble oportunidad; botón para «Gana el favorito»). Listas del 4 y 5 nov: gana el favorito 10/20 y

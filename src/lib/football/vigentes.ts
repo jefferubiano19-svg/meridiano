@@ -1,6 +1,7 @@
 import cierresFile from "../../../data/cierres.json";
 import comboFile from "../../../data/combo-odds.json";
 import vigentesFile from "../../../data/vigentes.json";
+import hourFile from "../../../data/valor-hora.json";
 
 /* ---------------------------------------------------------------------------
  * Cuota vigente: la lectura 1X2 más reciente de un partido con selección de «Valor del día», hecha cada hora
@@ -58,4 +59,39 @@ export function doubleOffers(matchId: string): { readAt: string | null; dc: Book
   const dnb = read("dnb", 2);
   if (!dc.length && !dnb.length) return null;
   return { readAt: item.doubleReadAt ?? item.readAtBogota ?? null, dc, dnb };
+}
+
+/** Selección de «Valor del día» que encontró la búsqueda de cada hora (data/valor-hora.json, regla v2). */
+export interface HourPick {
+  market: "1x2" | "dc" | "dnb";
+  outcomeIndex: 0 | 1 | 2;
+  prob: number;
+  pDraw: number;
+  house: string;
+  odds: number;
+  ev: number;
+  readAt: string;
+}
+
+type HourRow = { matchId?: string; market?: string; outcomeIndex?: number; prob?: number; pDraw?: number; house?: string; odds?: number; ev?: number; readAt?: string };
+const hourByMatch = new Map<string, HourPick[]>();
+for (const row of ((hourFile as { picks?: HourRow[] }).picks ?? [])) {
+  if (!row.matchId || row.outcomeIndex == null || !(Number(row.prob) > 0) || !(Number(row.odds) > 1)) continue;
+  const list = hourByMatch.get(row.matchId) ?? [];
+  list.push({
+    market: row.market === "dc" || row.market === "dnb" ? row.market : "1x2",
+    outcomeIndex: row.outcomeIndex as 0 | 1 | 2,
+    prob: Number(row.prob),
+    pDraw: Number(row.pDraw ?? 0),
+    house: String(row.house ?? ""),
+    odds: Number(row.odds),
+    ev: Number(row.ev ?? 0),
+    readAt: String(row.readAt ?? ""),
+  });
+  hourByMatch.set(row.matchId, list);
+}
+
+/** Selecciones de la búsqueda de cada hora de un partido (vacío si no hay). */
+export function hourPicks(matchId: string): HourPick[] {
+  return hourByMatch.get(matchId) ?? [];
 }

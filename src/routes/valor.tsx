@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { shiftDay } from "@/lib/football/clock";
 import type { MatchReading } from "@/lib/football/dto";
@@ -20,6 +20,7 @@ import {
   type DoubleMarket,
 } from "@/lib/football/valor";
 import { betSlip } from "@/lib/store/bet-slip";
+import { myBets } from "@/lib/store/mis-apuestas";
 
 export const Route = createFileRoute("/valor")({ component: ValorPage });
 
@@ -49,6 +50,9 @@ interface Row {
   pick: Pick;
   rank?: number | null;
   total?: number;
+  /** «hora»: la encontró la búsqueda de cada hora (no estaba en el corte); foundAt = hora de esa lectura. */
+  source?: "corte" | "hora";
+  foundAt?: string;
   /** Lectura de cada hora (cierre.yml), si es más reciente que la del corte. */
   now: { readAt: string; still: boolean; house: string; odds: number; minOdds: number } | null;
 }
@@ -94,9 +98,9 @@ function picksOf(
 }
 
 /** Revisa la selección con la lectura más reciente: ¿la mejor casa todavía paga por encima de lo que vale? */
-function recheck(match: MatchReading, pick: Pick): Row["now"] {
+function recheck(match: MatchReading, pick: Pick, readAt?: string): Row["now"] {
   const current = match.current;
-  const base = pick.market === "1x2" ? match.bestOdds?.readAt : match.double?.readAt;
+  const base = readAt ?? (pick.market === "1x2" ? match.bestOdds?.readAt : match.double?.readAt);
   if (!current || !(current.readAt > (base ?? ""))) return null;
   if (pick.market !== "1x2" && !current.double) return null;
   // Para decir si sigue con valor solo cuenta el valor, no el nivel de probabilidad.
@@ -131,7 +135,8 @@ function recheck(match: MatchReading, pick: Pick): Row["now"] {
   if (!top) return null;
   return {
     readAt: current.readAt,
-    still: Boolean(same),
+    // Sigue con valor si la mejor cuota de ahora llega a la mínima de ahora (también cuando pasa del +15 %).
+    still: Boolean(same) || top.odds >= minOdds,
     house: top.house,
     odds: top.odds,
     minOdds,
@@ -140,16 +145,19 @@ function recheck(match: MatchReading, pick: Pick): Row["now"] {
 
 function ValorPage() {
   const today = useAgendaToday();
+  const navigate = useNavigate();
   const [matches, setMatches] = useState<MatchReading[] | null>(null);
   const [records, setRecords] = useState<{
     all: Result | null;
     v2: Result | null;
     byMarket: { market: Market; results: Result }[];
+    bySource: { source: "corte" | "hora"; results: Result }[];
     alta: Result | null;
   }>({
     all: null,
     v2: null,
     byMarket: [],
+    bySource: [],
     alta: null,
   });
   const [order, setOrder] = useState<"rank" | "time">("rank");
@@ -170,7 +178,11 @@ function ValorPage() {
       .then((bundle) => {
         const review = bundle.review as unknown as {
           pickResults?: Result;
-          pickRuleV2?: { all: Result; byMarket: { market: Market; results: Result }[] };
+          pickRuleV2?: {
+            all: Result;
+            byMarket: { market: Market; results: Result }[];
+            bySource?: { source: "corte" | "hora"; results: Result }[];
+          };
           pickTiers?: { key: string; all: Result }[];
         } | null;
         if (live)
@@ -178,6 +190,7 @@ function ValorPage() {
             all: review?.pickResults ?? null,
             v2: review?.pickRuleV2?.all ?? null,
             byMarket: review?.pickRuleV2?.byMarket ?? [],
+            bySource: review?.pickRuleV2?.bySource ?? [],
             alta: review?.pickTiers?.find((tier) => tier.key === "alta")?.all ?? null,
           });
       })
@@ -193,17 +206,34 @@ function ValorPage() {
     for (const match of matches ?? []) {
       if (match.status !== "por-jugar" || !(Date.parse(match.kickoff) - now > 10 * 60 * 1000))
         continue;
-      if (!match.consensus || !match.bestOdds) continue;
-      // Ofertas 1X2 con la mejor cuota de cada resultado (la página no tiene cada casa por separado).
-      const probs = [match.consensus.home, match.consensus.draw, match.consensus.away];
-      const best = [match.bestOdds.home, match.bestOdds.draw, match.bestOdds.away];
-      const picks: Pick[] = valuePicks(probs, best, match.bestOdds.houses).map((pick) => ({
-        ...pick,
-        market: "1x2",
-        pDraw: 0,
-      }));
-      if (match.double) picks.push(...doublePicks(probs, match.double.dc, match.double.dnb));
-      for (const pick of picks) out.push({ match, pick, now: recheck(match, pick) });
+      const picks: Pick[] = [];
+      if (match.consensus && match.bestOdds) {
+        // Ofertas 1X2 con la mejor cuota de cada resultado (la página no tiene cada casa por separado).
+        const probs = [match.consensus.home, match.consensus.draw, match.consensus.away];
+        const best = [match.bestOdds.home, match.bestOdds.draw, match.bestOdds.away];
+        picks.push(
+          ...valuePicks(probs, best, match.bestOdds.houses).map((pick) => ({
+            ...pick,
+            market: "1x2" as const,
+            pDraw: 0,
+          })),
+        );
+        if (match.double) picks.push(...doublePicks(probs, match.double.dc, match.double.dnb));
+      }
+      for (const pick of picks) out.push({ match, pick, source: "corte", now: recheck(match, pick) });
+      // Las que encontró la búsqueda de cada hora (data/valor-hora.json) y no salen con la cuota del corte.
+      for (const hour of match.hourPicks ?? []) {
+        if (picks.some((pick) => pick.market === hour.market && pick.outcomeIndex === hour.outcomeIndex)) continue;
+        const pick: Pick = {
+          ...hour,
+          fair: hour.market === "dnb" ? (1 - hour.pDraw) / hour.prob : 1 / hour.prob,
+          minOdds:
+            hour.market === "dnb"
+              ? (1 + VALUE_MIN_EV - hour.pDraw) / hour.prob
+              : (1 + VALUE_MIN_EV) / hour.prob,
+        };
+        out.push({ match, pick, source: "hora", foundAt: hour.readAt, now: recheck(match, pick, hour.readAt) });
+      }
     }
     // Puesto 1 a N: entre las que siguen con valor, 1 es la que más probabilidad tiene de ganarse. Las que ya
     // perdieron el valor no llevan puesto y van al final.
@@ -334,6 +364,12 @@ function ValorPage() {
                 <li key={item.market}>
                   {MARKET_NAME[item.market]}: {item.results.settled} resueltas ·{" "}
                   {money(item.results.roi)}
+                </li>
+              ))}
+              {records.bySource.map((item) => (
+                <li key={item.source}>
+                  {item.source === "hora" ? "Encontradas en la búsqueda de cada hora" : "Encontradas en el corte"}:{" "}
+                  {item.results.settled} resueltas · {money(item.results.roi)}
                 </li>
               ))}
             </ul>
@@ -491,13 +527,36 @@ function ValorPage() {
                   </p>
                 ) : null}
                 <p className="mt-2 text-xs text-muted">
-                  Cuota leída en el último corte
-                  {(pick.market === "1x2" ? match.bestOdds?.readAt : match.double?.readAt)
-                    ? ` (${String(pick.market === "1x2" ? match.bestOdds?.readAt : match.double?.readAt).slice(11, 16)})`
-                    : ""}
+                  {row.source === "hora"
+                    ? `Encontrada en la búsqueda de cada hora (${String(row.foundAt ?? "").slice(11, 16)})`
+                    : `Cuota leída en el último corte${
+                        (pick.market === "1x2" ? match.bestOdds?.readAt : match.double?.readAt)
+                          ? ` (${String(pick.market === "1x2" ? match.bestOdds?.readAt : match.double?.readAt).slice(11, 16)})`
+                          : ""
+                      }`}
                   {now ? "; arriba, la lectura más reciente" : "; se relee cada hora"}. Verifica que
                   siga igual en la casa.
                 </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  className="h-9 rounded-full bg-accent px-3 text-xs text-accent-fg"
+                  onClick={() => {
+                    myBets.setDraft({
+                      date: match.kickoff.slice(0, 10),
+                      match: `${match.home} — ${match.away}`,
+                      market: MARKET_NAME[pick.market],
+                      selection: label(row),
+                      house: houseName(pick.house),
+                      odds: 0,
+                      combo: false,
+                      valor: { house: houseName(pick.house), minOdds: pick.minOdds, prob: pick.prob, matchId: match.id },
+                    });
+                    void navigate({ to: "/mis-apuestas" });
+                  }}
+                >
+                  Anotar mi apuesta
+                </button>
                 {pick.market === "dnb" ? null : (
                   <button
                     type="button"
@@ -513,6 +572,7 @@ function ValorPage() {
                     Revisar en Apuesta
                   </button>
                 )}
+                </div>
               </article>
             );
           })}

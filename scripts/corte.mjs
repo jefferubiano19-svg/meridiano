@@ -23,6 +23,8 @@ const ODDS_CAP = 450;
 const ODDS_BUDGET_MS = 90 * 60 * 1000;
 /** Una cuota solo cuenta si se lee al menos este tiempo antes del inicio. */
 const PREMATCH_MS = 10 * 60 * 1000;
+/** Horas hacia adelante de la búsqueda de valor de cada hora (cierre). */
+const SCAN_HOURS = 6;
 /** Tablas de posiciones que lee el corte de la noche: competición de la agenda → página de la liga en Flashscore. */
 const STANDINGS_PAGES = [
   ["GERMANY: Bundesliga", "alemania/bundesliga"],
@@ -532,16 +534,45 @@ async function readStandings(page) {
 }
 
 /**
- * Aviso de «Valor del día»: comenta en el issue «Valor del día: selecciones nuevas» con la mención al dueño del
- * repositorio (GitHub manda el correo). Solo si el corte agregó selecciones que todavía no empiezan. Sin
- * GITHUB_TOKEN (pruebas locales) no hace nada.
+ * Todas las selecciones de «Valor del día»: las del corte (data/valor-registro.json) y las de la búsqueda de cada
+ * hora (data/valor-hora.json, la escribe cierre.yml). Van en archivos distintos para que el corte y el cierre, que
+ * pueden correr al mismo tiempo, no choquen al guardar.
  */
-async function notifyPicks(picks) {
+function readPicks() {
+  return [
+    ...(readJsonOptional("valor-registro.json", { picks: [] }).picks ?? []),
+    ...(readJsonOptional("valor-hora.json", { picks: [] }).picks ?? []),
+  ];
+}
+
+/** Clave de una selección: partido y resultado (1X2) o partido, mercado y resultado (doble oportunidad, empate no válido). */
+const pickKey = (pick) => (pick.market && pick.market !== "1x2" ? `${pick.matchId}|${pick.market}|${pick.outcomeIndex}` : `${pick.matchId}|${pick.outcomeIndex}`);
+
+/** Texto de la selección para los correos. */
+function pickSide(pick) {
+  return pick.market === "dc"
+    ? `Doble oportunidad: ${pick.outcomeIndex === 0 ? `${pick.home} o empate` : pick.outcomeIndex === 1 ? `${pick.home} o ${pick.away}` : `empate o ${pick.away}`}`
+    : pick.market === "dnb"
+      ? `Empate no válido: ${pick.outcomeIndex === 0 ? pick.home : pick.away}`
+      : pick.outcomeIndex === 0
+        ? pick.home
+        : pick.outcomeIndex === 2
+          ? pick.away
+          : "Empate";
+}
+const num2 = (value) => Number(value).toFixed(2).replace(".", ",");
+const pct1 = (value) => `${(value * 100).toFixed(1).replace(".", ",")} %`;
+const whenOf = (kickoff) => `${kickoff.slice(5, 10).split("-").reverse().join("/")} ${kickoff.slice(11, 16)}`;
+
+/**
+ * Comenta en el issue «Valor del día: selecciones nuevas» (GitHub le manda el correo al dueño por la mención).
+ * Sin GITHUB_TOKEN (pruebas locales) no hace nada y devuelve false.
+ */
+async function commentValor(body) {
   const token = process.env.GITHUB_TOKEN || "";
   const repo = process.env.GITHUB_REPOSITORY || "";
-  const open = picks.filter((pick) => Date.parse(pick.kickoff) - Date.now() > PREMATCH_MS);
-  if (!token || !repo || open.length === 0) return { sent: false, picks: open.length };
-  const gh = async (method, path, body) => {
+  if (!token || !repo) return false;
+  const gh = async (method, path, payload) => {
     const response = await fetch(`https://api.github.com${path}`, {
       method,
       headers: {
@@ -549,38 +580,40 @@ async function notifyPicks(picks) {
         Authorization: `Bearer ${token}`,
         "X-GitHub-Api-Version": "2022-11-28",
         "User-Agent": "meridiano-corte",
-        ...(body ? { "Content-Type": "application/json" } : {}),
+        ...(payload ? { "Content-Type": "application/json" } : {}),
       },
-      body: body ? JSON.stringify(body) : undefined,
+      body: payload ? JSON.stringify(payload) : undefined,
     });
     const text = await response.text();
     if (!response.ok) throw new Error(`${method} ${path.split("?")[0]} → ${response.status} ${text.slice(0, 120)}`);
     return text ? JSON.parse(text) : null;
   };
   const TITLE = "Valor del día: selecciones nuevas";
-  const side = (pick) =>
-    pick.market === "dc"
-      ? `Doble oportunidad: ${pick.outcomeIndex === 0 ? `${pick.home} o empate` : pick.outcomeIndex === 1 ? `${pick.home} o ${pick.away}` : `empate o ${pick.away}`}`
-      : pick.market === "dnb"
-        ? `Empate no válido: ${pick.outcomeIndex === 0 ? pick.home : pick.away}`
-        : pick.outcomeIndex === 0
-          ? pick.home
-          : pick.outcomeIndex === 2
-            ? pick.away
-            : "Empate";
+  const owner = repo.split("/")[0];
+  const text = `@${owner} ${body}`;
+  const issues = (await gh("GET", `/repos/${repo}/issues?state=open&per_page=50`)).filter((issue) => issue.title === TITLE && !issue.pull_request);
+  if (issues[0]) await gh("POST", `/repos/${repo}/issues/${issues[0].number}/comments`, { body: text });
+  else await gh("POST", `/repos/${repo}/issues`, { title: TITLE, body: text });
+  return true;
+}
+
+/**
+ * Aviso de «Valor del día»: selecciones nuevas que todavía no empiezan. `origin` dice de dónde salen (el corte o la
+ * búsqueda de cada hora).
+ */
+async function notifyPicks(picks, origin = `corte ${CUT_MODE}, leídas desde las ${String(CUT_STARTED ?? "").slice(11, 16)}`) {
+  const open = picks.filter((pick) => Date.parse(pick.kickoff) - Date.now() > PREMATCH_MS);
+  if (open.length === 0) return { sent: false, picks: 0 };
   const minOf = (pick) => (pick.market === "dnb" ? (1.03 - (pick.pDraw ?? 0)) / pick.prob : 1.03 / pick.prob);
-  const num = (value) => Number(value).toFixed(2).replace(".", ",");
-  const pct = (value) => `${(value * 100).toFixed(1).replace(".", ",")} %`;
   // De mayor a menor probabilidad de cumplirse; «Alta» (40 % o más) es el nivel por defecto de la página.
   const sorted = [...open].sort((a, b) => b.prob - a.prob || a.kickoff.localeCompare(b.kickoff));
   const tier = (prob) => (prob >= 0.4 ? "**Alta**" : prob >= 0.25 ? "Media" : "Baja");
   const lines = sorted.map(
     (pick) =>
-      `| ${pick.kickoff.slice(5, 10).split("-").reverse().join("/")} ${pick.kickoff.slice(11, 16)} | ${pick.home} – ${pick.away} | **${side(pick)}** | ${pick.house} | ${num(pick.odds)} | **${num(minOf(pick))}** | ${pct(pick.prob)} | ${tier(pick.prob)} |`,
+      `| ${whenOf(pick.kickoff)} | ${pick.home} – ${pick.away} | **${pickSide(pick)}** | ${pick.house} | ${num2(pick.odds)} | **${num2(minOf(pick))}** | ${pct1(pick.prob)} | ${tier(pick.prob)} |`,
   );
-  const owner = repo.split("/")[0];
   const body = [
-    `@${owner} ${sorted.length === 1 ? "1 selección nueva" : `${sorted.length} selecciones nuevas`} (corte ${CUT_MODE}, leídas desde las ${String(CUT_STARTED ?? "").slice(11, 16)}).`,
+    `${sorted.length === 1 ? "1 selección nueva" : `${sorted.length} selecciones nuevas`} (${origin}).`,
     "",
     "| Inicio (Bogotá) | Partido | Selección | Casa | Cuota | Mínima | Se cumple | Nivel |",
     "|---|---|---|---|---|---|---|---|",
@@ -588,12 +621,35 @@ async function notifyPicks(picks) {
     "",
     "Reglas: solo en esa casa y a la mínima o más; sola, nunca en combinada; una por partido; mismo monto pequeño. La cuota baja con las horas: si ya está debajo de la mínima, no tiene valor. Detalle y cuota vigente: https://meridiano-beige.vercel.app/valor",
     "",
-    "_Lo escribe el corte (scripts/corte.mjs). No es una recomendación; la decisión sobre apostar queda para las 300 selecciones resueltas._",
+    "_Lo escribe scripts/corte.mjs. No es una recomendación; la decisión sobre apostar queda para las 300 selecciones resueltas._",
   ].join("\n");
-  const issues = (await gh("GET", `/repos/${repo}/issues?state=open&per_page=50`)).filter((issue) => issue.title === TITLE && !issue.pull_request);
-  if (issues[0]) await gh("POST", `/repos/${repo}/issues/${issues[0].number}/comments`, { body });
-  else await gh("POST", `/repos/${repo}/issues`, { title: TITLE, body });
-  return { sent: true, picks: sorted.length };
+  const sent = await commentValor(body);
+  return { sent, picks: sorted.length };
+}
+
+/**
+ * Aviso «ya no tiene valor»: selecciones registradas que no han empezado y que en la lectura de cada hora ya no
+ * pagan +3 % en ninguna casa colombiana. Una sola vez por selección (data/avisos.json).
+ */
+async function notifyLost(lost) {
+  if (lost.length === 0) return { sent: false, picks: 0 };
+  const lines = [...lost]
+    .sort((a, b) => a.kickoff.localeCompare(b.kickoff))
+    .map(
+      (item) =>
+        `| ${whenOf(item.kickoff)} | ${item.home} – ${item.away} | ${pickSide(item)} | ${item.house} ${num2(item.odds)} | ${item.nowHouse} ${num2(item.nowOdds)} | ${num2(item.nowMin)} |`,
+    );
+  const body = [
+    `**Ya no tienen valor** (lectura de las ${String(lost[0].readAt ?? "").slice(11, 16)}): ${lost.length === 1 ? "esta selección ya no se debe apostar" : `estas ${lost.length} selecciones ya no se deben apostar`}.`,
+    "",
+    "| Inicio (Bogotá) | Partido | Selección | Avisada a | Mejor cuota ahora | Mínima ahora |",
+    "|---|---|---|---|---|---|",
+    ...lines,
+    "",
+    "La mejor cuota de las casas colombianas quedó por debajo de la mínima (consenso actual + 3 %). Siguen en la medición con la cuota con que se registraron.",
+  ].join("\n");
+  const sent = await commentValor(body);
+  return { sent, picks: lost.length };
 }
 
 /** Guarda las cuotas leídas en data/combo-odds.json, el archivo del que sale el consenso de la app. */
@@ -1253,8 +1309,9 @@ async function main() {
       "Selecciones de «Valor del día» (mejor cuota de 3+ casas entre +3 % y +15 % sobre el consenso de las casas; desde el 5 nov 2026, regla v2: solo resultados de 40 % o más). Una fila por partido, mercado y resultado, guardada la primera vez que aparece; no se edita.";
     registro.picks = Array.isArray(registro.picks) ? registro.picks : [];
     // Clave: partido y resultado (1X2, como antes) o partido, mercado y resultado (doble oportunidad, empate no válido).
-    const keyOf = (pick) => (pick.market && pick.market !== "1x2" ? `${pick.matchId}|${pick.market}|${pick.outcomeIndex}` : `${pick.matchId}|${pick.outcomeIndex}`);
-    const seen = new Set(registro.picks.map(keyOf));
+    const keyOf = pickKey;
+    // También las que ya encontró la búsqueda de cada hora (valor-hora.json): no se registran dos veces.
+    const seen = new Set(readPicks().map(keyOf));
     for (const item of stored) {
       const row = byId.get(item.id);
       if (!row || row[5] !== "por-jugar" || !(Date.parse(row[1]) - Date.now() > PREMATCH_MS)) continue;
@@ -1493,7 +1550,7 @@ async function finishCut(coverage, previous = null) {
       evaluations: readJsonOptional("evaluations.json", {}),
       marks: readJsonOptional("value-marks.json", { marks: [] }).marks ?? [],
       closings: readJsonOptional("cierres.json", { byMatch: {} }).byMatch ?? {},
-      picks: readJsonOptional("valor-registro.json", { picks: [] }).picks ?? [],
+      picks: readPicks(),
       favorites: readJsonOptional("favoritos-registro.json", { picks: [] }).picks ?? [],
       agenda: readJsonOptional("agenda.json", { matches: [] }).matches ?? [],
       standings: readJsonOptional("standings-auto.json", { leagues: [] }).leagues ?? [],
@@ -1597,7 +1654,7 @@ async function cierre() {
     "Cuotas 1X2 de las casas leídas entre 10 y 130 min antes del inicio de los partidos con marca de valor o de «Valor del día». Las escribe cierre.yml cada hora; queda la última lectura antes del inicio. 30 días.";
   const keep = now - 30 * 24 * 3600 * 1000;
   file.byMatch = Object.fromEntries(Object.entries(file.byMatch ?? {}).filter(([, row]) => Date.parse(row?.kickoff ?? "") >= keep));
-  const picks = readJsonOptional("valor-registro.json", { picks: [] }).picks ?? [];
+  const picks = readPicks();
   const targets = [
     ...new Map(
       [...(registry.marks ?? []), ...picks]
@@ -1624,8 +1681,31 @@ async function cierre() {
         .map((pick) => [pick.matchId, pick]),
     ).values(),
   ].slice(0, 15);
-  console.log(`cierre: ${targets.length} partidos por empezar en 10-130 min; ${refresh.length} selecciones para cuota vigente.`);
-  if (targets.length === 0 && refresh.length === 0) return;
+  // Búsqueda de valor de cada hora: partidos con 3+ casas colombianas en el corte que empiezan entre 130 min y 6 h y
+  // que no se leen ya arriba. Primero los que llevan más tiempo sin leerse (vigentes.json), luego los más próximos.
+  // Hasta 25. Las selecciones que aparezcan se registran (valor-hora.json) y se avisan por correo: la cuota del corte
+  // tiene hasta 15 h y para entonces muchas ya perdieron el valor.
+  const previous = readJsonOptional("vigentes.json", { byMatch: {} }).byMatch ?? {};
+  const agendaRows = readJsonOptional("agenda.json", { matches: [] }).matches ?? [];
+  const rowById = new Map(agendaRows.map((row) => [row[0], row]));
+  const busy = new Set([...closingIds, ...refresh.map((pick) => pick.matchId)]);
+  const housesOf = (item) =>
+    (item.markets?.["1X2"] ?? []).filter(colombian).filter((book) => Array.isArray(book.cells) && book.cells.length >= 3 && !book.cells.some((cell) => cell.withdrawn)).length;
+  const scan = (readJsonOptional("combo-odds.json", { matches: [] }).matches ?? [])
+    .filter((item) => !busy.has(item.id) && housesOf(item) >= 3)
+    .map((item) => rowById.get(item.id))
+    .filter((row) => row && row[5] === "por-jugar")
+    .filter((row) => {
+      const left = Date.parse(row[1]) - now;
+      return left > 130 * 60 * 1000 && left <= SCAN_HOURS * 3600 * 1000;
+    })
+    .sort((a, b) => String(previous[a[0]]?.readAt ?? "").localeCompare(String(previous[b[0]]?.readAt ?? "")) || a[1].localeCompare(b[1]))
+    .slice(0, 25)
+    .map((row) => ({ matchId: row[0], kickoff: row[1] }));
+  console.log(
+    `cierre: ${targets.length} partidos por empezar en 10-130 min; ${refresh.length} selecciones para cuota vigente; ${scan.length} partidos en la búsqueda de valor.`,
+  );
+  if (targets.length === 0 && refresh.length === 0 && scan.length === 0) return;
   // Partidos con selección de doble oportunidad o empate no válido: también esos mercados (para la cuota vigente).
   const doubleIds = new Set(picks.filter((pick) => pick.market === "dc" || pick.market === "dnb").map((pick) => pick.matchId));
   const job = (mark) => ({
@@ -1640,8 +1720,10 @@ async function cierre() {
     },
   });
   const goodRead = (row) => (row?.books ?? []).filter(colombian).filter((book) => book.market === "1x2" && !book.struck).length >= 3;
-  const all = [...targets, ...refresh];
-  let read = await browserPages(all.map(job));
+  const all = [...targets, ...refresh, ...scan];
+  // Tope de 15 min para la vuelta principal (el cierre va primero; la búsqueda, al final, es lo que se recorta).
+  const t0 = Date.now();
+  let read = await browserPages(all.map(job), () => Date.now() - t0 > 15 * 60 * 1000);
   // La página de cuotas a veces llega vacía (sobre todo la primera de cada navegador): hasta 2 intentos más,
   // con un navegador nuevo, para los partidos que no trajeron 3 casas colombianas.
   for (let attempt = 1; attempt <= 2; attempt += 1) {
@@ -1685,6 +1767,102 @@ async function cierre() {
   }
   current.updatedAt = started;
   writeJson("vigentes.json", current);
+
+  // «Valor del día» con la lectura de esta hora: selecciones nuevas (solo partidos a más de 130 min, para que la
+  // lectura del registro no sea la misma del cierre con que se mide) y avisos de las que perdieron el valor.
+  let added = 0;
+  let lostCount = 0;
+  try {
+    const { consensusFromOffers, bestFromOffers, valuePicks, doublePicks } = await import("../src/lib/football/valor.ts");
+    const hourFile = readJsonOptional("valor-hora.json", { picks: [] });
+    hourFile.rule =
+      "Selecciones de «Valor del día» (regla v2) que encontró la búsqueda de cada hora (cierre.yml) en partidos que empiezan entre 130 min y 6 h y que el corte no había registrado. Mismas reglas que valor-registro.json; source = hora. Una fila por partido, mercado y resultado; no se edita.";
+    hourFile.picks = Array.isArray(hourFile.picks) ? hourFile.picks : [];
+    const registered = readPicks();
+    const seen = new Set(registered.map(pickKey));
+    const avisos = readJsonOptional("avisos.json", { lost: {} });
+    avisos.rule = "Selecciones de «Valor del día» ya avisadas por correo como «ya no tiene valor» (una vez cada una). Se borran 3 días después del partido.";
+    avisos.lost = Object.fromEntries(Object.entries(avisos.lost ?? {}).filter(([, item]) => Date.parse(item?.kickoff ?? "") >= now - 3 * 24 * 3600 * 1000));
+    const fresh = [];
+    const lost = [];
+    const short = (house) => String(house).replace(/\.(co|latam|com)$/i, "");
+    for (const row of read) {
+      if (!(Date.parse(row.kickoff) - Date.now() > PREMATCH_MS)) continue;
+      const usable = (row.books ?? []).filter(colombian).filter((book) => !book.struck && Array.isArray(book.odds));
+      const offers = usable.filter((book) => book.market === "1x2" && book.odds.length === 3).map((book) => ({ house: short(book.book), odds: book.odds }));
+      if (offers.length < 3) continue;
+      const probs = consensusFromOffers(offers);
+      const best = bestFromOffers(offers);
+      if (!probs || !best) continue;
+      const dc = usable.filter((book) => book.market === "dc" && book.odds.length === 3).map((book) => ({ house: short(book.book), odds: book.odds }));
+      const dnb = usable.filter((book) => book.market === "dnb" && book.odds.length === 2).map((book) => ({ house: short(book.book), odds: book.odds }));
+      const agendaRow = rowById.get(row.id);
+      // Nuevas: solo fuera de la ventana del cierre.
+      if (agendaRow && !closingIds.has(row.id) && Date.parse(row.kickoff) - now > 130 * 60 * 1000) {
+        const found = [
+          ...valuePicks(probs, best, offers.length).map((pick) => ({ market: "1x2", ...pick })),
+          ...doublePicks(probs, dc, dnb),
+        ];
+        for (const pick of found) {
+          const key = pickKey({ matchId: row.id, market: pick.market, outcomeIndex: pick.outcomeIndex });
+          if (seen.has(key)) continue;
+          seen.add(key);
+          const base = {
+            matchId: row.id,
+            home: agendaRow[3],
+            away: agendaRow[4],
+            competition: agendaRow[2],
+            kickoff: agendaRow[1],
+            ...(pick.market !== "1x2" ? { market: pick.market, pDraw: pick.pDraw } : {}),
+            outcomeIndex: pick.outcomeIndex,
+            prob: pick.prob,
+            house: pick.house,
+            odds: pick.odds,
+            ev: pick.ev,
+          };
+          fresh.push(base);
+          hourFile.picks.push({ ...base, readAt: started, savedAt: started, rule: "v2", source: "hora" });
+        }
+      }
+      // Ya no tiene valor: selecciones v2 registradas de este partido cuya mejor cuota colombiana de ahora quedó por
+      // debajo de la mínima calculada con el consenso de ahora (+3 %). Solo con 3+ casas leídas.
+      const [home, draw, away] = probs;
+      for (const pick of registered.filter((item) => item.matchId === row.id && item.rule === "v2")) {
+        const market = pick.market ?? "1x2";
+        if (market !== "1x2" && (market === "dc" ? dc : dnb).length === 0) continue;
+        const key = pickKey(pick);
+        if (avisos.lost[key]) continue;
+        const prob = market === "1x2" ? probs[pick.outcomeIndex] : market === "dc" ? [home + draw, home + away, draw + away][pick.outcomeIndex] : pick.outcomeIndex === 0 ? home : away;
+        const nowMin = market === "dnb" ? (1.03 - draw) / prob : 1.03 / prob;
+        const pool = market === "1x2" ? offers : market === "dc" ? dc : dnb;
+        const slot = market === "dnb" ? (pick.outcomeIndex === 0 ? 0 : 1) : pick.outcomeIndex;
+        const top = pool.reduce((acc, offer) => (offer.odds[slot] > (acc?.odds ?? 0) ? { house: offer.house, odds: offer.odds[slot] } : acc), null);
+        if (!top || top.odds >= nowMin) continue;
+        avisos.lost[key] = { kickoff: pick.kickoff, at: started, odds: top.odds, minOdds: Number(nowMin.toFixed(3)) };
+        lost.push({ ...pick, market, readAt: started, nowHouse: top.house, nowOdds: top.odds, nowMin });
+      }
+    }
+    added = fresh.length;
+    lostCount = lost.length;
+    writeJson("valor-hora.json", hourFile);
+    writeJson("avisos.json", avisos);
+    if (fresh.length) {
+      try {
+        await notifyPicks(fresh, `búsqueda de cada hora, leídas a las ${started.slice(11, 16)}`);
+      } catch (error) {
+        console.log(`cierre: el aviso de selecciones nuevas falló: ${error instanceof Error ? error.message : error}`);
+      }
+    }
+    if (lost.length) {
+      try {
+        await notifyLost(lost);
+      } catch (error) {
+        console.log(`cierre: el aviso «ya no tiene valor» falló: ${error instanceof Error ? error.message : error}`);
+      }
+    }
+  } catch (error) {
+    console.log(`cierre: la búsqueda de valor falló: ${error instanceof Error ? error.message : error}`);
+  }
   file.updatedAt = started;
   // Registro de la última vuelta (para revisar fallas sin acceso a los logs de GitHub).
   file.lastRun = {
@@ -1693,6 +1871,9 @@ async function cierre() {
     saved,
     refresh: refresh.length,
     refreshed,
+    scan: scan.length,
+    added,
+    lost: lostCount,
     rows: read.map((row) => ({
       id: row.id,
       failed: row.failed ?? null,

@@ -14,6 +14,7 @@ import {
   Calculator,
   Gem,
   Goal,
+  NotebookPen,
 } from "lucide-react";
 import { type ReactNode } from "react";
 import { MeridianMark } from "@/components/brand/mark";
@@ -33,6 +34,7 @@ const NAV = [
   { to: "/consulta", label: "Consulta", icon: History, date: "" },
   { to: "/buscar", label: "Partido", icon: Search, date: "" },
   { to: "/apuesta", label: "Apuesta", icon: Calculator, date: "" },
+  { to: "/mis-apuestas", label: "Mis apuestas", icon: NotebookPen, date: "" },
   { to: "/riesgo", label: "Riesgo", icon: Scale, date: "" },
   { to: "/modelo", label: "Modelo", icon: BookOpen, date: "" },
   { to: "/responsable", label: "Límites", icon: Shield, date: "" },

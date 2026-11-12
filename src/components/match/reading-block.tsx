@@ -148,9 +148,7 @@ export function MatchReadingCard({
               className={`rounded-full px-2 py-0.5 text-[11px] ring-1 ${
                 badge.key === "valor"
                   ? "bg-accent text-accent-fg ring-transparent"
-                  : badge.key === "favorito"
-                    ? "bg-elevated text-warn ring-border"
-                    : "bg-elevated text-fg ring-border"
+                  : "bg-elevated text-fg ring-border"
               }`}
             >
               {badge.label}
