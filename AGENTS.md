@@ -122,7 +122,16 @@ una mediana de 14,7 h del inicio y solo 73 de 187 (39 %) seguían con valor al c
   `dsof` (local/visita por `side`; la API no pone siempre al local primero) con `page.request` (robots.txt revisado)
   → filas 1X2 (`viaApi`) y `doubles` (dc 1X/12/X2, dnb). Primera vuelta con el arreglo: 3 de 3 bien, cierre guardado.
   Además `browserPages(jobs, stop, again)` relee una vez al final las que no traen 3 casas (`lastRun.retried`,
-  `retriedOk`); tope de la vuelta principal 18 min. Avisos «ya no tiene valor»
+  `retriedOk`); tope de la vuelta principal 18 min.
+- Revisión del 13 nov 2026: 430 de 430 lecturas del cierre con 3+ casas en 24 h (antes ~40 % vacías); local/visita
+  por API igual al corte en 152 de 152 partidos con favorito claro. **Dobles con consenso viejo:** la 1X2 del paso de
+  cuotas y los dobles se leían con una mediana de 63 min de diferencia (hasta 11 h), y varias selecciones dc/dnb
+  eran solo movimiento del mercado (Ebreichsdorf 1,85 → 1,62 entre las dos lecturas; «empate o ASK Ybbs» a 2,10 con
+  +3 % contra el consenso viejo, sin valor contra el de la misma hora). Arreglo: el paso `cuotas-dobles` devuelve la
+  1X2 de la misma visita y `storeDouble` la guarda con los dobles (`readAtBogota` = `doubleReadAt`); sin 1X2 fresca
+  borra los dobles. El paso `valor-del-dia` y `vigentes.ts` → `doubleOffers` usan dobles solo si
+  `doubleReadAt === readAtBogota`. Las 23 dc/dnb del corte registradas antes del 13 nov se leyeron así (el registro
+  no se edita; se miden igual contra el cierre). Avisos «ya no tiene valor»
   con la mínima redondeada (`+ 0,005`): 1,14 contra 1,1401 ya no se avisa; `/valor` igual.
 - `cierre.yml`: `issues: write`, `GITHUB_TOKEN`, timeout 35 min; el paso «¿Hay…?» cuenta también los partidos de la
   búsqueda; guarda `cierres.json`, `vigentes.json`, `valor-hora.json` y `avisos.json`. `lastRun` agrega `scan`, `added`, `lost`.

@@ -798,11 +798,23 @@ function storeDouble(results, started) {
     const item = byId.get(result?.id);
     if (!item || books.length === 0) continue;
     const cells = (book) => book.odds.map((price) => ({ text: Number(price).toFixed(2), withdrawn: Boolean(book.struck) }));
+    // Doble oportunidad y empate no válido solo junto a una 1X2 leída en la misma visita (3+ casas), que reemplaza a la
+    // del paso de cuotas. Corte del 13 nov 2026: la 1X2 se leyó a las 00:57 y los dobles a las 01:56; en ese rato
+    // Ebreichsdorf pasó de 1,85 a 1,62 y «empate o ASK Ybbs» a 2,10 salió con +3 % contra un consenso viejo
+    // (con el de la misma hora no tenía valor). Sin 1X2 fresca se borran los dobles para no compararlos con uno viejo.
+    const fresh = books.filter((book) => book.market === "1x2" && Array.isArray(book.odds) && book.odds.length === 3 && !book.struck);
+    if (fresh.length < 3) {
+      item.markets = { ...(item.markets ?? {}), dc: [], dnb: [] };
+      delete item.doubleReadAt;
+      continue;
+    }
     item.markets = {
       ...(item.markets ?? {}),
+      "1X2": books.filter((book) => book.market === "1x2" && book.odds.length === 3).map((book) => ({ house: book.book, cells: cells(book) })),
       dc: books.filter((book) => book.market === "dc").map((book) => ({ house: book.book, cells: cells(book) })),
       dnb: books.filter((book) => book.market === "dnb").map((book) => ({ house: book.book, cells: cells(book) })),
     };
+    item.readAtBogota = result.at ?? started;
     item.doubleReadAt = result.at ?? started;
     stored += 1;
   }
@@ -1199,10 +1211,12 @@ async function main() {
     // Los enlaces de doble oportunidad y empate no válido aparecen solo con la pestaña Cuotas abierta (corte del 5 nov:
     // 0 de 120 leídos sin abrirla): primero se abre con el lector 1X2 y luego se leen los mercados dobles.
     read: async (page) => {
+      // Se devuelve también la 1X2 de esta misma visita: los mercados dobles se comparan con un consenso de la misma
+      // hora (ver storeDouble).
       const opened = await readOdds(page, ONLY_1X2);
-      if (opened.viaApi) return { books: opened.doubles ?? [] };
+      if (opened.viaApi) return { books: [...opened.books, ...(opened.doubles ?? [])] };
       if (opened.noOddsTab) return { books: [] };
-      return { books: await readDoubleMarkets(page) };
+      return { books: [...(opened.books ?? []), ...(await readDoubleMarkets(page))] };
     },
   })), () => Date.now() - doubleStartedMs >= 25 * 60 * 1000 || overBudget()))) ?? [];
   const doubleStored = storeDouble(doubleRead, started);
@@ -1437,9 +1451,11 @@ async function main() {
         favFile.picks.push({ matchId: item.id, home: row[3], away: row[4], competition: row[2], kickoff: row[1], market: "1x2", ...fav, readAt: item.readAtBogota ?? null, savedAt: started });
         favoritesAdded += 1;
       }
-      // Doble oportunidad y empate no válido, con el mismo consenso 1X2.
+      // Doble oportunidad y empate no válido, con el mismo consenso 1X2 y solo si los dos son de la misma visita
+      // (storeDouble): con una 1X2 de otra hora el «valor» puede ser solo el movimiento del mercado.
+      const sameVisit = Boolean(item.doubleReadAt) && item.doubleReadAt === item.readAtBogota;
       const doubleOffers = (key, cells) =>
-        (item.markets?.[key] ?? [])
+        (sameVisit ? (item.markets?.[key] ?? []) : [])
           .filter(colombian)
           .filter((book) => Array.isArray(book.cells) && book.cells.length === cells && !book.cells.some((cell) => cell.withdrawn))
           .map((book) => ({ house: String(book.house).replace(/\.(co|latam|com)$/i, ""), odds: book.cells.map((cell) => Number(cell.text)) }));

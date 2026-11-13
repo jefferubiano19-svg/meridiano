@@ -50,6 +50,8 @@ const comboById = new Map(((comboFile as { matches?: ComboItem[] }).matches ?? [
 export function doubleOffers(matchId: string): { readAt: string | null; dc: Book[]; dnb: Book[] } | null {
   const item = comboById.get(matchId);
   if (!item?.markets) return null;
+  // Solo si la 1X2 es de la misma visita (scripts/corte.mjs → storeDouble): con otra hora el valor puede ser falso.
+  if (!item.doubleReadAt || item.doubleReadAt !== item.readAtBogota) return null;
   const read = (key: string, cells: number) =>
     (item.markets?.[key] ?? [])
       .filter((book) => HOUSES.test(String(book.house).trim()) && Array.isArray(book.cells) && book.cells.length === cells && !book.cells.some((cell) => cell.withdrawn))
