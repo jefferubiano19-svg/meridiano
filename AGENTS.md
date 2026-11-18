@@ -23,7 +23,7 @@ Nunca se escriben secretos ni datos personales en el repositorio.
 ejecuciones de `corte.yml`; relanza por `workflow_dispatch` un turno vencido (40 min de margen) si no hay otro corriendo,
 máximo 3 ejecuciones por turno y nunca a menos de 60 min del turno siguiente. Escribe el resumen de la ejecución y
 mantiene el issue «Vigía de cortes: hay un problema» (lo abre o comenta solo si los problemas cambian; lo cierra al
-resolverse). No escribe en `data/`. Pruebas: `node --test scripts/vigia.test.mjs` (23 casos: atascos, reintentos, Vercel, cron-job.org, flujo desactivado, errores de la API, datos dañados). Prueba en seco: `VIGIA_DRY=si node scripts/vigia.mjs`.
+resolverse). No escribe en `data/`. Un corte «corriendo» se cuenta desde que su job empezó en un runner (`jobsStartedAt`), no desde que se creó la ejecución: el 16 nov 2026 el corte del mediodía esperó 68 min por un runner y el vigía lo canceló a los 102 min de trabajo. Pruebas: `node --test scripts/vigia.test.mjs` (25 casos: atascos, reintentos, Vercel, cron-job.org, flujo desactivado, errores de la API, datos dañados). Prueba en seco: `VIGIA_DRY=si node scripts/vigia.mjs`.
 
 ## Corte (orden)
 

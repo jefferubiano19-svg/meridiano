@@ -72,6 +72,7 @@ function fakeIo(now, over = {}) {
     cancel: async (id) => {
       did.cancel.push(id);
     },
+    jobsStartedAt: async (id) => (over.jobsStartedAt ? over.jobsStartedAt[id] ?? null : null),
     dispatch: async (mode) => {
       if (over.dispatchError) throw new Error("403 sin permiso");
       did.dispatch.push(mode);
@@ -135,6 +136,19 @@ test("B: corte en cola detrás de otro que está corriendo → no lo cancela", a
   const runningRun = run(`${DAY}T00:15:30-05:00`, { status: "in_progress", conclusion: null, run_started_at: new Date(T(`${DAY}T00:16:00-05:00`)).toISOString() });
   const waiting = run(`${DAY}T00:20:00-05:00`, { status: "pending", conclusion: null, triggering_actor: BOT });
   const { io, did } = fakeIo(`${DAY}T01:50:00-05:00`, { runs: [...cronRuns(`${DAY}T00:00:00-05:00`), runningRun, waiting] });
+  await vigia(io);
+  assert.deepEqual(did.cancel, []);
+  assert.deepEqual(did.dispatch, []);
+});
+
+test("B: ejecución de 170 min con el job esperando runner 68 min → no la cancela", async () => {
+  const slow = run(`${DAY}T12:00:30-05:00`, { status: "in_progress", conclusion: null, run_started_at: new Date(T(`${DAY}T12:01:00-05:00`)).toISOString() });
+  const { io, did } = fakeIo(`${DAY}T14:52:00-05:00`, {
+    done: { noche: DAY },
+    log: [logRow("noche", DAY, "00:15")],
+    runs: [...cronRuns(`${DAY}T12:00:00-05:00`), slow],
+    jobsStartedAt: { [slow.id]: new Date(T(`${DAY}T13:09:00-05:00`)).toISOString() },
+  });
   await vigia(io);
   assert.deepEqual(did.cancel, []);
   assert.deepEqual(did.dispatch, []);

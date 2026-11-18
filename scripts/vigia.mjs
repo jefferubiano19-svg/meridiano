@@ -112,8 +112,14 @@ export async function vigia(io) {
   // B. Atascados. Uno en cola detrás de otro que está corriendo no está atascado: espera su turno (concurrencia).
   const running = runs.some((r) => r.status === "in_progress");
   for (const run of runs.filter((r) => ACTIVE.has(r.status))) {
-    const age = (now - Date.parse(run.run_started_at ?? run.created_at)) / MIN;
+    let age = (now - Date.parse(run.run_started_at ?? run.created_at)) / MIN;
     const queued = run.status !== "in_progress";
+    // Corriendo: la edad se cuenta desde que el job empezó en un runner, no desde que se creó la ejecución. El 16 nov
+    // 2026 el corte del mediodía esperó 68 min por un runner, llevaba 102 min trabajando y se canceló por «170 min».
+    if (!queued && age > RUNNING_MAX_MIN && typeof io.jobsStartedAt === "function") {
+      const started = await guard("leer los jobs del corte", () => io.jobsStartedAt(run.id), null);
+      if (started) age = (now - Date.parse(started)) / MIN;
+    }
     if ((queued && !running && age > QUEUED_MAX_MIN) || (!queued && age > RUNNING_MAX_MIN)) {
       const ok = await guard("cancelar un corte atascado", async () => (await io.cancel(run.id), true), false);
       if (ok) {
@@ -322,6 +328,13 @@ function realIo() {
     },
     async enableWorkflow() {
       if (act("reactivaría el flujo corte")) await gh("PUT", `/repos/${REPO}/actions/workflows/corte.yml/enable`);
+    },
+    /** Hora en que empezó el primer job de la ejecución en un runner (null si ninguno empezó). */
+    async jobsStartedAt(id) {
+      if (process.env.VIGIA_FAKE_RUNS) return null;
+      const jobs = (await gh("GET", `/repos/${REPO}/actions/runs/${id}/jobs`)).jobs ?? [];
+      const times = jobs.map((job) => job.started_at).filter(Boolean).sort();
+      return times[0] ?? null;
     },
     async cancel(id) {
       if (act(`cancelaría la ejecución ${id}`)) await gh("POST", `/repos/${REPO}/actions/runs/${id}/cancel`);
