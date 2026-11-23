@@ -1,6 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { shin } from "./engine";
+import { adjustFavorite } from "./favorites";
 import {
   bestFromOffers,
   consensusFromOffers,
@@ -76,6 +77,25 @@ describe("consenso y mejor cuota", () => {
     const fair = shin(2.0, 3.4, 3.8)!;
     near(consensus[0], fair.home);
     near(consensus[2], fair.away);
+  });
+
+  it("ignora ofertas incompletas o con alguna cuota de 1 o menos", () => {
+    const withBad = [
+      ...offers,
+      { house: "Corta", odds: [9, 9] },
+      { house: "Uno", odds: [1, 50, 50] },
+      { house: "Cero", odds: [9, 0.5, 9] },
+    ];
+    assert.deepEqual(bestFromOffers(withBad), bestFromOffers(offers));
+  });
+
+  it("si dos casas empatan en la mejor cuota, queda la primera", () => {
+    const tie = [
+      { house: "Primera", odds: [2.2, 3.4, 3.8] },
+      { house: "Segunda", odds: [2.2, 3.3, 3.6] },
+      { house: "Tercera", odds: [2.0, 3.3, 3.6] },
+    ];
+    assert.equal(bestFromOffers(tie)![0].house, "Primera");
   });
 
   it("la mejor cuota de cada resultado dice en qué casa está", () => {
@@ -176,6 +196,19 @@ describe("doublePicks (doble oportunidad y empate no válido)", () => {
   it("descarta más de +15 %", () => {
     assert.deepEqual(doublePicks(probs, dc(1.5, 1.01, 1.01), []), []);
   });
+
+  it("en los mercados dobles también ignora cuotas de 1 o menos y deja la primera casa si empatan", () => {
+    const rows = [
+      { house: "Primera", odds: [1.3, 1.01, 1.01] },
+      { house: "Segunda", odds: [1.3, 1.01, 1.01] },
+      { house: "Tercera", odds: [1.2, 1.01, 1.01] },
+      { house: "Mala", odds: [1.4, 1, 1.01] },
+      { house: "Peor", odds: [1.4, 0.5, 1.01] },
+    ];
+    const [pick] = doublePicks(probs, rows, []);
+    assert.equal(pick.house, "Primera");
+    near(pick.odds, 1.3);
+  });
 });
 
 describe("textos", () => {
@@ -193,8 +226,33 @@ describe("textos", () => {
 });
 
 describe("favoritePick (medición interna)", () => {
-  it("sin 3 casas o sin favorito de 65 %+ no hay selección", () => {
-    assert.equal(favoritePick([0.7, 0.2, 0.1], best3(1.5, 4, 8), 2, {}), null);
+  it("sin 3 casas, datos incompletos o sin favorito de 65 %+ no hay selección", () => {
+    const inRange = Number((1.05 / adjustFavorite({ home: 0.7, draw: 0.2, away: 0.1 }, {}).home).toFixed(2));
+    assert.ok(favoritePick([0.7, 0.2, 0.1], best3(inRange, 4, 8), 3, {}));
+    assert.equal(favoritePick([0.7, 0.2, 0.1], best3(inRange, 4, 8), 2, {}), null);
+    assert.equal(favoritePick([0.7, 0.2, 0.1], best3(inRange, 4, 8).slice(0, 2), 3, {}), null);
+    assert.equal(favoritePick([0.7, 0.2], best3(1.5, 4, 8), 3, {}), null);
     assert.equal(favoritePick([0.5, 0.3, 0.2], best3(2.1, 4, 8), 3, {}), null);
+  });
+
+  it("usa la probabilidad corregida del favorito y su cuota mínima", () => {
+    const probs = [0.7, 0.2, 0.1];
+    const corrected = adjustFavorite({ home: 0.7, draw: 0.2, away: 0.1 }, {}).home;
+    const odds = Number(((1.05 / corrected)).toFixed(2));
+    const pick = favoritePick(probs, best3(odds, 4, 8), 3, {});
+    assert.ok(pick);
+    assert.equal(pick.outcomeIndex, 0);
+    near(pick.prob, corrected);
+    assert.equal(pick.probConsensus, 0.7);
+    near(pick.ev, corrected * odds - 1);
+    near(pick.minOdds, 1.03 / corrected);
+  });
+
+  it("favorito visitante usa el índice 2; fuera de +3 % a +15 % no sale", () => {
+    const corrected = adjustFavorite({ home: 0.1, draw: 0.2, away: 0.7 }, {}).away;
+    const pick = favoritePick([0.1, 0.2, 0.7], best3(8, 4, Number((1.05 / corrected).toFixed(2))), 3, {});
+    assert.equal(pick?.outcomeIndex, 2);
+    assert.equal(favoritePick([0.1, 0.2, 0.7], best3(8, 4, Number((1.01 / corrected).toFixed(2))), 3, {}), null);
+    assert.equal(favoritePick([0.1, 0.2, 0.7], best3(8, 4, Number((1.3 / corrected).toFixed(2))), 3, {}), null);
   });
 });

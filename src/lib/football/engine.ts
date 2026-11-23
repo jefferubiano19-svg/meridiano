@@ -163,30 +163,35 @@ export function devig(home: number, draw: number, away: number): ThreeWay | null
 }
 
 /** Shin. Si no converge, el llamador usa el proporcional. */
+/** Probabilidad de Shin de un resultado con cuota implícita q, suma de implícitas `sum` y fracción de informados z. */
+function shinProb(q: number, z: number, sum: number): number {
+  const inner = z * z + (4 * (1 - z) * q * q) / sum;
+  return (Math.sqrt(Math.max(0, inner)) - z) / (2 * (1 - z));
+}
+
+/** z de Shin por bisección: la que hace que las tres probabilidades sumen 1. */
+function shinZ(raw: number[], sum: number): number {
+  let lo = 0;
+  let hi = 0.4;
+  for (let i = 0; i < 40; i += 1) {
+    const z = (lo + hi) / 2;
+    const total = raw.reduce((acc, q) => acc + shinProb(q, z, sum), 0);
+    if (total > 1) lo = z;
+    else hi = z;
+  }
+  return (lo + hi) / 2;
+}
+
 export function shin(home: number, draw: number, away: number): ThreeWay | null {
   if (!(home > 1) || !(draw > 1) || !(away > 1)) return null;
   const raw = [1 / home, 1 / draw, 1 / away];
   const sum = raw[0] + raw[1] + raw[2];
   const margin = sum - 1;
   if (margin < 0 || margin > 0.15) return null;
-  let lo = 0;
-  let hi = 0.4;
-  for (let i = 0; i < 40; i += 1) {
-    const z = (lo + hi) / 2;
-    const total = raw.reduce((acc, q) => {
-      const inner = z * z + (4 * (1 - z) * q * q) / sum;
-      return acc + (Math.sqrt(inner) - z) / (2 * (1 - z));
-    }, 0);
-    if (total > 1) lo = z;
-    else hi = z;
-  }
-  const z = (lo + hi) / 2;
-  const probs = raw.map((q) => {
-    const inner = z * z + (4 * (1 - z) * q * q) / sum;
-    return (Math.sqrt(Math.max(0, inner)) - z) / (2 * (1 - z));
-  });
-  const mass = probs.reduce((acc, p) => acc + p, 0);
-  if (mass <= 0 || probs.some((p) => !(p > 0))) return null;
+  const z = shinZ(raw, sum);
+  // Cada probabilidad es positiva por construcción (q > 0 ⇒ √(z² + algo positivo) > z): no hace falta revisar.
+  const probs = raw.map((q) => shinProb(q, z, sum));
+  const mass = probs[0] + probs[1] + probs[2];
   return { home: probs[0] / mass, draw: probs[1] / mass, away: probs[2] / mass };
 }
 

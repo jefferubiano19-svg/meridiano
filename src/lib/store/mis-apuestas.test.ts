@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { followedRules, profitOf, type MyBet } from "./mis-apuestas";
+import { createBetStore, followedRules, profitOf, type MyBet } from "./mis-apuestas";
 
 /* «Mis apuestas»: ganancia de cada apuesta y si siguió las reglas de «Valor del día». */
 
@@ -42,5 +42,84 @@ describe("¿siguió las reglas?", () => {
   it("la mínima se compara como se muestra, a 2 decimales (igual que /valor)", () => {
     assert.equal(followedRules(bet({ odds: 1.14, valor: { house: "Betano", minOdds: 1.1401, prob: 0.9, matchId: "x" } })), true);
     assert.equal(followedRules(bet({ odds: 1.13, valor: { house: "Betano", minOdds: 1.1401, prob: 0.9, matchId: "x" } })), false);
+  });
+});
+
+describe("guardado en el navegador", () => {
+  type Store = Record<string, string>;
+  const KEY = "meridiano-mis-apuestas";
+  const storeOn = (store: Store, broken = false) =>
+    createBetStore(() => ({
+      getItem: (key: string) => {
+        if (broken) throw new Error("bloqueado");
+        return store[key] ?? null;
+      },
+      setItem: (key: string, value: string) => {
+        if (broken) throw new Error("bloqueado");
+        store[key] = value;
+      },
+    }));
+  const saved = (store: Store) => JSON.parse(store[KEY] ?? "[]") as MyBet[];
+  const { id: _id, ...fresh } = bet();
+
+  it("agregar, cambiar el resultado y borrar quedan guardados", () => {
+    const store: Store = {};
+    const bets = storeOn(store);
+    bets.add(fresh);
+    const [first] = saved(store);
+    assert.equal(first.match, "Junior — Pasto");
+    assert.equal(typeof first.id, "string");
+    bets.update(first.id, { result: "ganada" });
+    assert.equal(saved(store)[0].result, "ganada");
+    bets.add({ ...fresh, match: "Otro" });
+    assert.deepEqual(saved(store).map((item) => item.match), ["Otro", "Junior — Pasto"]);
+    bets.remove(first.id);
+    assert.deepEqual(saved(store).map((item) => item.match), ["Otro"]);
+    assert.deepEqual(bets.load().map((item) => item.match), ["Otro"]);
+  });
+
+  it("descarta filas dañadas al leer y sobrevive a un JSON roto o que no es lista", () => {
+    const good = bet({ id: "bien" });
+    const store: Store = { [KEY]: JSON.stringify([good, { ...good, id: 3 }, { ...good, odds: 1 }, { ...good, stake: 0 }, null]) };
+    assert.deepEqual(storeOn(store).load().map((item) => item.id), ["bien"]);
+    // Montos pequeños (incluso menos de 1) y cuotas apenas sobre 1 son válidos.
+    const small: Store = { [KEY]: JSON.stringify([bet({ id: "uno", stake: 1 }), bet({ id: "medio", stake: 0.5, odds: 1.01 })]) };
+    assert.deepEqual(storeOn(small).load().map((item) => item.id), ["uno", "medio"]);
+    assert.deepEqual(storeOn({ [KEY]: "{no es json" }).load(), []);
+    assert.deepEqual(storeOn({ [KEY]: JSON.stringify({ a: 1 }) }).load(), []);
+    assert.deepEqual(storeOn({}).load(), []);
+  });
+
+  it("si el navegador no deja leer ni guardar, funciona en memoria", () => {
+    const store: Store = {};
+    const bets = storeOn(store, true);
+    bets.add(fresh);
+    assert.deepEqual(store, {});
+    assert.equal(bets.load().length, 1);
+  });
+
+  it("avisa a quien escucha y relee cuando otra pestaña cambia lo guardado", () => {
+    const store: Store = {};
+    const bets = storeOn(store);
+    let calls = 0;
+    const stop = bets.listen(() => (calls += 1));
+    bets.add(fresh);
+    assert.equal(calls, 1);
+    store[KEY] = JSON.stringify([bet({ id: "otra", match: "Desde otra pestaña" })]);
+    assert.equal(bets.load()[0].match, "Junior — Pasto");
+    bets.reload();
+    assert.equal(calls, 2);
+    assert.equal(bets.load()[0].match, "Desde otra pestaña");
+    stop();
+    bets.add(fresh);
+    assert.equal(calls, 2);
+  });
+
+  it("el borrador de «Valor del día» se entrega una sola vez", () => {
+    const bets = storeOn({});
+    const { stake: _stake, result: _result, ...draft } = fresh;
+    bets.setDraft(draft);
+    assert.equal(bets.takeDraft()?.match, "Junior — Pasto");
+    assert.equal(bets.takeDraft(), null);
   });
 });

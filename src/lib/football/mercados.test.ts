@@ -5,6 +5,7 @@ import {
   expectedValue,
   fairOdds,
   medianConsensus,
+  medians,
   minOdds,
   pickFairOdds,
   pickMinOdds,
@@ -66,6 +67,8 @@ describe("valor, cuota justa y cuota mínima", () => {
     assert.equal(stillValuable(1.14, 1.1451), false);
     assert.equal(stillValuable(2.0, 2.06), false);
     assert.equal(stillValuable(2.1, 2.06), true);
+    // Justo en el borde (cuota + 0,005 = mínima) todavía cuenta.
+    assert.equal(stillValuable(2, 2.005), true);
   });
 });
 
@@ -133,6 +136,17 @@ describe("consenso", () => {
       { home: 0.7, draw: 0.2, away: 0.1 },
     ])!;
     near(consensus[0], 0.55 / (0.55 + 0.25 + 0.2));
+  });
+  it("medians sin normalizar: con número par, promedio de las dos del medio (la usa el cierre del 1X2)", () => {
+    const [home, draw, away] = medians([
+      { home: 0.5, draw: 0.3, away: 0.2 },
+      { home: 0.6, draw: 0.2, away: 0.2 },
+      { home: 0.4, draw: 0.3, away: 0.3 },
+      { home: 0.7, draw: 0.2, away: 0.1 },
+    ]);
+    near(home, 0.55);
+    near(draw, 0.25);
+    near(away, 0.2);
   });
   it("menos de 3 casas: sin consenso", () => {
     assert.equal(medianConsensus([{ home: 0.5, draw: 0.3, away: 0.2 }]), null);

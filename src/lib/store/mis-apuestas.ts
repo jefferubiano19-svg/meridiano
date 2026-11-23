@@ -34,76 +34,95 @@ export type BetDraft = Omit<MyBet, "id" | "stake" | "result">;
 
 const KEY = "meridiano-mis-apuestas";
 const EMPTY: MyBet[] = [];
-let memory: MyBet[] | null = null;
-let draft: BetDraft | null = null;
-const listeners = new Set<() => void>();
+
+/** Lo que el guardado necesita del navegador (en pruebas, uno simulado). */
+export interface BetStorage {
+  getItem(key: string): string | null;
+  setItem(key: string, value: string): void;
+}
 
 function valid(bet: MyBet): boolean {
   return Boolean(bet) && typeof bet.id === "string" && Number(bet.odds) > 1 && Number(bet.stake) > 0;
 }
 
-function load(): MyBet[] {
-  if (memory) return memory;
+/** Lee lo guardado; filas dañadas se descartan y un JSON roto o un navegador que no deja leer da una lista vacía. */
+function parseSaved(storage: () => BetStorage): MyBet[] {
   try {
-    const raw = window.localStorage.getItem(KEY);
-    const parsed = raw ? (JSON.parse(raw) as MyBet[]) : [];
-    memory = Array.isArray(parsed) ? parsed.filter(valid) : [];
+    const parsed: unknown = JSON.parse(storage().getItem(KEY) || "[]");
+    return Array.isArray(parsed) ? (parsed as MyBet[]).filter(valid) : [];
   } catch {
-    memory = [];
+    return [];
   }
-  return memory;
 }
 
-function save(next: MyBet[]) {
-  memory = next;
-  try {
-    window.localStorage.setItem(KEY, JSON.stringify(next));
-  } catch {
-    /* sin almacenamiento: queda en memoria */
-  }
-  for (const listener of listeners) listener();
+/**
+ * Guardado de las apuestas: una sola copia en memoria (un solo escritor) y localStorage como respaldo. Si el navegador
+ * no deja guardar, sigue en memoria mientras la página esté abierta.
+ */
+export function createBetStore(storage: () => BetStorage) {
+  let memory: MyBet[] | null = null;
+  let draft: BetDraft | null = null;
+  const listeners = new Set<() => void>();
+  const load = (): MyBet[] => (memory ??= parseSaved(storage));
+  const save = (next: MyBet[]) => {
+    memory = next;
+    try {
+      storage().setItem(KEY, JSON.stringify(next));
+    } catch {
+      /* sin almacenamiento: queda en memoria */
+    }
+    for (const listener of listeners) listener();
+  };
+  return {
+    load,
+    /** Otra pestaña cambió lo guardado: se vuelve a leer. */
+    reload() {
+      memory = null;
+      for (const listener of listeners) listener();
+    },
+    listen(listener: () => void) {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+    add(bet: Omit<MyBet, "id">) {
+      const id = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
+      save([{ ...bet, id }, ...load()]);
+    },
+    update(id: string, change: Partial<Omit<MyBet, "id">>) {
+      save(load().map((bet) => (bet.id === id ? { ...bet, ...change } : bet)));
+    },
+    remove(id: string) {
+      save(load().filter((bet) => bet.id !== id));
+    },
+    /** Deja lista una apuesta de «Valor del día» para que la página la muestre en el formulario. */
+    setDraft(next: BetDraft) {
+      draft = next;
+    },
+    takeDraft(): BetDraft | null {
+      const out = draft;
+      draft = null;
+      return out;
+    },
+  };
 }
+
+export const myBets = createBetStore(() => window.localStorage);
 
 function subscribe(listener: () => void) {
-  listeners.add(listener);
+  const stop = myBets.listen(listener);
   const onStorage = (event: StorageEvent) => {
-    if (event.key === KEY) {
-      memory = null;
-      listener();
-    }
+    if (event.key === KEY) myBets.reload();
   };
   window.addEventListener("storage", onStorage);
   return () => {
-    listeners.delete(listener);
+    stop();
     window.removeEventListener("storage", onStorage);
   };
 }
 
 export function useMyBets(): MyBet[] {
-  return useSyncExternalStore(subscribe, load, () => EMPTY);
+  return useSyncExternalStore(subscribe, myBets.load, () => EMPTY);
 }
-
-export const myBets = {
-  add(bet: Omit<MyBet, "id">) {
-    const id = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
-    save([{ ...bet, id }, ...load()]);
-  },
-  update(id: string, change: Partial<Omit<MyBet, "id">>) {
-    save(load().map((bet) => (bet.id === id ? { ...bet, ...change } : bet)));
-  },
-  remove(id: string) {
-    save(load().filter((bet) => bet.id !== id));
-  },
-  /** Deja lista una apuesta de «Valor del día» para que la página la muestre en el formulario. */
-  setDraft(next: BetDraft) {
-    draft = next;
-  },
-  takeDraft(): BetDraft | null {
-    const out = draft;
-    draft = null;
-    return out;
-  },
-};
 
 /** Ganancia neta de una apuesta resuelta (null si está pendiente). */
 export function profitOf(bet: MyBet): number | null {

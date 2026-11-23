@@ -54,9 +54,12 @@ export function consensusFromOffers(offers: Offer[]): [number, number, number] |
   return fairs.length < VALUE_MIN_HOUSES ? null : medianConsensus(fairs);
 }
 
-/** ¿Entra en «Valor del día»? Probabilidad de ganar al mínimo o más y valor entre +3 % y +15 %. */
+/**
+ * ¿Entra en «Valor del día»? Probabilidad de ganar al mínimo o más y valor entre +3 % y +15 %. Una probabilidad de 0
+ * da valor −100 % y una vacía (NaN) no pasa ninguna comparación: no hacen falta revisiones aparte.
+ */
 function qualifies(prob: number, ev: number, minProb: number): boolean {
-  return prob > 0 && prob >= minProb && ev >= VALUE_MIN_EV && ev <= VALUE_MAX_EV;
+  return prob >= minProb && ev >= VALUE_MIN_EV && ev <= VALUE_MAX_EV;
 }
 
 /** Mejor cuota de cada resultado entre las ofertas. */
@@ -83,7 +86,8 @@ export function valuePicks(
     const { house, odds } = best[index];
     const prob = winProb(selection, probs);
     const ev = expectedValue(selection, probs, odds);
-    if (!(odds > 1) || !qualifies(prob, ev, minProb)) continue;
+    // Una cuota de 1 o menos (o vacía) da valor negativo o NaN y no pasa qualifies: no hace falta revisarla aparte.
+    if (!qualifies(prob, ev, minProb)) continue;
     out.push({ outcomeIndex: index, prob, house, odds, ev, fair: fairOdds(selection, probs), minOdds: minOdds(selection, probs) });
   }
   return out;
