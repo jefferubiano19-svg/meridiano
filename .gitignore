@@ -12,3 +12,6 @@ attachments
 .venv/
 coverage/
 .tools/
+
+# Copias de trabajo temporales de los agentes (git worktree)
+.claude/worktrees/
