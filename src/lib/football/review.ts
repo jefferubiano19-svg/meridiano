@@ -194,9 +194,6 @@ function bogotaDay(ms: number): string {
   return new Date(ms - 5 * 3600 * 1000).toISOString().slice(0, 10);
 }
 
-const SPANISH_PREFIX =
-  /^(ALEMANIA|INGLATERRA|ESPAÑA|FRANCIA|ITALIA|PAÍSES BAJOS|BÉLGICA|TURQUÍA|BRASIL|MÉXICO|ESTADOS UNIDOS|ESCOCIA|SUIZA|EUROPA|SUDAMÉRICA|ÁFRICA|MUNDIAL|GRECIA|RUSIA|SUECIA|NORUEGA|DINAMARCA|POLONIA|UCRANIA|CROACIA|EGIPTO|MARRUECOS|ARGELIA|JAPÓN|COREA DEL SUR|ARABIA SAUDÍ|PERÚ|PANAMÁ|REPÚBLICA CHECA|HUNGRÍA|SUDÁFRICA):/;
-
 /** Mercado y resultado de una fila del registro (sin mercado = 1X2). */
 function selectionOf(mark: { market?: string | null; outcomeIndex?: number }): Selection {
   return { market: (mark.market ?? "1x2") as Selection["market"], outcomeIndex: mark.outcomeIndex as Outcome } as Selection;
@@ -505,6 +502,113 @@ export function calibrationOf(byMatch: ByMatch[], rowById: Map<string, Predictio
   }));
 }
 
+/* ---- 7. Anomalías de datos ------------------------------------------------------------------------------- */
+
+type Anomalies = Review["anomalies"];
+
+/** Lo que miran las verificaciones de datos. `recent`: cortes de la semana; `from`, `now`: la ventana. */
+export interface AnomalyInput {
+  agenda: AgendaRow[];
+  predictions: PredictionRow[];
+  standings: ReviewInput["standings"];
+  recent: CutRow[];
+  from: number;
+  now: number;
+}
+
+const SPANISH_PREFIX =
+  /^(ALEMANIA|INGLATERRA|ESPAÑA|FRANCIA|ITALIA|PAÍSES BAJOS|BÉLGICA|TURQUÍA|BRASIL|MÉXICO|ESTADOS UNIDOS|ESCOCIA|SUIZA|EUROPA|SUDAMÉRICA|ÁFRICA|MUNDIAL|GRECIA|RUSIA|SUECIA|NORUEGA|DINAMARCA|POLONIA|UCRANIA|CROACIA|EGIPTO|MARRUECOS|ARGELIA|JAPÓN|COREA DEL SUR|ARABIA SAUDÍ|PERÚ|PANAMÁ|REPÚBLICA CHECA|HUNGRÍA|SUDÁFRICA):/;
+
+function matchLabel(row: AgendaRow): string {
+  return `${row[0]} ${row[1].slice(0, 16)} ${row[3]} - ${row[4]}`;
+}
+
+function repeatedIds(agenda: AgendaRow[]): string[] {
+  const ids = new Map<string, number>();
+  for (const row of agenda) ids.set(row[0], (ids.get(row[0]) ?? 0) + 1);
+  return [...ids.entries()].filter(([, n]) => n > 1).map(([id]) => id);
+}
+
+function weekPredictions(data: AnomalyInput): PredictionRow[] {
+  return data.predictions.filter((row) => Date.parse(row.calculatedAt) >= data.from);
+}
+
+function sumIsOff(way: Way | null | undefined): boolean {
+  return way != null && Math.abs(way.home + way.draw + way.away - 1) > 0.001;
+}
+
+function goalsOutOfRange(row: PredictionRow): boolean {
+  return [row.lambdaHome, row.lambdaAway].some((v) => typeof v === "number" && (v < 0.2 - 1e-9 || v > 4 + 1e-9));
+}
+
+function badTableRows(standings: ReviewInput["standings"]): string[] {
+  return standings.flatMap((table) =>
+    table.rows.filter((row) => row.w != null && row.d != null && row.l != null && row.gp !== row.w + row.d + row.l).map((row) => `${table.competition}: ${row.team}`),
+  );
+}
+
+/** Verificaciones en el orden en que se muestran: clave, texto y las filas que fallan. */
+const ANOMALY_CHECKS: { key: string; label: string; rows: (data: AnomalyInput) => string[] }[] = [
+  {
+    key: "prefijo",
+    label: "Competiciones con el país en español",
+    rows: (data) => data.agenda.filter((row) => SPANISH_PREFIX.test(row[2])).map((row) => `${row[0]} ${row[2]}`),
+  },
+  {
+    key: "por-jugar-viejo",
+    label: "Partidos 'por-jugar' que empezaron hace más de 48 horas",
+    rows: (data) =>
+      data.agenda.filter((row) => row[5] === "por-jugar" && Date.parse(row[1]) < data.now - 2 * DAY && Date.parse(row[1]) >= data.now - 9 * DAY).map(matchLabel),
+  },
+  {
+    key: "sin-resultado",
+    label: "Partidos sin resultado publicado en Flashscore (aplazados o sin dato; informativo, no se evalúan)",
+    rows: (data) => data.agenda.filter((row) => row[5] === "sin-resultado" && Date.parse(row[1]) >= data.now - 9 * DAY).map(matchLabel),
+  },
+  { key: "id-repetido", label: "Ids repetidos en la agenda", rows: (data) => repeatedIds(data.agenda) },
+  {
+    key: "despues-inicio",
+    label: "Predicciones guardadas después del inicio",
+    rows: (data) => weekPredictions(data).filter((row) => Date.parse(row.calculatedAt) >= Date.parse(row.kickoff)).map((row) => row.id),
+  },
+  {
+    key: "suma",
+    label: "Probabilidades publicadas que no suman 1",
+    rows: (data) => weekPredictions(data).filter((row) => sumIsOff(row.published)).map((row) => row.id),
+  },
+  {
+    key: "goles",
+    label: "Goles esperados fuera de 0,20 a 4,00",
+    rows: (data) => weekPredictions(data).filter(goalsOutOfRange).map((row) => row.id),
+  },
+  { key: "tablas", label: "Filas de tablas con PJ ≠ G + E + P", rows: (data) => badTableRows(data.standings) },
+  {
+    key: "conflictos",
+    label: "Marcadores corregidos por la página de resultados de ayer",
+    rows: (data) => data.recent.flatMap((row) => (row.scoreConflicts ? [`${row.startedAtBogota}: ${row.scoreConflicts}`] : [])),
+  },
+];
+
+/** Informativos: correcciones de marcador (el sistema funcionando) y partidos sin resultado publicado. */
+const INFORMATIVE = ["conflictos", "sin-resultado"];
+/** Errores que ponen el semáforo en rojo. */
+const SEVERE = ["despues-inicio", "suma", "id-repetido"];
+
+/** Verde sin anomalías serias; rojo si alguna es grave; si no, amarillo. */
+function anomaliesLightOf(items: Anomalies["items"]): Light {
+  const serious = items.filter((item) => !INFORMATIVE.includes(item.key) && item.count > 0).length;
+  if (serious === 0) return "verde";
+  return items.some((item) => SEVERE.includes(item.key) && item.count > 0) ? "rojo" : "amarillo";
+}
+
+export function anomaliesOf(data: AnomalyInput): Anomalies {
+  const items = ANOMALY_CHECKS.map(({ key, label, rows }) => {
+    const found = rows(data);
+    return { key, label, count: found.length, examples: found.slice(0, 5) };
+  });
+  return { light: anomaliesLightOf(items), items };
+}
+
 /* ---- Medición del dinero: liquidación y comparación con el cierre ---------------------------------------- */
 
 /** Fila del registro de marcas, de «Valor del día» o de «Favorito con valor». */
@@ -680,7 +784,6 @@ export function buildReview(input: ReviewInput): Review {
   const from = now - 7 * DAY;
 
   const recent = recentCuts(input.cuts, from, now);
-
   const byMatch = input.evaluations.byMatch ?? [];
   const rowById = predictionIndex(input.predictions);
 
@@ -696,69 +799,6 @@ export function buildReview(input: ReviewInput): Review {
   const pickRuleV2 = pickRuleV2Of(input.picks ?? [], measure);
   const pickTiers = pickTiersOf(input.picks ?? [], measure);
 
-
-  // 7. Anomalías de datos.
-  const items: Review["anomalies"]["items"] = [];
-  const push = (key: string, label: string, rows: string[]) => items.push({ key, label, count: rows.length, examples: rows.slice(0, 5) });
-  push(
-    "prefijo",
-    "Competiciones con el país en español",
-    input.agenda.filter((row) => SPANISH_PREFIX.test(row[2])).map((row) => `${row[0]} ${row[2]}`),
-  );
-  push(
-    "por-jugar-viejo",
-    "Partidos 'por-jugar' que empezaron hace más de 48 horas",
-    input.agenda
-      .filter((row) => row[5] === "por-jugar" && Date.parse(row[1]) < now - 2 * DAY && Date.parse(row[1]) >= now - 9 * DAY)
-      .map((row) => `${row[0]} ${row[1].slice(0, 16)} ${row[3]} - ${row[4]}`),
-  );
-  push(
-    "sin-resultado",
-    "Partidos sin resultado publicado en Flashscore (aplazados o sin dato; informativo, no se evalúan)",
-    input.agenda
-      .filter((row) => row[5] === "sin-resultado" && Date.parse(row[1]) >= now - 9 * DAY)
-      .map((row) => `${row[0]} ${row[1].slice(0, 16)} ${row[3]} - ${row[4]}`),
-  );
-  const ids = new Map<string, number>();
-  for (const row of input.agenda) ids.set(row[0], (ids.get(row[0]) ?? 0) + 1);
-  push("id-repetido", "Ids repetidos en la agenda", [...ids.entries()].filter(([, n]) => n > 1).map(([id]) => id));
-  const weekRows = input.predictions.filter((row) => Date.parse(row.calculatedAt) >= from);
-  push(
-    "despues-inicio",
-    "Predicciones guardadas después del inicio",
-    weekRows.filter((row) => Date.parse(row.calculatedAt) >= Date.parse(row.kickoff)).map((row) => row.id),
-  );
-  push(
-    "suma",
-    "Probabilidades publicadas que no suman 1",
-    weekRows
-      .filter((row) => row.published && Math.abs(row.published.home + row.published.draw + row.published.away - 1) > 0.001)
-      .map((row) => row.id),
-  );
-  push(
-    "goles",
-    "Goles esperados fuera de 0,20 a 4,00",
-    weekRows
-      .filter((row) => [row.lambdaHome, row.lambdaAway].some((v) => typeof v === "number" && (v < 0.2 - 1e-9 || v > 4 + 1e-9)))
-      .map((row) => row.id),
-  );
-  push(
-    "tablas",
-    "Filas de tablas con PJ ≠ G + E + P",
-    input.standings.flatMap((table) =>
-      table.rows
-        .filter((row) => row.w != null && row.d != null && row.l != null && row.gp !== row.w + row.d + row.l)
-        .map((row) => `${table.competition}: ${row.team}`),
-    ),
-  );
-  push(
-    "conflictos",
-    "Marcadores corregidos por la página de resultados de ayer",
-    recent.flatMap((row) => (row.scoreConflicts ? [`${row.startedAtBogota}: ${row.scoreConflicts}`] : [])),
-  );
-  // Informativos: correcciones de marcador (el sistema funcionando) y partidos sin resultado publicado.
-  const serious = items.filter((item) => !["conflictos", "sin-resultado"].includes(item.key) && item.count > 0).length;
-  const anomaliesLight: Light = serious === 0 ? "verde" : items.some((item) => ["despues-inicio", "suma", "id-repetido"].includes(item.key) && item.count > 0) ? "rojo" : "amarillo";
 
   // «El rival marca»: la fila evaluada de cada partido contra su marcador.
   const rivalRows: { p: number; y: number }[] = [];
@@ -810,6 +850,6 @@ export function buildReview(input: ReviewInput): Review {
     modelBlend: modelBlendOf(byMatch, rowById),
     calibration: calibrationOf(byMatch, rowById),
     rivalGoal,
-    anomalies: { light: anomaliesLight, items },
+    anomalies: anomaliesOf({ agenda: input.agenda, predictions: input.predictions, standings: input.standings, recent, from, now }),
   };
 }
