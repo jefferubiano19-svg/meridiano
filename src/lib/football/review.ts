@@ -273,7 +273,10 @@ function coverageFor(predictions: PredictionRow[], start: number, end: number): 
     return at >= start && at < end;
   });
   const byLevel: Record<string, number> = {};
-  for (const row of rows) byLevel[row.level ?? "?"] = (byLevel[row.level ?? "?"] ?? 0) + 1;
+  for (const row of rows) {
+    const level = row.level ?? "?";
+    byLevel[level] = (byLevel[level] ?? 0) + 1;
+  }
   return { total: rows.length, byLevel, withConsensus: rows.filter((row) => row.consensus).length };
 }
 
@@ -424,11 +427,12 @@ function wplayMarketOf(byMatch: ByMatch[], predictions: PredictionRow[]): Review
 
 /* ---- 5b. Sombra del modelo: ¿la mezcla 0,8 le gana al consenso solo? (desde el 15 oct se publica el consenso) */
 
-/** RPS de una 1X2 contra el resultado. */
+/** RPS de una 1X2 contra el resultado (con 3 resultados solo cuentan los dos primeros acumulados). */
 function outcomeRps(p: Way, actual: string): number {
-  const o = [actual === "home" ? 1 : 0, actual === "draw" ? 1 : 0, actual === "away" ? 1 : 0];
-  const c1 = p.home - o[0];
-  const c2 = p.home + p.draw - o[0] - o[1];
+  const home = actual === "home" ? 1 : 0;
+  const draw = actual === "draw" ? 1 : 0;
+  const c1 = p.home - home;
+  const c2 = p.home + p.draw - home - draw;
   return (c1 * c1 + c2 * c2) / 2;
 }
 
@@ -783,7 +787,8 @@ export function pickTiersOf(picks: PickRow[], measure: Measure): Review["pickTie
 
 /* ---- «El rival marca»: probabilidad de que el no favorito haga gol contra su marcador ---------------------- */
 
-type RivalRow = { p: number; y: number };
+/** Lo dicho (p, probabilidad de que el no favorito marque) y lo que pasó (y = 1 si marcó). */
+export type RivalRow = { p: number; y: number };
 
 /** Tramos de la probabilidad dicha (el último llega hasta 1,01 para que entre el 100 %). */
 const RIVAL_BUCKETS: [number, number, string][] = [
@@ -804,9 +809,12 @@ function rivalRowOf(ev: ByMatch, rowById: Map<string, PredictionRow>): RivalRow 
   return { p: rival.p, y: Number(rival.side === "home" ? score[0] : score[1]) >= 1 ? 1 : 0 };
 }
 
-/** Brier contra la frecuencia real (una constante) y calibración por tramos. */
 export function rivalGoalOf(byMatch: ByMatch[], rowById: Map<string, PredictionRow>): Review["rivalGoal"] {
-  const rows = byMatch.map((ev) => rivalRowOf(ev, rowById)).filter((row): row is RivalRow => row != null);
+  return rivalSummary(byMatch.map((ev) => rivalRowOf(ev, rowById)).filter((row): row is RivalRow => row != null));
+}
+
+/** Brier contra la frecuencia real (una constante) y calibración por tramos. */
+export function rivalSummary(rows: RivalRow[]): Review["rivalGoal"] {
   const rate = mean(rows.map((row) => row.y));
   return {
     n: rows.length,
