@@ -4,6 +4,7 @@ import { ExportBar } from "@/components/export-bar";
 import { Input } from "@/components/ui/input";
 import { loadModelo } from "@/lib/football/pages";
 import { useAgendaToday } from "@/lib/football/use-today";
+import { stillValuable } from "@/lib/football/mercados";
 import {
   followedRules,
   myBets,
@@ -114,7 +115,7 @@ function MisApuestasPage() {
       rules: tally(rules),
       other: tally(other),
       combos: tally(bets.filter((bet) => bet.combo)),
-      below: tally(bets.filter((bet) => bet.valor && bet.odds + 1e-9 < bet.valor.minOdds)),
+      below: tally(bets.filter((bet) => bet.valor && !stillValuable(bet.odds, bet.valor.minOdds))),
     };
   }, [bets]);
 
@@ -125,7 +126,7 @@ function MisApuestasPage() {
     warnings.push(
       "Combinada: la probabilidad de acertar es el producto de cada selección (tres de 60 % = 21,6 %). Meridiano no mide ni recomienda combinadas.",
     );
-  if (form.valor && odds > 1 && odds + 1e-9 < form.valor.minOdds)
+  if (form.valor && odds > 1 && !stillValuable(odds, form.valor.minOdds))
     warnings.push(`Cuota debajo de la mínima (${num(form.valor.minOdds)}): esta apuesta ya no tiene valor.`);
   if (form.valor && form.house.toLowerCase() !== form.valor.house.toLowerCase())
     warnings.push(`La casa indicada era ${form.valor.house}: en otra casa la cuota y el valor cambian.`);
@@ -348,8 +349,8 @@ function MisApuestasPage() {
               const profit = profitOf(bet);
               const flags = [
                 bet.combo ? "Combinada" : null,
-                bet.valor && bet.odds + 1e-9 < bet.valor.minOdds ? "Debajo de la mínima" : null,
-                bet.valor && !followedRules(bet) && !bet.combo && bet.odds + 1e-9 >= bet.valor.minOdds ? "Otra casa" : null,
+                bet.valor && !stillValuable(bet.odds, bet.valor.minOdds) ? "Debajo de la mínima" : null,
+                bet.valor && !followedRules(bet) && !bet.combo && stillValuable(bet.odds, bet.valor.minOdds) ? "Otra casa" : null,
                 !bet.valor && !bet.combo ? "Fuera de «Valor del día»" : null,
               ].filter(Boolean);
               return (

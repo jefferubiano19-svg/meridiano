@@ -5,6 +5,8 @@
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { chromium } from "playwright";
+// La matemática del dinero vive en un solo lugar (src/lib/football/mercados.ts); el corte corre con register-ts.
+import { COLOMBIAN_HOUSE, minOdds, pickMinOdds, stillValuable } from "../src/lib/football/mercados.ts";
 
 const ROOT = new URL("../data/", import.meta.url);
 const GAP_MS = 3000;
@@ -689,13 +691,12 @@ async function commentValor(body) {
 async function notifyPicks(picks, origin = `corte ${CUT_MODE}, leídas desde las ${String(CUT_STARTED ?? "").slice(11, 16)}`) {
   const open = picks.filter((pick) => Date.parse(pick.kickoff) - Date.now() > PREMATCH_MS);
   if (open.length === 0) return { sent: false, picks: 0 };
-  const minOf = (pick) => (pick.market === "dnb" ? (1.03 - (pick.pDraw ?? 0)) / pick.prob : 1.03 / pick.prob);
   // De mayor a menor probabilidad de cumplirse; «Alta» (40 % o más) es el nivel por defecto de la página.
   const sorted = [...open].sort((a, b) => b.prob - a.prob || a.kickoff.localeCompare(b.kickoff));
   const tier = (prob) => (prob >= 0.4 ? "**Alta**" : prob >= 0.25 ? "Media" : "Baja");
   const lines = sorted.map(
     (pick) =>
-      `| ${whenOf(pick.kickoff)} | ${pick.home} – ${pick.away} | **${pickSide(pick)}** | ${pick.house} | ${num2(pick.odds)} | **${num2(minOf(pick))}** | ${pct1(pick.prob)} | ${tier(pick.prob)} |`,
+      `| ${whenOf(pick.kickoff)} | ${pick.home} – ${pick.away} | **${pickSide(pick)}** | ${pick.house} | ${num2(pick.odds)} | **${num2(pickMinOdds(pick))}** | ${pct1(pick.prob)} | ${tier(pick.prob)} |`,
   );
   const body = [
     `${sorted.length === 1 ? "1 selección nueva" : `${sorted.length} selecciones nuevas`} (${origin}).`,
@@ -742,7 +743,7 @@ async function notifyLost(lost) {
  * Las 5 casas colombianas que usa Meridiano. Flashscore a veces muestra otras según el país desde donde se consulta
  * (los servidores de GitHub están en EE. UU.: aparecía bet365.us). Cualquier otra casa se descarta al leer.
  */
-const HOUSES = /^(wplay\.co|betano\.co|stake\.latam|bwin\.co|betplay)$/i;
+const HOUSES = COLOMBIAN_HOUSE;
 const colombian = (book) => HOUSES.test(String(book?.book ?? book?.house ?? "").trim());
 
 function storeOdds(results, started) {
@@ -1929,19 +1930,17 @@ async function cierre() {
       }
       // Ya no tiene valor: selecciones v2 registradas de este partido cuya mejor cuota colombiana de ahora quedó por
       // debajo de la mínima calculada con el consenso de ahora (+3 %). Solo con 3+ casas leídas.
-      const [home, draw, away] = probs;
       for (const pick of registered.filter((item) => item.matchId === row.id && item.rule === "v2")) {
         const market = pick.market ?? "1x2";
         if (market !== "1x2" && (market === "dc" ? dc : dnb).length === 0) continue;
         const key = pickKey(pick);
         if (avisos.lost[key]) continue;
-        const prob = market === "1x2" ? probs[pick.outcomeIndex] : market === "dc" ? [home + draw, home + away, draw + away][pick.outcomeIndex] : pick.outcomeIndex === 0 ? home : away;
-        const nowMin = market === "dnb" ? (1.03 - draw) / prob : 1.03 / prob;
+        const nowMin = minOdds({ market, outcomeIndex: pick.outcomeIndex }, probs);
         const pool = market === "1x2" ? offers : market === "dc" ? dc : dnb;
         const slot = market === "dnb" ? (pick.outcomeIndex === 0 ? 0 : 1) : pick.outcomeIndex;
         const top = pool.reduce((acc, offer) => (offer.odds[slot] > (acc?.odds ?? 0) ? { house: offer.house, odds: offer.odds[slot] } : acc), null);
         // Con la mínima redondeada a 2 decimales, como se muestra: 1,14 contra 1,1401 no se avisa (12 nov 2026).
-        if (!top || top.odds + 0.005 >= nowMin) continue;
+        if (!top || stillValuable(top.odds, nowMin)) continue;
         avisos.lost[key] = { kickoff: pick.kickoff, at: started, odds: top.odds, minOdds: Number(nowMin.toFixed(3)) };
         lost.push({ ...pick, market, readAt: started, nowHouse: top.house, nowOdds: top.odds, nowMin });
       }

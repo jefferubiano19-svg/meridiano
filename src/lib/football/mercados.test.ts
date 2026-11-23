@@ -6,6 +6,8 @@ import {
   fairOdds,
   medianConsensus,
   minOdds,
+  pickFairOdds,
+  pickMinOdds,
   normalize,
   refundProb,
   settle,
@@ -64,6 +66,23 @@ describe("valor, cuota justa y cuota mínima", () => {
     assert.equal(stillValuable(1.14, 1.1451), false);
     assert.equal(stillValuable(2.0, 2.06), false);
     assert.equal(stillValuable(2.1, 2.06), true);
+  });
+});
+
+describe("cuota mínima de una selección ya registrada (probabilidad de ganar y de empate guardadas)", () => {
+  it("1X2 y doble oportunidad: 1,03 ÷ probabilidad", () => {
+    near(pickMinOdds({ prob: 0.5 }), 2.06);
+    near(pickMinOdds({ market: "dc", prob: 0.8, pDraw: 0 }), 1.2875);
+    near(pickFairOdds({ market: "1x2", prob: 0.5 }), 2);
+  });
+  it("empate no válido descuenta la devolución del empate", () => {
+    near(pickMinOdds({ market: "dnb", prob: 0.5, pDraw: 0.3 }), 1.46);
+    near(pickFairOdds({ market: "dnb", prob: 0.5, pDraw: 0.3 }), 1.4);
+    near(pickMinOdds({ market: "dnb", prob: 0.5 }), 2.06);
+  });
+  it("coincide con minOdds calculada desde el consenso", () => {
+    near(pickMinOdds({ market: "dnb", prob: winProb(dnbAway, probs), pDraw: probs[1] }), minOdds(dnbAway, probs));
+    near(pickMinOdds({ market: "dc", prob: winProb(xTwo, probs) }), minOdds(xTwo, probs));
   });
 });
 

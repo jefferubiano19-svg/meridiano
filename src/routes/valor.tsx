@@ -6,6 +6,7 @@ import { ExportBar } from "@/components/export-bar";
 import { kickLabel } from "@/components/match/reading-block";
 import { loadDay, loadModelo } from "@/lib/football/pages";
 import { useAgendaToday } from "@/lib/football/use-today";
+import { minOdds as minOddsOf, pickFairOdds, pickMinOdds, stillValuable, type Selection } from "@/lib/football/mercados";
 import {
   bestFromOffers,
   consensusFromOffers,
@@ -109,17 +110,7 @@ function recheck(match: MatchReading, pick: Pick, readAt?: string): Row["now"] {
   const same = again.picks.find(
     (item) => item.market === pick.market && item.outcomeIndex === pick.outcomeIndex,
   );
-  const [home, draw, away] = again.probs;
-  const prob =
-    pick.market === "1x2"
-      ? again.probs[pick.outcomeIndex]
-      : pick.market === "dc"
-        ? [home + draw, home + away, draw + away][pick.outcomeIndex]
-        : pick.outcomeIndex === 0
-          ? home
-          : away;
-  const minOdds =
-    pick.market === "dnb" ? (1 + VALUE_MIN_EV - draw) / prob : (1 + VALUE_MIN_EV) / prob;
+  const minOdds = minOddsOf({ market: pick.market, outcomeIndex: pick.outcomeIndex } as Selection, again.probs);
   const offers =
     pick.market === "1x2"
       ? current.offers
@@ -136,7 +127,7 @@ function recheck(match: MatchReading, pick: Pick, readAt?: string): Row["now"] {
   return {
     readAt: current.readAt,
     // Sigue con valor si la mejor cuota de ahora llega a la mínima de ahora (también cuando pasa del +15 %).
-    still: Boolean(same) || top.odds + 0.005 >= minOdds,
+    still: Boolean(same) || stillValuable(top.odds, minOdds),
     house: top.house,
     odds: top.odds,
     minOdds,
@@ -226,11 +217,8 @@ function ValorPage() {
         if (picks.some((pick) => pick.market === hour.market && pick.outcomeIndex === hour.outcomeIndex)) continue;
         const pick: Pick = {
           ...hour,
-          fair: hour.market === "dnb" ? (1 - hour.pDraw) / hour.prob : 1 / hour.prob,
-          minOdds:
-            hour.market === "dnb"
-              ? (1 + VALUE_MIN_EV - hour.pDraw) / hour.prob
-              : (1 + VALUE_MIN_EV) / hour.prob,
+          fair: pickFairOdds(hour),
+          minOdds: pickMinOdds(hour),
         };
         out.push({ match, pick, source: "hora", foundAt: hour.readAt, now: recheck(match, pick, hour.readAt) });
       }

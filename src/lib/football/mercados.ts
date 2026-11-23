@@ -55,6 +55,25 @@ export function minOdds(selection: Selection, probs: Probs): number {
   return (1 + MIN_EV - refundProb(selection, probs)) / winProb(selection, probs);
 }
 
+/** Selección ya registrada: probabilidad de ganar y, en empate no válido, de empate. */
+export interface StoredPick {
+  market?: string | null;
+  prob: number;
+  pDraw?: number | null;
+}
+
+const storedRefund = (pick: StoredPick) => (pick.market === "dnb" ? (pick.pDraw ?? 0) : 0);
+
+/** Cuota mínima de una selección registrada (correo del corte, /valor). Igual a minOdds con el consenso de entonces. */
+export function pickMinOdds(pick: StoredPick): number {
+  return (1 + MIN_EV - storedRefund(pick)) / pick.prob;
+}
+
+/** Cuota justa de una selección registrada. */
+export function pickFairOdds(pick: StoredPick): number {
+  return (1 - storedRefund(pick)) / pick.prob;
+}
+
 /**
  * ¿La cuota llega a la mínima? Con la mínima redondeada a 2 decimales, como se muestra (1,14 contra 1,1401 sigue con
  * valor). Lo usan el aviso «ya no tiene valor» del cierre y /valor.

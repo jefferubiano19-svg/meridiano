@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from "react";
+import { stillValuable } from "../football/mercados";
 
 /* ---------------------------------------------------------------------------
  * «Mis apuestas»: las apuestas reales que el usuario anota (casa, cuota, monto, resultado) para comparar su
@@ -116,5 +117,6 @@ export function profitOf(bet: MyBet): number | null {
 export function followedRules(bet: MyBet): boolean {
   if (bet.combo || !bet.valor) return false;
   const sameHouse = bet.house.trim().toLowerCase().replace(/\.(co|latam|com)$/i, "") === bet.valor.house.trim().toLowerCase().replace(/\.(co|latam|com)$/i, "");
-  return sameHouse && bet.odds + 1e-9 >= bet.valor.minOdds;
+  // Misma tolerancia que /valor y el aviso del cierre: la mínima se compara redondeada a 2 decimales.
+  return sameHouse && stillValuable(bet.odds, bet.valor.minOdds);
 }
