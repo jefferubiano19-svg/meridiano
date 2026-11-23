@@ -357,6 +357,114 @@ function valueOf(marks: MarkRow[]): Review["value"] {
   };
 }
 
+/* ---- 5. Sombras contra la publicada, en los mismos partidos ---------------------------------------------- */
+
+const SHADOW_LABELS: Record<string, string> = {
+  wplay: "Wplay (hasta 12 oct)",
+  xg: "xG",
+  clubElo: "Elo clubes",
+  season: "Temporada BetPlay",
+};
+
+/** RPS publicada del partido (la guardada aparte si existe). */
+function publishedRpsOf(row: ByMatch): number | null | undefined {
+  return row.publishedRps ?? row.rpsPublished;
+}
+
+/** ¿El partido entra en la sombra? Desde el 13 oct la mezcla con Wplay ya es la publicada cuando no hay consenso. */
+function inShadow(row: ByMatch, key: string): boolean {
+  return row.shadowRps?.[key] != null && publishedRpsOf(row) != null && !(key === "wplay" && row.marketSource === "wplay");
+}
+
+/**
+ * Sombra − publicada por sombra. La sombra «favoritos» (corrección de favoritos fuertes, 5 nov 2026) se quitó el
+ * 11 nov 2026: en 3.419 partidos no mejoró la RPS publicada.
+ */
+function shadowsOf(byMatch: ByMatch[]): Review["shadows"] {
+  return Object.keys(SHADOW_LABELS).map((key) => {
+    const pairs = byMatch.filter((row) => inShadow(row, key));
+    return {
+      key,
+      label: SHADOW_LABELS[key],
+      n: pairs.length,
+      diff: stat(pairs.map((row) => (row.shadowRps?.[key] as number) - (publishedRpsOf(row) as number))),
+    };
+  });
+}
+
+/**
+ * Partidos cuyas cuotas de Wplay eran copiadas de otro partido (lector anterior al 14 oct 2026): misma hora de
+ * lectura y mismas 3 cuotas en partidos distintos. Medirlas sería medir un error de lectura.
+ */
+function copiedWplay(predictions: PredictionRow[]): Set<string> {
+  const groups = new Map<string, Set<string>>();
+  for (const row of predictions) {
+    const odds = row.verifiedOdds?.wplay1x2;
+    if (!Array.isArray(odds) || !odds.every((value) => typeof value === "number")) continue;
+    const key = `${row.verifiedOdds?.readAtBogota ?? ""}|${odds.join("/")}`;
+    const set = groups.get(key) ?? new Set<string>();
+    set.add(row.matchId);
+    groups.set(key, set);
+  }
+  return new Set([...groups.values()].filter((set) => set.size > 1).flatMap((set) => [...set]));
+}
+
+/** Partidos publicados con Wplay como mercado (sin 3 casas): publicada contra modelo solo, sin los copiados. */
+function wplayMarketOf(byMatch: ByMatch[], predictions: PredictionRow[]): Review["wplayMarket"] {
+  const copied = copiedWplay(predictions);
+  const all = byMatch.filter((row) => row.marketSource === "wplay" && row.publishedRps != null && row.modelRps != null);
+  const rows = all.filter((row) => !copied.has(row.matchId));
+  return {
+    excludedCopied: all.length - rows.length,
+    n: rows.length,
+    rpsPublished: mean(rows.map((row) => row.publishedRps as number)),
+    rpsModel: mean(rows.map((row) => row.modelRps as number)),
+    diff: stat(rows.map((row) => (row.publishedRps as number) - (row.modelRps as number))),
+  };
+}
+
+/* ---- 5b. Sombra del modelo: ¿la mezcla 0,8 le gana al consenso solo? (desde el 15 oct se publica el consenso) */
+
+/** RPS de una 1X2 contra el resultado. */
+function outcomeRps(p: Way, actual: string): number {
+  const o = [actual === "home" ? 1 : 0, actual === "draw" ? 1 : 0, actual === "away" ? 1 : 0];
+  const c1 = p.home - o[0];
+  const c2 = p.home + p.draw - o[0] - o[1];
+  return (c1 * c1 + c2 * c2) / 2;
+}
+
+/** Log-odds con la probabilidad recortada a [0,01, 0,99]. */
+function logit(x: number): number {
+  const v = Math.min(0.99, Math.max(0.01, x));
+  return Math.log(v / (1 - v));
+}
+
+function logistic(x: number): number {
+  return 1 / (1 + Math.exp(-x));
+}
+
+/** Mezcla en log-odds 80 % mercado + 20 % modelo, normalizada. */
+function blend(model: Way, market: Way): Way {
+  const raw = {
+    home: logistic(0.8 * logit(market.home) + 0.2 * logit(model.home)),
+    draw: logistic(0.8 * logit(market.draw) + 0.2 * logit(model.draw)),
+    away: logistic(0.8 * logit(market.away) + 0.2 * logit(model.away)),
+  };
+  const sum = raw.home + raw.draw + raw.away;
+  return { home: raw.home / sum, draw: raw.draw / sum, away: raw.away / sum };
+}
+
+/** RPS de la mezcla − RPS del consenso, en los partidos con modelo y consenso. Negativa: el modelo aporta. */
+function modelBlendOf(byMatch: ByMatch[], rowById: Map<string, PredictionRow>): Review["modelBlend"] {
+  const diffs: number[] = [];
+  for (const row of byMatch) {
+    const pred = row.rowId ? rowById.get(row.rowId) : undefined;
+    if (!pred?.model || !pred?.consensus) continue;
+    diffs.push(outcomeRps(blend(pred.model, pred.consensus), row.actual) - outcomeRps(pred.consensus, row.actual));
+  }
+  return { n: diffs.length, diff: stat(diffs) };
+}
+
 /* ---- Medición del dinero: liquidación y comparación con el cierre ---------------------------------------- */
 
 /** Fila del registro de marcas, de «Valor del día» o de «Favorito con valor». */
@@ -548,83 +656,6 @@ export function buildReview(input: ReviewInput): Review {
   const pickRuleV2 = pickRuleV2Of(input.picks ?? [], measure);
   const pickTiers = pickTiersOf(input.picks ?? [], measure);
 
-  // 5. Sombras contra la publicada, en los mismos partidos.
-  const shadowLabels: Record<string, string> = {
-    wplay: "Wplay (hasta 12 oct)",
-    xg: "xG",
-    clubElo: "Elo clubes",
-    season: "Temporada BetPlay",
-  };
-  const shadows = Object.keys(shadowLabels).map((key) => {
-    // Desde el 13 oct la mezcla con Wplay ya es la publicada cuando no hay consenso: esos partidos no cuentan como sombra.
-    const pairs = byMatch.filter(
-      (row) =>
-        row.shadowRps?.[key] != null &&
-        (row.publishedRps ?? row.rpsPublished) != null &&
-        !(key === "wplay" && row.marketSource === "wplay"),
-    );
-    return {
-      key,
-      label: shadowLabels[key],
-      n: pairs.length,
-      diff: stat(pairs.map((row) => (row.shadowRps?.[key] as number) - ((row.publishedRps ?? row.rpsPublished) as number))),
-    };
-  });
-
-  // La sombra «favoritos» (corrección de favoritos fuertes, 5 nov 2026) se quitó el 11 nov 2026: en 3.419 partidos no
-  // mejoró la RPS publicada. favorites.ts queda solo para el registro en prueba de favoritos-registro.json.
-
-  // Fuera las predicciones cuyas cuotas de Wplay eran copiadas de otro partido (lector anterior al 14 oct 2026):
-  // misma hora de lectura y mismas 3 cuotas en partidos distintos. Medirlas sería medir un error de lectura.
-  const oddsGroups = new Map<string, Set<string>>();
-  for (const row of input.predictions) {
-    const odds = row.verifiedOdds?.wplay1x2;
-    if (!Array.isArray(odds) || !odds.every((value) => typeof value === "number")) continue;
-    const key = `${row.verifiedOdds?.readAtBogota ?? ""}|${odds.join("/")}`;
-    const set = oddsGroups.get(key) ?? new Set<string>();
-    set.add(row.matchId);
-    oddsGroups.set(key, set);
-  }
-  const copied = new Set<string>();
-  for (const set of oddsGroups.values()) if (set.size > 1) for (const id of set) copied.add(id);
-  const wplayAll = byMatch.filter((row) => row.marketSource === "wplay" && row.publishedRps != null && row.modelRps != null);
-  const wplayRows = wplayAll.filter((row) => !copied.has(row.matchId));
-  const wplayMarket = {
-    excludedCopied: wplayAll.length - wplayRows.length,
-    n: wplayRows.length,
-    rpsPublished: mean(wplayRows.map((row) => row.publishedRps as number)),
-    rpsModel: mean(wplayRows.map((row) => row.modelRps as number)),
-    diff: stat(wplayRows.map((row) => (row.publishedRps as number) - (row.modelRps as number))),
-  };
-
-  // 5b. Sombra del modelo: ¿la mezcla 0,8 le gana al consenso solo? (desde el 15 oct se publica el consenso solo).
-  const outcomeRps = (p: Way, actual: string) => {
-    const o = [actual === "home" ? 1 : 0, actual === "draw" ? 1 : 0, actual === "away" ? 1 : 0];
-    const c1 = p.home - o[0];
-    const c2 = p.home + p.draw - o[0] - o[1];
-    return (c1 * c1 + c2 * c2) / 2;
-  };
-  const lg = (x: number) => {
-    const v = Math.min(0.99, Math.max(0.01, x));
-    return Math.log(v / (1 - v));
-  };
-  const ex = (x: number) => 1 / (1 + Math.exp(-x));
-  const mix = (model: Way, market: Way): Way => {
-    const raw = {
-      home: ex(0.8 * lg(market.home) + 0.2 * lg(model.home)),
-      draw: ex(0.8 * lg(market.draw) + 0.2 * lg(model.draw)),
-      away: ex(0.8 * lg(market.away) + 0.2 * lg(model.away)),
-    };
-    const sum = raw.home + raw.draw + raw.away;
-    return { home: raw.home / sum, draw: raw.draw / sum, away: raw.away / sum };
-  };
-  const blendDiffs: number[] = [];
-  for (const row of byMatch) {
-    const pred = row.rowId ? rowById.get(row.rowId) : undefined;
-    if (!pred?.model || !pred?.consensus) continue;
-    blendDiffs.push(outcomeRps(mix(pred.model, pred.consensus), row.actual) - outcomeRps(pred.consensus, row.actual));
-  }
-  const modelBlend = { n: blendDiffs.length, diff: stat(blendDiffs) };
 
   // 6. Calibración: probabilidad publicada del favorito contra lo que pasó.
   const bins = [0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9].map((low) => ({ low, high: low + 0.1, p: [] as number[], hit: 0 }));
@@ -758,9 +789,9 @@ export function buildReview(input: ReviewInput): Review {
     pickTiers,
     pickRuleV2,
     favoriteResults,
-    shadows,
-    wplayMarket,
-    modelBlend,
+    shadows: shadowsOf(byMatch),
+    wplayMarket: wplayMarketOf(byMatch, input.predictions),
+    modelBlend: modelBlendOf(byMatch, rowById),
     calibration,
     rivalGoal,
     anomalies: { light: anomaliesLight, items },
