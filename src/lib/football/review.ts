@@ -7,7 +7,7 @@
  * ------------------------------------------------------------------------- */
 
 import { rivalScores, shin } from "./engine";
-import { COLOMBIAN_HOUSE, expectedValue, medians, normalize, settle, type Outcome, type Selection } from "./mercados";
+import { COLOMBIAN_HOUSE, expectedValue, medianConsensus, settle, type Outcome, type Selection } from "./mercados";
 
 export type Light = "verde" | "amarillo" | "rojo" | "gris";
 
@@ -320,8 +320,10 @@ export function buildReview(input: ReviewInput): Review {
       if (market === "1x2" && same && same.odds[index] > 1) clvHouse.push((mark.odds as number) / same.odds[index] - 1);
       const fairs = close.books.map((book) => shin(book.odds[0], book.odds[1], book.odds[2])).filter((f): f is NonNullable<typeof f> => Boolean(f));
       if (fairs.length >= 3) {
-        // 1X2 con la mediana sin normalizar; doble oportunidad y empate no válido con el consenso normalizado.
-        const closing = market === "1x2" ? medians(fairs) : normalize(medians(fairs));
+        // Mismo consenso que al registrar (mediana normalizada) en los tres mercados. Hasta el 23 nov 2026 el 1X2 usaba
+        // las medianas sin normalizar (suman 1 ± 2 %); con los datos de ese día el valor al cierre cambia de +4,29 % a
+        // +4,25 % (205 cierres).
+        const closing = medianConsensus(fairs) as [number, number, number];
         evClose.push(expectedValue(selectionOf(mark), closing, mark.odds as number));
       }
     }
