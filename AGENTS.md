@@ -13,6 +13,11 @@ tal como funciona hoy; si el código y este texto no coinciden, manda el código
 | Programación | `.github/workflows/corte.yml` | Corre el corte. Lo dispara cron-job.org (00:15, 12:00 y 17:00 Bogotá) por `workflow_dispatch`; no tiene `schedule` propio (GitHub lo atrasaba hasta 2 h y repetía cortes); si falta un turno, el vigía (`vigia.yml`) lo relanza. Antes de correr hace `git pull` para que el candado vea el estado más reciente. Al final hace commit de `data/` y llama al deploy hook de Vercel. |
 | Despliegue | Vercel | Reconstruye la app con los datos nuevos tras cada corte. |
 
+Sin restos de la plantilla de Grok (quitados el 23 nov 2026): no hay script de grok.com en las páginas, ni
+`/__grok`, ni envoltorio `with-app-env`, ni conectores. Manifiesto estático `public/manifest.webmanifest` e icono
+`public/icon-180.png`; vista previa al compartir (og:*) en `src/routes/__root.tsx`; la dirección pública vive en
+`src/lib/share.ts` (`SITE_URL`, botón de WhatsApp).
+
 Secretos: `VERCEL_DEPLOY_HOOK` en GitHub Actions. El token de cron-job.org vive solo en cron-job.org.
 Nunca se escriben secretos ni datos personales en el repositorio.
 

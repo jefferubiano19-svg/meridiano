@@ -1,14 +1,11 @@
 import { Link } from "@tanstack/react-router";
-import { ArrowLeft, Bookmark, PenLine } from "lucide-react";
-import { useState } from "react";
-import { generateBriefing } from "@/lib/ai/briefing";
+import { ArrowLeft, Bookmark } from "lucide-react";
 import { EvPanel } from "@/components/match/ev-panel";
 import { ProbabilityBar } from "@/components/match/probability-bar";
 import { ScoreMatrix } from "@/components/match/score-matrix";
 import { SideMarkets } from "@/components/match/side-markets";
 import { TeamRecordBlock } from "@/components/match/team-record";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { confidenceCopy, formatKickoffLong, formatOdds, formatPct } from "@/lib/football/format";
 import { getFixture } from "@/lib/football/fixtures";
 import { getLeague } from "@/lib/football/leagues";
@@ -24,6 +21,9 @@ import { sheetFor } from "@/lib/football/sheets";
 import { useSession } from "@/lib/store/session";
 
 export function MatchPage({ id }: { id: string }) {
+  // Los hooks van antes de cualquier return: React exige el mismo orden en cada render.
+  const watchlist = useSession((s) => s.watchlist);
+  const toggleWatch = useSession((s) => s.toggleWatch);
   const fixture = getFixture(id);
   if (!fixture) {
     return (
@@ -57,8 +57,6 @@ export function MatchPage({ id }: { id: string }) {
         })
       : null;
   const sheet = sheetFor(fixture.id);
-  const watchlist = useSession((s) => s.watchlist);
-  const toggleWatch = useSession((s) => s.toggleWatch);
   const watched = watchlist.includes(fixture.id);
 
   return (
@@ -275,8 +273,6 @@ export function MatchPage({ id }: { id: string }) {
         awayName={away.name}
       />
 
-      <BriefingBlock home={home.name} away={away.name} league={league.name} analysis={analysis} />
-
       <p className="text-xs leading-relaxed text-subtle">
         Esto no es consejo de apuesta ni una recomendación de inversión. Las probabilidades son
         estimaciones con error. El azar, las rotaciones y el VAR no están en el modelo.
@@ -386,61 +382,3 @@ function ModelRow({
   );
 }
 
-function BriefingBlock({
-  home,
-  away,
-  league,
-  analysis,
-}: {
-  home: string;
-  away: string;
-  league: string;
-  analysis: ReturnType<typeof getAnalysis>;
-}) {
-  const [text, setText] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-
-  async function run() {
-    setLoading(true);
-    setError(null);
-    try {
-      const result = await generateBriefing({
-        data: {
-          home,
-          away,
-          league,
-          pHome: analysis.p1x2.home,
-          pDraw: analysis.p1x2.draw,
-          pAway: analysis.p1x2.away,
-          lambdaHome: analysis.lambdaHome,
-          lambdaAway: analysis.lambdaAway,
-          confidence: analysis.confidence,
-          note: analysis.inputs,
-        },
-      });
-      if (result.ok) setText(result.text);
-      else setError(result.error);
-    } catch {
-      setError("No se pudo completar la lectura.");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  return (
-    <section className="rounded-xl bg-surface p-5 shadow-[var(--shadow-border)]">
-      <h2 className="font-display text-xl">Lectura cualitativa</h2>
-      <p className="mt-1 text-sm text-muted">
-        Opcional y bajo demanda. Interpreta los números; no cambia las probabilidades ni sugiere una
-        apuesta.
-      </p>
-      <Button className="mt-4" variant="secondary" disabled={loading} onClick={run}>
-        <PenLine className="size-4" />
-        {loading ? "Redactando…" : "Generar lectura"}
-      </Button>
-      {text ? <p className="mt-4 text-sm leading-relaxed text-fg">{text}</p> : null}
-      {error ? <p className="mt-4 text-sm text-danger">{error}</p> : null}
-    </section>
-  );
-}

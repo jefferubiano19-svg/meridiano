@@ -22,7 +22,7 @@ import { AgeGate } from "@/components/layout/age-gate";
 import { shiftDay } from "@/lib/football/clock";
 import { useAgendaToday } from "@/lib/football/use-today";
 import { cn } from "@/lib/utils";
-import { openWhatsAppShare } from "@/lib/preview-embedder-origin";
+import { openWhatsAppShare } from "@/lib/share";
 
 const NAV = [
   { to: "/", label: "Agenda", icon: CalendarDays, date: "" },

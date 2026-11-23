@@ -1,0 +1,15 @@
+{
+  "name": "Meridiano",
+  "short_name": "Meridiano",
+  "description": "Probabilidades de fútbol, cuota justa y valor esperado. Sin garantías.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0c0d0b",
+  "theme_color": "#0c0d0b",
+  "lang": "es",
+  "icons": [
+    { "src": "/icon-180.png", "sizes": "180x180", "type": "image/png" },
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}

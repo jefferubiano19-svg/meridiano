@@ -19,7 +19,9 @@ const { agendaToday, agendaTomorrow } = await import("../src/lib/football/today.
 let data = { rule: "", byDay: {} };
 try {
   data = JSON.parse(fs.readFileSync(file, "utf8"));
-} catch {}
+} catch {
+  /* sin archivo o dañado: se empieza de cero (el archivo se reescribe abajo) */
+}
 data.rule =
   "Listas «Partido hoy» y «Partido» (mañana) como quedaron publicadas después de cada corte: los 20 partidos con el favorito más probable según la probabilidad publicada. Una lista por día y por corte; no se editan. 30 días.";
 data.byDay = data.byDay && typeof data.byDay === "object" ? data.byDay : {};

@@ -549,7 +549,7 @@ export function searchBoard(input: { home: string; away: string; date: string; c
   const named = estimateNamed(input);
   if (named.kind === "vacio") return { hits, others, named: null, note: named.note };
   if (named.kind === "modelo") {
-    let model: ThreeWay | null = named.analysis.p1x2;
+    const model: ThreeWay | null = named.analysis.p1x2;
     const level = named.analysis.level ?? "B";
     const confidence = named.analysis.confidenceLabel || MISSING;
     const total = named.analysis.lambdaHome + named.analysis.lambdaAway;

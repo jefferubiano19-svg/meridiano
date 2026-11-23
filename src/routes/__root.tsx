@@ -1,10 +1,12 @@
 import { createRootRoute, HeadContent, Outlet, Scripts } from "@tanstack/react-router";
-import { PreviewHostBridge } from "@/components/preview-host-bridge";
 import { AppShell } from "@/components/layout/app-shell";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import appCss from "../styles.css?url";
+import { SITE_URL } from "@/lib/share";
 
 const APP_NAME = "Meridiano";
+const DESCRIPTION =
+  "Análisis predictivo de fútbol: probabilidades, cuota justa, valor esperado y gestión de riesgo. Sin garantías.";
 
 export const Route = createRootRoute({
   head: () => ({
@@ -12,18 +14,22 @@ export const Route = createRootRoute({
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { title: APP_NAME },
-      {
-        name: "description",
-        content:
-          "Análisis predictivo de fútbol: probabilidades, cuota justa, valor esperado y gestión de riesgo. Sin garantías.",
-      },
+      { name: "description", content: DESCRIPTION },
       { name: "theme-color", content: "#0c0d0b" },
+      { name: "apple-mobile-web-app-title", content: APP_NAME },
+      // Vista previa al compartir el enlace (WhatsApp, redes).
+      { property: "og:title", content: APP_NAME },
+      { property: "og:description", content: DESCRIPTION },
+      { property: "og:image", content: `${SITE_URL}og.jpg` },
+      { property: "og:image:width", content: "1200" },
+      { property: "og:image:height", content: "630" },
+      { name: "twitter:card", content: "summary_large_image" },
     ],
     links: [
       { rel: "icon", type: "image/svg+xml", href: "/favicon.svg" },
       { rel: "stylesheet", href: appCss },
-      { rel: "manifest", href: "/__grok/manifest.webmanifest" },
-      { rel: "apple-touch-icon", href: "/__grok/icon-180.png" },
+      { rel: "manifest", href: "/manifest.webmanifest" },
+      { rel: "apple-touch-icon", href: "/icon-180.png" },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
       {
@@ -47,7 +53,6 @@ function RootComponent() {
         />
       </head>
       <body>
-        <PreviewHostBridge />
         <TooltipProvider delayDuration={200}>
           <AppShell>
             <Outlet />
