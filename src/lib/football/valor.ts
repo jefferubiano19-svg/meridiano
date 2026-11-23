@@ -13,8 +13,9 @@
 
 import { shin } from "./engine";
 import { adjustFavorite } from "./favorites";
+import { expectedValue, fairOdds, medianConsensus, MIN_EV, minOdds, winProb, type Selection } from "./mercados";
 
-export const VALUE_MIN_EV = 0.03;
+export const VALUE_MIN_EV = MIN_EV;
 export const VALUE_MAX_EV = 0.15;
 export const VALUE_MIN_HOUSES = 3;
 /**
@@ -41,12 +42,6 @@ export interface ValuePick {
   minOdds: number;
 }
 
-function median(values: number[]): number {
-  const sorted = [...values].sort((a, b) => a - b);
-  const mid = Math.floor(sorted.length / 2);
-  return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
-}
-
 function validOffers(offers: Offer[]): Offer[] {
   return offers.filter((offer) => offer.odds.length >= 3 && offer.odds.slice(0, 3).every((price) => price > 1));
 }
@@ -56,10 +51,12 @@ export function consensusFromOffers(offers: Offer[]): [number, number, number] |
   const fairs = validOffers(offers)
     .map((offer) => shin(offer.odds[0], offer.odds[1], offer.odds[2]))
     .filter((fair): fair is NonNullable<typeof fair> => Boolean(fair));
-  if (fairs.length < VALUE_MIN_HOUSES) return null;
-  const raw = [median(fairs.map((f) => f.home)), median(fairs.map((f) => f.draw)), median(fairs.map((f) => f.away))];
-  const sum = raw[0] + raw[1] + raw[2];
-  return [raw[0] / sum, raw[1] / sum, raw[2] / sum];
+  return fairs.length < VALUE_MIN_HOUSES ? null : medianConsensus(fairs);
+}
+
+/** ¿Entra en «Valor del día»? Probabilidad de ganar al mínimo o más y valor entre +3 % y +15 %. */
+function qualifies(prob: number, ev: number, minProb: number): boolean {
+  return prob > 0 && prob >= minProb && ev >= VALUE_MIN_EV && ev <= VALUE_MAX_EV;
 }
 
 /** Mejor cuota de cada resultado entre las ofertas. */
@@ -82,12 +79,12 @@ export function valuePicks(
   if (houses < VALUE_MIN_HOUSES || probs.length < 3 || best.length < 3) return [];
   const out: ValuePick[] = [];
   for (const index of [0, 1, 2] as const) {
-    const prob = probs[index];
+    const selection: Selection = { market: "1x2", outcomeIndex: index };
     const { house, odds } = best[index];
-    if (!(prob > 0) || !(odds > 1) || prob < minProb) continue;
-    const ev = prob * odds - 1;
-    if (ev < VALUE_MIN_EV || ev > VALUE_MAX_EV) continue;
-    out.push({ outcomeIndex: index, prob, house, odds, ev, fair: 1 / prob, minOdds: (1 + VALUE_MIN_EV) / prob });
+    const prob = winProb(selection, probs);
+    const ev = expectedValue(selection, probs, odds);
+    if (!(odds > 1) || !qualifies(prob, ev, minProb)) continue;
+    out.push({ outcomeIndex: index, prob, house, odds, ev, fair: fairOdds(selection, probs), minOdds: minOdds(selection, probs) });
   }
   return out;
 }
@@ -133,27 +130,30 @@ export function doublePicks(
   minProb = VALUE_MIN_PROB,
 ): DoublePick[] {
   if (probs.length < 3) return [];
-  const [home, draw, away] = probs;
-  const out: DoublePick[] = [];
+  const candidates: { selection: Exclude<Selection, { market: "1x2" }>; offer: { house: string; odds: number } }[] = [];
   const bestDc = bestOf(dc, 3);
-  if (bestDc) {
-    const covered = [home + draw, home + away, draw + away];
-    for (const index of [0, 1, 2] as const) {
-      const prob = covered[index];
-      const { house, odds } = bestDc[index];
-      const ev = prob * odds - 1;
-      if (!(prob > 0) || prob < minProb || ev < VALUE_MIN_EV || ev > VALUE_MAX_EV) continue;
-      out.push({ market: "dc", outcomeIndex: index, prob, pDraw: 0, house, odds, ev, fair: 1 / prob, minOdds: (1 + VALUE_MIN_EV) / prob });
-    }
-  }
+  if (bestDc) for (const index of [0, 1, 2] as const) candidates.push({ selection: { market: "dc", outcomeIndex: index }, offer: bestDc[index] });
   const bestDnb = bestOf(dnb, 2);
   if (bestDnb) {
-    for (const [slot, index, win] of [[0, 0, home], [1, 2, away]] as const) {
-      const { house, odds } = bestDnb[slot];
-      const ev = win * odds + draw - 1;
-      if (!(win > 0) || win < minProb || ev < VALUE_MIN_EV || ev > VALUE_MAX_EV) continue;
-      out.push({ market: "dnb", outcomeIndex: index, prob: win, pDraw: draw, house, odds, ev, fair: (1 - draw) / win, minOdds: (1 + VALUE_MIN_EV - draw) / win });
-    }
+    candidates.push({ selection: { market: "dnb", outcomeIndex: 0 }, offer: bestDnb[0] });
+    candidates.push({ selection: { market: "dnb", outcomeIndex: 2 }, offer: bestDnb[1] });
+  }
+  const out: DoublePick[] = [];
+  for (const { selection, offer } of candidates) {
+    const prob = winProb(selection, probs);
+    const ev = expectedValue(selection, probs, offer.odds);
+    if (!qualifies(prob, ev, minProb)) continue;
+    out.push({
+      market: selection.market,
+      outcomeIndex: selection.outcomeIndex,
+      prob,
+      pDraw: selection.market === "dnb" ? probs[1] : 0,
+      house: offer.house,
+      odds: offer.odds,
+      ev,
+      fair: fairOdds(selection, probs),
+      minOdds: minOdds(selection, probs),
+    });
   }
   return out;
 }
@@ -205,7 +205,9 @@ export function favoritePick(
   const prob = index === 0 ? adjusted.home : adjusted.away;
   if (prob < FAVORITE_MIN_PROB) return null;
   const { house, odds } = best[index];
-  const ev = prob * odds - 1;
-  if (ev < VALUE_MIN_EV || ev > VALUE_MAX_EV) return null;
-  return { outcomeIndex: index, prob, probConsensus: probs[index], house, odds, ev, minOdds: (1 + VALUE_MIN_EV) / prob };
+  const selection: Selection = { market: "1x2", outcomeIndex: index };
+  const corrected = [adjusted.home, adjusted.draw, adjusted.away];
+  const ev = expectedValue(selection, corrected, odds);
+  if (!qualifies(prob, ev, 0)) return null;
+  return { outcomeIndex: index, prob, probConsensus: probs[index], house, odds, ev, minOdds: minOdds(selection, corrected) };
 }

@@ -7,6 +7,7 @@
  * ------------------------------------------------------------------------- */
 
 import { rivalScores, shin } from "./engine";
+import { COLOMBIAN_HOUSE, expectedValue, medians, normalize, settle, type Outcome, type Selection } from "./mercados";
 
 export type Light = "verde" | "amarillo" | "rojo" | "gris";
 
@@ -196,6 +197,11 @@ function bogotaDay(ms: number): string {
 const SPANISH_PREFIX =
   /^(ALEMANIA|INGLATERRA|ESPAÑA|FRANCIA|ITALIA|PAÍSES BAJOS|BÉLGICA|TURQUÍA|BRASIL|MÉXICO|ESTADOS UNIDOS|ESCOCIA|SUIZA|EUROPA|SUDAMÉRICA|ÁFRICA|MUNDIAL|GRECIA|RUSIA|SUECIA|NORUEGA|DINAMARCA|POLONIA|UCRANIA|CROACIA|EGIPTO|MARRUECOS|ARGELIA|JAPÓN|COREA DEL SUR|ARABIA SAUDÍ|PERÚ|PANAMÁ|REPÚBLICA CHECA|HUNGRÍA|SUDÁFRICA):/;
 
+/** Mercado y resultado de una fila del registro (sin mercado = 1X2). */
+function selectionOf(mark: { market?: string | null; outcomeIndex?: number }): Selection {
+  return { market: (mark.market ?? "1x2") as Selection["market"], outcomeIndex: mark.outcomeIndex as Outcome } as Selection;
+}
+
 export function buildReview(input: ReviewInput): Review {
   const now = input.now;
   const from = now - 7 * DAY;
@@ -297,19 +303,8 @@ export function buildReview(input: ReviewInput): Review {
     for (const mark of marks1x2) {
       const row = agendaById.get(mark.matchId as string);
       if (!row || row[5] !== "finalizado" || row[6] == null || row[7] == null) continue;
-      const winner = row[6] > row[7] ? 0 : row[6] === row[7] ? 1 : 2;
-      const odds = mark.odds as number;
-      const market = mark.market ?? "1x2";
-      if (market === "dc") {
-        // 0 = 1X, 1 = 12, 2 = X2.
-        const covered = [[0, 1], [0, 2], [1, 2]][mark.outcomeIndex as number];
-        pnl.push(covered.includes(winner) ? odds - 1 : -1);
-      } else if (market === "dnb") {
-        // Empate: se devuelve lo apostado.
-        pnl.push(winner === 1 ? 0 : winner === mark.outcomeIndex ? odds - 1 : -1);
-      } else {
-        pnl.push(winner === mark.outcomeIndex ? odds - 1 : -1);
-      }
+      const winner: Outcome = row[6] > row[7] ? 0 : row[6] === row[7] ? 1 : 2;
+      pnl.push(settle(selectionOf(mark), mark.odds as number, winner));
     }
     const clvHouse: number[] = [];
     const evClose: number[] = [];
@@ -317,7 +312,7 @@ export function buildReview(input: ReviewInput): Review {
       const close = input.closings?.[mark.matchId as string];
       if (!close?.books?.length) continue;
       // Solo las 5 casas colombianas (una lectura desde EE. UU. puede traer otras, como bet365.us).
-      close.books = close.books.filter((book) => /^(wplay\.co|betano\.co|stake\.latam|bwin\.co|betplay)$/i.test(String(book.house).trim()));
+      close.books = close.books.filter((book) => COLOMBIAN_HOUSE.test(String(book.house).trim()));
       if (!close.books.length) continue;
       const same = close.books.find((book) => houseKey(book.house) === houseKey(mark.house));
       const index = mark.outcomeIndex as number;
@@ -325,21 +320,9 @@ export function buildReview(input: ReviewInput): Review {
       if (market === "1x2" && same && same.odds[index] > 1) clvHouse.push((mark.odds as number) / same.odds[index] - 1);
       const fairs = close.books.map((book) => shin(book.odds[0], book.odds[1], book.odds[2])).filter((f): f is NonNullable<typeof f> => Boolean(f));
       if (fairs.length >= 3) {
-        const medianOf = (key: "home" | "draw" | "away") => {
-          const sorted = fairs.map((f) => f[key]).sort((a, b) => a - b);
-          const mid = Math.floor(sorted.length / 2);
-          return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
-        };
-        if (market === "1x2") {
-          evClose.push((mark.odds as number) * medianOf((["home", "draw", "away"] as const)[index]) - 1);
-        } else {
-          // Doble oportunidad y empate no válido: con el consenso 1X2 de cierre (normalizado).
-          const raw = [medianOf("home"), medianOf("draw"), medianOf("away")];
-          const sum = raw[0] + raw[1] + raw[2];
-          const [h, d, a] = raw.map((value) => value / sum);
-          if (market === "dc") evClose.push((mark.odds as number) * [h + d, h + a, d + a][index] - 1);
-          else evClose.push((mark.odds as number) * (index === 0 ? h : a) + d - 1);
-        }
+        // 1X2 con la mediana sin normalizar; doble oportunidad y empate no válido con el consenso normalizado.
+        const closing = market === "1x2" ? medians(fairs) : normalize(medians(fairs));
+        evClose.push(expectedValue(selectionOf(mark), closing, mark.odds as number));
       }
     }
     const evStat = stat(evClose);

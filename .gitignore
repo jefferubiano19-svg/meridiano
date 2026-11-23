@@ -6,3 +6,8 @@ dist
 data/pglite
 __pycache__
 attachments
+
+# Métricas locales de crapper / dryer / mutator
+.metrics/
+.venv/
+coverage/

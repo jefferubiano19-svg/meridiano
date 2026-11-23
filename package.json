@@ -15,7 +15,8 @@
     "preview:stop": "node scripts/preview.mjs stop",
     "corte": "node --experimental-strip-types --import ./scripts/register-ts.mjs scripts/corte.mjs",
     "check:auth": "node scripts/check-auth-invariant.mjs",
-    "test": "node --test 'scripts/**/*.test.mjs' && node --experimental-strip-types --test src/lib/app-data/app-data.test.ts src/lib/app-data/readiness-schedule.test.ts",
+    "test": "node --test 'scripts/**/*.test.mjs' && node --experimental-strip-types --test src/lib/app-data/app-data.test.ts src/lib/app-data/readiness-schedule.test.ts && npm run test:football",
+    "test:football": "node --experimental-strip-types --import ./scripts/register-ts.mjs --test 'src/lib/football/*.test.ts'",
     "lint": "eslint .",
     "format": "prettier --write ."
   },
