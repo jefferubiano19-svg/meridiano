@@ -13,6 +13,7 @@ import {
   pickTiersOf,
   resultsOf,
   rivalGoalOf,
+  rivalSummary,
   verdictOf,
   type ByMatch,
   type CutRow,
@@ -715,5 +716,112 @@ describe("buildReview", () => {
     const result = buildReview(input({ cuts: [{ cut: "2026-11-20", corte: "noche", startedAtBogota: "2026-11-20T00:15:00-05:00", scoreConflicts: 3 }] }));
     assert.equal(result.anomalies.items.find((item) => item.key === "conflictos")!.count, 1);
     assert.equal(result.cuts.list.length, 1);
+  });
+});
+
+/* ---- Bordes (los encontró mutator) ------------------------------------------------------------------- */
+
+describe("bordes de la revisión", () => {
+  const now = Date.parse("2026-11-23T12:00:00Z");
+  const from = now - 7 * 24 * 3600 * 1000;
+  const input = (extra: Partial<ReviewInput>): ReviewInput => ({ now, cuts: [], predictions: [], evaluations: {}, marks: [], agenda: [], standings: [], ...extra });
+
+  it("intervalo del 95 %: media ± 1,96 × desviación (n − 1) ÷ √n; con un solo dato, sin intervalo", () => {
+    const clv = buildReview(input({ marks: [{ clv: 0.01, closingOdds: 2 }, { clv: 0.03, closingOdds: 2 }] })).value.clv;
+    const half = (1.96 * Math.sqrt(0.0002)) / Math.sqrt(2);
+    assert.equal(clv.n, 2);
+    near(clv.mean, 0.02);
+    near(clv.low, 0.02 - half);
+    near(clv.high, 0.02 + half);
+    assert.deepEqual(buildReview(input({ marks: [{ clv: 0.01, closingOdds: 2 }] })).value.clv, { n: 1, mean: 0.01, low: null, high: null });
+  });
+
+  it("el día de la ventana es el de Bogotá (UTC − 5)", () => {
+    assert.deepEqual(buildReview(input({ now: Date.parse("2026-11-23T03:00:00Z") })).window, { from: "2026-11-15", to: "2026-11-22" });
+  });
+
+  it("un corte que empezó justo al abrir o al cerrar la ventana cuenta", () => {
+    const at = (ms: number): CutRow => ({ cut: "2026-11-16", corte: "noche", startedAtBogota: new Date(ms).toISOString() });
+    assert.equal(cutsSummary([at(from), at(now), at(from - 1), at(now + 1)], from, now).list.length, 2);
+  });
+
+  it("un turno justo en el inicio de la ventana se espera", () => {
+    const noon = Date.parse("2026-11-23T12:00:00-05:00");
+    const week = cutsSummary([{ cut: "2026-11-16", corte: "mediodia", startedAtBogota: "2026-11-16T12:00:00-05:00" }], noon - 7 * 24 * 3600 * 1000, noon);
+    assert.equal(week.expected, 14);
+    assert.equal(week.done, 1);
+  });
+
+  it("cero predicciones guardadas es cero, no «sin dato»", () => {
+    const [row] = cutsSummary([{ cut: "2026-11-20", corte: "noche", startedAtBogota: "2026-11-20T00:15:00-05:00", predictionsSaved: 0, predictionsWithConsensus: 0 }], from, now).list;
+    assert.deepEqual([row.predictions, row.withConsensus], [0, 0]);
+  });
+
+  it("cobertura: un nivel vacío se cuenta como vacío, no como «?»", () => {
+    const row = (id: string): PredictionRow => ({ id, matchId: id, kickoff: "", calculatedAt: "2026-11-22T00:00:00Z", level: "" });
+    assert.deepEqual(buildReview(input({ predictions: [row("a"), row("b")] })).coverage.week.byLevel, { "": 2 });
+  });
+
+  it("una RPS publicada de 0 (acierto pleno) se usa, no se cambia por la otra", () => {
+    const ev = (extra: Partial<ByMatch>): ByMatch => ({ matchId: "m", rowId: null, actual: "home", comparable: false, rpsModel: null, rpsPublished: 0.2, rpsConsensus: null, publishedRps: 0, ...extra });
+    const result = buildReview(input({ evaluations: { byMatch: [ev({ shadowRps: { xg: 0.1 } })] } }));
+    assert.equal(result.evaluation.byLevel[0].rpsPublished, 0);
+    near(result.shadows[1].diff.mean, 0.1);
+  });
+
+  it("sin diferencia alguna con el consenso (IC de 0 a 0): amarillo", () => {
+    assert.equal(evaluationOf(evaluated(150, () => 0), new Map(), 500).light, "amarillo");
+  });
+
+  it("una predicción guardada justo al abrir la ventana entra en las anomalías", () => {
+    const at = new Date(from).toISOString();
+    const result = anomaliesOf({ agenda: [], predictions: [{ id: "x", matchId: "x", kickoff: at, calculatedAt: at }], standings: [], recent: [], from, now });
+    assert.deepEqual(result.items[4].examples, ["x"]);
+  });
+
+  it("goles esperados justo en el margen de 0,20 y 4,00 no son anomalía", () => {
+    const result = anomaliesOf({
+      agenda: [],
+      predictions: [{ id: "x", matchId: "x", kickoff: "2026-11-22T20:00:00Z", calculatedAt: "2026-11-22T10:00:00Z", lambdaHome: 0.2 - 1e-9, lambdaAway: 4 + 1e-9 }],
+      standings: [],
+      recent: [],
+      from,
+      now,
+    });
+    assert.equal(result.items[6].count, 0);
+  });
+
+  it("no se liquida un partido sin terminar aunque tenga marcador, ni uno sin goles del local", () => {
+    const live: Agenda = [
+      ["vivo", "2026-11-23T11:00:00Z", "COLOMBIA: Liga", "A", "B", "en-juego", 1, 0, null, null],
+      ["medio", "2026-11-22T15:00:00Z", "COLOMBIA: Liga", "A", "B", "finalizado", null, 1, null, null],
+    ];
+    assert.equal(resultsOf([pick("vivo", 0, 2), pick("medio", 2, 2)], agendaIndex(live), {}).settled, 0);
+  });
+
+  it("un mercado vacío no es 1X2: no se mide ni entra en la regla v2", () => {
+    assert.equal(measure([pick("home", 0, 2, { market: "" })]).settled, 0);
+    const v2 = pickRuleV2Of([{ ...pick("home", 0, 2, { market: "" }), rule: "v2" }], (list) => ({ ...resultsOf([], index, {}), settled: list.length }));
+    assert.deepEqual(
+      v2.byMarket.map((row) => row.results.settled),
+      [0, 0, 0],
+    );
+  });
+
+  it("la prueba limpia incluye lo guardado el mismo 5 nov", () => {
+    const tiers = pickTiersOf([{ ...pick("home", 0, 2), prob: 0.5, savedAt: "2026-11-05" }], (list) => ({ ...resultsOf([], index, {}), settled: list.length }));
+    assert.equal(tiers[0].forward.settled, 1);
+  });
+
+  it("rival marca: cada tramo incluye su borde de abajo y no el de arriba", () => {
+    const buckets = rivalSummary([0.6, 0.7, 0.8, 0.9, 0.5999, 1].map((p) => ({ p, y: 1 }))).buckets;
+    assert.deepEqual(
+      buckets.map((bucket) => bucket.n),
+      [1, 1, 1, 1, 2],
+    );
+  });
+
+  it("una meta de 0 se respeta", () => {
+    assert.equal(buildReview(input({ evaluations: { goal: 0 } })).evaluation.goal, 0);
   });
 });
