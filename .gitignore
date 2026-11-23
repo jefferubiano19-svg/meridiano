@@ -11,3 +11,4 @@ attachments
 .metrics/
 .venv/
 coverage/
+.tools/

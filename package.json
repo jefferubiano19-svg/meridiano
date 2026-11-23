@@ -17,6 +17,8 @@
     "check:auth": "node scripts/check-auth-invariant.mjs",
     "test": "node --test 'scripts/**/*.test.mjs' && node --experimental-strip-types --test src/lib/app-data/app-data.test.ts src/lib/app-data/readiness-schedule.test.ts && npm run test:football",
     "coverage": "mkdir -p coverage && node --experimental-strip-types --import ./scripts/register-ts.mjs --experimental-test-coverage --test-reporter=lcov --test-reporter-destination=coverage/lcov.info --test 'src/lib/football/*.test.ts' 'src/lib/store/*.test.ts'",
+    "calidad": "bash scripts/calidad.sh",
+    "calidad:mutacion": "bash scripts/calidad.sh mutacion",
     "test:football": "node --experimental-strip-types --import ./scripts/register-ts.mjs --test 'src/lib/football/*.test.ts' 'src/lib/store/*.test.ts'",
     "lint": "eslint .",
     "format": "prettier --write ."

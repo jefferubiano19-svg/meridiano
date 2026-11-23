@@ -1,0 +1,41 @@
+# Compuerta de calidad ub-mode del núcleo del dinero (scripts/calidad.sh): pruebas, CRAP < 10 y sin duplicados ≥ 0,8.
+# Corre cuando cambia código del núcleo o sus pruebas; no corre con los commits de datos del corte y del cierre.
+name: calidad
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/lib/football/**"
+      - "src/lib/store/**"
+      - "scripts/corte.mjs"
+      - "scripts/calidad.sh"
+      - "package.json"
+      - ".github/workflows/calidad.yml"
+  pull_request:
+    paths:
+      - "src/lib/football/**"
+      - "src/lib/store/**"
+      - "scripts/corte.mjs"
+      - "scripts/calidad.sh"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  calidad:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: npm ci
+      - run: node --check scripts/corte.mjs
+      - run: npm run calidad

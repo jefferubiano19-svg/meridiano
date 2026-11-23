@@ -187,6 +187,37 @@ ligas por el ranking de Opta de julio 2026, con fuente y advertencia en el archi
 y etapa (< 150 muestra insuficiente, 150–499 preliminar, ≥ 500 formal), Wplay como mercado, sombras,
 calibración y anomalías de datos. La página `/modelo` la muestra. Solo mide; no cambia parámetros.
 
+## Disciplina de código (ub-mode)
+
+Todo cambio de código sigue `.claude/skills/ub-mode/SKILL.md` (copia de github.com/unclebob/ub-mode, MIT): primero
+que funcione (prueba que falla antes del cambio, el cambio más pequeño, una decisión en un solo lugar), luego que
+quede bien (causa raíz, CRAP < 10, sin duplicados ≥ 0,8, matar mutantes, borrar código muerto) y práctica (registro
+de acciones, commits pequeños que dicen por qué, qué y cómo se probó).
+
+- **Núcleo del dinero** (aplicado el 23 nov 2026): `src/lib/football/mercados.ts` es el único lugar de la matemática
+  de una selección: probabilidad de ganar (`winProb`), devolución del empate no válido (`refundProb`), valor
+  (`expectedValue`), cuota justa y mínima (`fairOdds`, `minOdds`; de una selección guardada: `pickFairOdds`,
+  `pickMinOdds`), «sigue con valor» con la mínima a 2 decimales (`stillValuable`), liquidación (`settle`), consenso
+  (`medians`, `medianConsensus`) y las 5 casas colombianas (`COLOMBIAN_HOUSE`). Lo usan `valor.ts`, `review.ts`,
+  `scripts/corte.mjs` (importa el `.ts` con register-ts), `/valor` y «Mis apuestas». No volver a escribir estas
+  fórmulas a mano en otro archivo.
+- Pruebas: `src/lib/football/*.test.ts` y `src/lib/store/*.test.ts` (`npm run test:football`). «Mis apuestas» se prueba
+  con `createBetStore(storage)` (guardado inyectable).
+- Compuerta: `npm run calidad` (`scripts/calidad.sh`: pruebas, cobertura LCOV de Node, crapper `--threshold 9.99` y
+  dryer 0,8 sobre `mercados.ts`, `valor.ts` y `mis-apuestas.ts`; herramientas en `.tools/` con commit fijado). La
+  corre `.github/workflows/calidad.yml` en cada push que toca el núcleo. Mutación (lenta, a mano):
+  `npm run calidad:mutacion`. Mutantes que sobreviven y son equivalentes (no se matan): los bordes exactos +3 %, +15 %
+  y 65 % (ninguna cuota real los da en número de máquina), empate local/visita en `favoritePick`, la probabilidad de
+  empate que recibe `adjustFavorite` y `pDraw ?? 0` contra `|| 0`.
+- Prueba de que la refactorización no cambió nada: salidas de `valuePicks`, `doublePicks`, `favoritePick` (3.979
+  partidos) y la revisión completa con datos congelados, idénticas byte a byte; el cierre con lecturas simuladas da
+  los mismos archivos y correos. Cambios de comportamiento a propósito: «Mis apuestas» compara con la mínima a 2
+  decimales como `/valor`; el valor al cierre del 1X2 usa el consenso normalizado como el registro (+4,29 % → +4,25 %
+  en 205 cierres el 23 nov).
+- Fuera del núcleo todavía no cumple (803 funciones, 158 con complejidad ≥ 10 al 23 nov; `main` del corte 253,
+  `buildReview` 167, `cierre` 106). Se aplica a lo que se toque: no se agrega a un archivo sin pruebas una función
+  compleja sin prueba.
+
 ## Comandos
 
 ```bash
@@ -194,6 +225,8 @@ npm ci
 npm run build          # app
 npm run corte          # corte (CORTE=noche|mediodia, FORZAR=si)
 npx tsc --noEmit -p .  # tipos
+npm run test:football  # pruebas del núcleo del dinero
+npm run calidad        # compuerta ub-mode del núcleo
 ```
 
 ## Al cambiar código
