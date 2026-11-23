@@ -202,6 +202,129 @@ function selectionOf(mark: { market?: string | null; outcomeIndex?: number }): S
   return { market: (mark.market ?? "1x2") as Selection["market"], outcomeIndex: mark.outcomeIndex as Outcome } as Selection;
 }
 
+/* ---- Medición del dinero: liquidación y comparación con el cierre ---------------------------------------- */
+
+/** Fila del registro de marcas, de «Valor del día» o de «Favorito con valor». */
+export type MarkRow = ReviewInput["marks"][number];
+type AgendaRow = ReviewInput["agenda"][number];
+type Closings = NonNullable<ReviewInput["closings"]>;
+type CloseBook = { house: string; odds: number[] };
+
+/** Resultado de un grupo de selecciones (ver `Review["valueResults"]`). */
+export type Results = Review["pickResults"];
+
+/** Agenda por id de partido (la última fila gana si un id se repite). */
+export function agendaIndex(agenda: AgendaRow[]): Map<string, AgendaRow> {
+  return new Map(agenda.map((row) => [row[0], row]));
+}
+
+/** Casa sin dominio y en minúsculas: «Betano.co» y «betano» son la misma. */
+function houseKey(house: string | undefined): string {
+  return String(house ?? "").replace(/\.(co|latam|com)$/i, "").toLowerCase();
+}
+
+/** ¿La fila se puede medir? 1X2 y, desde el 5 nov 2026, doble oportunidad (dc) y empate no válido (dnb). */
+function measurable(mark: MarkRow): boolean {
+  return ["1x2", "dc", "dnb"].includes(mark.market ?? "1x2") && Boolean(mark.matchId) && Number(mark.odds) > 1 && Number.isInteger(mark.outcomeIndex);
+}
+
+/** Filas medibles, una por partido, mercado, casa y resultado (la primera que aparece). */
+function uniqueMeasurable(list: MarkRow[]): MarkRow[] {
+  const seen = new Set<string>();
+  return list.filter((mark) => {
+    if (!measurable(mark)) return false;
+    const key = `${mark.matchId}|${mark.market ?? "1x2"}|${houseKey(mark.house)}|${mark.outcomeIndex}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+/** Resultado 1X2 de un partido finalizado con marcador; null si todavía no se puede liquidar. */
+function winnerOf(row: AgendaRow | undefined): Outcome | null {
+  if (!row || row[5] !== "finalizado" || row[6] == null || row[7] == null) return null;
+  return row[6] > row[7] ? 0 : row[6] === row[7] ? 1 : 2;
+}
+
+/** Ganancia o pérdida apostando 1 a cada selección de un partido ya jugado. */
+function settledPnl(marks: MarkRow[], agendaById: Map<string, AgendaRow>): number[] {
+  const pnl: number[] = [];
+  for (const mark of marks) {
+    const winner = winnerOf(agendaById.get(mark.matchId as string));
+    if (winner != null) pnl.push(settle(selectionOf(mark), mark.odds as number, winner));
+  }
+  return pnl;
+}
+
+/** Libros del cierre de las 5 casas colombianas (una lectura desde EE. UU. puede traer otras, como bet365.us). */
+function colombianBooks(books: CloseBook[] | undefined): CloseBook[] {
+  return (books ?? []).filter((book) => COLOMBIAN_HOUSE.test(String(book.house).trim()));
+}
+
+/** Cuota contra la misma casa al cierre − 1 (solo 1X2); null sin esa casa o sin cuota válida. */
+function clvHouseOf(mark: MarkRow, books: CloseBook[]): number | null {
+  if ((mark.market ?? "1x2") !== "1x2") return null;
+  const same = books.find((book) => houseKey(book.house) === houseKey(mark.house));
+  const index = mark.outcomeIndex as number;
+  return same && same.odds[index] > 1 ? (mark.odds as number) / same.odds[index] - 1 : null;
+}
+
+/**
+ * Valor contra el consenso de cierre (3+ casas); null con menos. Mismo consenso que al registrar (mediana
+ * normalizada) en los tres mercados. Hasta el 23 nov 2026 el 1X2 usaba las medianas sin normalizar (suman 1 ± 2 %);
+ * con los datos de ese día el valor al cierre cambia de +4,29 % a +4,25 % (205 cierres).
+ */
+function evCloseOf(mark: MarkRow, books: CloseBook[]): number | null {
+  const fairs = books.map((book) => shin(book.odds[0], book.odds[1], book.odds[2])).filter((f): f is NonNullable<typeof f> => Boolean(f));
+  if (fairs.length < 3) return null;
+  const closing = medianConsensus(fairs) as [number, number, number];
+  return expectedValue(selectionOf(mark), closing, mark.odds as number);
+}
+
+/** Comparación de cada selección con su cierre: misma casa (clvHouse) y consenso de cierre (evClose). */
+function closingComparison(marks: MarkRow[], closings: Closings): { clvHouse: number[]; evClose: number[] } {
+  const clvHouse: number[] = [];
+  const evClose: number[] = [];
+  for (const mark of marks) {
+    const books = colombianBooks(closings[mark.matchId as string]?.books);
+    if (!books.length) continue;
+    const house = clvHouseOf(mark, books);
+    if (house != null) clvHouse.push(house);
+    const ev = evCloseOf(mark, books);
+    if (ev != null) evClose.push(ev);
+  }
+  return { clvHouse, evClose };
+}
+
+/** Lectura del valor al cierre: 30 cierres para una primera lectura (puede cambiar), 100 para decidir. */
+export function verdictOf(evClose: Stat): string {
+  const n = evClose.n;
+  if (n < 30) return `sin conclusión: ${n} con cierre de 3+ casas (hacen falta 30 para una primera lectura y 100 para decidir)`;
+  const wins = evClose.low != null && evClose.low > 0;
+  const loses = evClose.high != null && evClose.high < 0;
+  if (n < 100) {
+    if (wins) return `primera lectura favorable: le ganan al cierre en ${n} (preliminar; se confirma con 100)`;
+    if (loses) return `primera lectura desfavorable: pierden contra el cierre en ${n} (preliminar; se confirma con 100)`;
+    return `primera lectura: todavía no se distingue de cero en ${n} (se decide con 100)`;
+  }
+  if (wins) return "le ganan al cierre: hay ventaja medida";
+  if (loses) return "pierden contra el cierre: no hay ventaja";
+  return "todavía no se distingue de cero";
+}
+
+/**
+ * Medición de un grupo de selecciones: retorno real apostando 1 a cada una (roi) y comparación con el cierre
+ * (clvHouse, evClose). Las filas repetidas (mismo partido, mercado, casa y resultado) cuentan una vez.
+ * Pura: no cambia la lista, la agenda ni los cierres.
+ */
+export function resultsOf(list: MarkRow[], agendaById: Map<string, AgendaRow>, closings: Closings): Results {
+  const marks = uniqueMeasurable(list);
+  const pnl = settledPnl(marks, agendaById);
+  const { clvHouse, evClose } = closingComparison(marks, closings);
+  const evStat = stat(evClose);
+  return { settled: pnl.length, roi: stat(pnl), closed: evClose.length, clvHouse: stat(clvHouse), evClose: evStat, verdict: verdictOf(evStat) };
+}
+
 export function buildReview(input: ReviewInput): Review {
   const now = input.now;
   const from = now - 7 * DAY;
@@ -287,78 +410,22 @@ export function buildReview(input: ReviewInput): Review {
   const clv = stat(closed.map((mark) => mark.clv as number));
 
   // 4b. Resultado real de las marcas 1X2 y de «Valor del día», y comparación con el cierre (data/cierres.json).
-  const agendaById = new Map(input.agenda.map((row) => [row[0], row]));
-  const houseKey = (house: string | undefined) => String(house ?? "").replace(/\.(co|latam|com)$/i, "").toLowerCase();
-  const resultsOf = (list: ReviewInput["marks"]) => {
-    const seenMark = new Set<string>();
-    // 1X2 y, desde el 5 nov 2026, doble oportunidad (dc) y empate no válido (dnb) de «Valor del día».
-    const marks1x2 = list.filter((mark) => {
-      if (!["1x2", "dc", "dnb"].includes(mark.market ?? "1x2") || !mark.matchId || !(Number(mark.odds) > 1) || !Number.isInteger(mark.outcomeIndex)) return false;
-      const key = `${mark.matchId}|${mark.market ?? "1x2"}|${houseKey(mark.house)}|${mark.outcomeIndex}`;
-      if (seenMark.has(key)) return false;
-      seenMark.add(key);
-      return true;
-    });
-    const pnl: number[] = [];
-    for (const mark of marks1x2) {
-      const row = agendaById.get(mark.matchId as string);
-      if (!row || row[5] !== "finalizado" || row[6] == null || row[7] == null) continue;
-      const winner: Outcome = row[6] > row[7] ? 0 : row[6] === row[7] ? 1 : 2;
-      pnl.push(settle(selectionOf(mark), mark.odds as number, winner));
-    }
-    const clvHouse: number[] = [];
-    const evClose: number[] = [];
-    for (const mark of marks1x2) {
-      const close = input.closings?.[mark.matchId as string];
-      if (!close?.books?.length) continue;
-      // Solo las 5 casas colombianas (una lectura desde EE. UU. puede traer otras, como bet365.us).
-      close.books = close.books.filter((book) => COLOMBIAN_HOUSE.test(String(book.house).trim()));
-      if (!close.books.length) continue;
-      const same = close.books.find((book) => houseKey(book.house) === houseKey(mark.house));
-      const index = mark.outcomeIndex as number;
-      const market = mark.market ?? "1x2";
-      if (market === "1x2" && same && same.odds[index] > 1) clvHouse.push((mark.odds as number) / same.odds[index] - 1);
-      const fairs = close.books.map((book) => shin(book.odds[0], book.odds[1], book.odds[2])).filter((f): f is NonNullable<typeof f> => Boolean(f));
-      if (fairs.length >= 3) {
-        // Mismo consenso que al registrar (mediana normalizada) en los tres mercados. Hasta el 23 nov 2026 el 1X2 usaba
-        // las medianas sin normalizar (suman 1 ± 2 %); con los datos de ese día el valor al cierre cambia de +4,29 % a
-        // +4,25 % (205 cierres).
-        const closing = medianConsensus(fairs) as [number, number, number];
-        evClose.push(expectedValue(selectionOf(mark), closing, mark.odds as number));
-      }
-    }
-    const evStat = stat(evClose);
-    const verdict =
-      evClose.length < 30
-        ? `sin conclusión: ${evClose.length} con cierre de 3+ casas (hacen falta 30 para una primera lectura y 100 para decidir)`
-        : evClose.length < 100
-          ? // Entre 30 y 99 cierres es una primera lectura: puede cambiar; se decide con 100.
-            evStat.low != null && evStat.low > 0
-            ? `primera lectura favorable: le ganan al cierre en ${evClose.length} (preliminar; se confirma con 100)`
-            : evStat.high != null && evStat.high < 0
-              ? `primera lectura desfavorable: pierden contra el cierre en ${evClose.length} (preliminar; se confirma con 100)`
-              : `primera lectura: todavía no se distingue de cero en ${evClose.length} (se decide con 100)`
-          : evStat.low != null && evStat.low > 0
-            ? "le ganan al cierre: hay ventaja medida"
-            : evStat.high != null && evStat.high < 0
-              ? "pierden contra el cierre: no hay ventaja"
-              : "todavía no se distingue de cero";
-    return { settled: pnl.length, roi: stat(pnl), closed: evClose.length, clvHouse: stat(clvHouse), evClose: evStat, verdict };
-  };
-  const valueResults = resultsOf(input.marks);
-  const pickResults = resultsOf(input.picks ?? []);
+  const agendaById = agendaIndex(input.agenda);
+  const measure = (list: MarkRow[]) => resultsOf(list, agendaById, input.closings ?? {});
+  const valueResults = measure(input.marks);
+  const pickResults = measure(input.picks ?? []);
   // Filtro «cuota menor a 4» de la página /valor: la misma medición solo con esas selecciones.
   // «Favorito con valor» (en prueba): resultado real apostando lo mismo a cada uno.
-  const favoriteResults = resultsOf(input.favorites ?? []);
-  const pickResultsLow = resultsOf((input.picks ?? []).filter((pick) => Number(pick.odds) < 4));
+  const favoriteResults = measure(input.favorites ?? []);
+  const pickResultsLow = measure((input.picks ?? []).filter((pick) => Number(pick.odds) < 4));
   // Regla v2 (5 nov 2026): solo 40 %+ y, además de 1X2, doble oportunidad y empate no válido. Medición aparte y por mercado.
   const v2 = (input.picks ?? []).filter((pick) => (pick as { rule?: string }).rule === "v2");
   const pickRuleV2 = {
-    all: resultsOf(v2),
-    byMarket: (["1x2", "dc", "dnb"] as const).map((market) => ({ market, results: resultsOf(v2.filter((pick) => (pick.market ?? "1x2") === market)) })),
+    all: measure(v2),
+    byMarket: (["1x2", "dc", "dnb"] as const).map((market) => ({ market, results: measure(v2.filter((pick) => (pick.market ?? "1x2") === market)) })),
     bySource: (["corte", "hora"] as const).map((source) => ({
       source,
-      results: resultsOf(v2.filter((pick) => ((pick as { source?: string }).source === "hora" ? "hora" : "corte") === source)),
+      results: measure(v2.filter((pick) => ((pick as { source?: string }).source === "hora" ? "hora" : "corte") === source)),
     })),
   };
   // Niveles de probabilidad de «Valor del día» (regla fijada el 5 nov 2026): todo el histórico y, aparte, solo lo
@@ -374,9 +441,9 @@ export function buildReview(input: ReviewInput): Review {
     return {
       key: tier.key,
       label: tier.label,
-      all: resultsOf(inTier),
+      all: measure(inTier),
       since: TIER_SINCE,
-      forward: resultsOf(inTier.filter((pick) => String((pick as { savedAt?: string }).savedAt ?? "") >= TIER_SINCE)),
+      forward: measure(inTier.filter((pick) => String((pick as { savedAt?: string }).savedAt ?? "") >= TIER_SINCE)),
     };
   });
 
