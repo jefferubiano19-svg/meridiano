@@ -202,6 +202,67 @@ function selectionOf(mark: { market?: string | null; outcomeIndex?: number }): S
   return { market: (mark.market ?? "1x2") as Selection["market"], outcomeIndex: mark.outcomeIndex as Outcome } as Selection;
 }
 
+/* ---- 1. Cortes de los últimos 7 días completos (14 esperados) y su semáforo ----------------------------- */
+
+const HOUR = 3600 * 1000;
+
+function startedMs(row: CutRow): number {
+  return Date.parse(row.startedAtBogota ?? "");
+}
+
+/** Cortes que empezaron dentro de la ventana [from, now]. */
+function recentCuts(cuts: CutRow[], from: number, now: number): CutRow[] {
+  return cuts.filter((row) => {
+    const start = startedMs(row);
+    return Number.isFinite(start) && start >= from && start <= now;
+  });
+}
+
+/** Fila de la lista de cortes: retraso en minutos contra la hora programada. */
+function cutEntry(row: CutRow): Review["cuts"]["list"][number] {
+  const scheduled = scheduledMs(row);
+  return {
+    when: row.startedAtBogota ?? "",
+    corte: row.corte ?? "",
+    delayMin: scheduled != null ? Math.round((startedMs(row) - scheduled) / 60000) : null,
+    predictions: row.predictionsSaved ?? null,
+    withConsensus: row.predictionsWithConsensus ?? null,
+    failures: row.failures ?? 0,
+  };
+}
+
+/** Turnos esperados («fecha|corte»): los de la ventana, desde el primer corte registrado y con al menos 1 hora de margen. */
+function expectedSlots(cuts: CutRow[], from: number, now: number): Set<string> {
+  const firstStart = Math.min(...cuts.map(startedMs).filter(Number.isFinite));
+  const slots = new Set<string>();
+  for (let day = Date.parse(`${bogotaDay(from)}T00:00:00-05:00`); day <= now; day += DAY) {
+    for (const [clock, corte] of [["00:15", "noche"], ["12:00", "mediodia"]]) {
+      const date = bogotaDay(day + 6 * HOUR);
+      const at = Date.parse(`${date}T${clock}:00-05:00`);
+      if (at >= from && at >= firstStart - HOUR && at <= now - HOUR) slots.add(`${date}|${corte}`);
+    }
+  }
+  return slots;
+}
+
+/** Rojo: algún corte fatal o 3+ turnos sin correr. Amarillo: falta alguno o alguno llegó más de 15 min tarde. */
+function cutsLightOf(fatal: number, missing: number, late: number): Light {
+  if (fatal > 0 || missing >= 3) return "rojo";
+  return missing > 0 || late > 0 ? "amarillo" : "verde";
+}
+
+/** Salud de los cortes de la semana: esperados, hechos, tardes, fatales y semáforo. */
+export function cutsSummary(cuts: CutRow[], from: number, now: number): Review["cuts"] {
+  const recent = recentCuts(cuts, from, now);
+  const list = recent.map(cutEntry);
+  const ran = new Set(recent.map((row) => `${row.cut}|${row.corte}`));
+  const expected = [...expectedSlots(cuts, from, now)];
+  const done = expected.filter((slot) => ran.has(slot)).length;
+  const late = list.filter((row) => row.delayMin != null && row.delayMin > 15).length;
+  const fatal = recent.filter((row) => row.fatal).length;
+  return { light: cutsLightOf(fatal, expected.length - done, late), expected: expected.length, done, late, fatal, list };
+}
+
 /* ---- Medición del dinero: liquidación y comparación con el cierre ---------------------------------------- */
 
 /** Fila del registro de marcas, de «Valor del día» o de «Favorito con valor». */
@@ -376,40 +437,7 @@ export function buildReview(input: ReviewInput): Review {
   const now = input.now;
   const from = now - 7 * DAY;
 
-  // 1. Cortes de los últimos 7 días completos (14 esperados).
-  const recent = input.cuts.filter((row) => {
-    const start = Date.parse(row.startedAtBogota ?? "");
-    return Number.isFinite(start) && start >= from && start <= now;
-  });
-  const list = recent.map((row) => {
-    const start = Date.parse(row.startedAtBogota ?? "");
-    const scheduled = scheduledMs(row);
-    return {
-      when: row.startedAtBogota ?? "",
-      corte: row.corte ?? "",
-      delayMin: scheduled != null ? Math.round((start - scheduled) / 60000) : null,
-      predictions: row.predictionsSaved ?? null,
-      withConsensus: row.predictionsWithConsensus ?? null,
-      failures: row.failures ?? 0,
-    };
-  });
-  const slots = new Set(recent.map((row) => `${row.cut}|${row.corte}`));
-  // Turnos esperados: los de la ventana, desde el primer corte registrado y con al menos 1 hora de margen.
-  const firstStart = Math.min(...input.cuts.map((row) => Date.parse(row.startedAtBogota ?? "")).filter(Number.isFinite));
-  const expectedSlots = new Set<string>();
-  for (let day = Date.parse(`${bogotaDay(from)}T00:00:00-05:00`); day <= now; day += DAY) {
-    for (const [clock, corte] of [["00:15", "noche"], ["12:00", "mediodia"]]) {
-      const date = bogotaDay(day + 6 * 3600 * 1000);
-      const at = Date.parse(`${date}T${clock}:00-05:00`);
-      if (at >= from && at >= firstStart - 3600 * 1000 && at <= now - 3600 * 1000) expectedSlots.add(`${date}|${corte}`);
-    }
-  }
-  const expected = expectedSlots.size;
-  const done = [...expectedSlots].filter((slot) => slots.has(slot)).length;
-  const late = list.filter((row) => row.delayMin != null && row.delayMin > 15).length;
-  const fatal = recent.filter((row) => row.fatal).length;
-  const missing = expected - done;
-  const cutsLight: Light = fatal > 0 || missing >= 3 ? "rojo" : missing > 0 || late > 0 ? "amarillo" : "verde";
+  const recent = recentCuts(input.cuts, from, now);
 
   // 2. Cobertura: predicciones guardadas esta semana y la anterior.
   const coverageFor = (start: number, end: number) => {
@@ -668,7 +696,7 @@ export function buildReview(input: ReviewInput): Review {
   return {
     generatedAt: new Date(now).toISOString(),
     window: { from: bogotaDay(from), to: bogotaDay(now) },
-    cuts: { light: cutsLight, expected, done, late, fatal, list },
+    cuts: cutsSummary(input.cuts, from, now),
     coverage: { week: coverageFor(from, now + 1), previous: coverageFor(from - 7 * DAY, from) },
     evaluation: {
       light: evalLight,
