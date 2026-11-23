@@ -325,6 +325,53 @@ export function resultsOf(list: MarkRow[], agendaById: Map<string, AgendaRow>, c
   return { settled: pnl.length, roi: stat(pnl), closed: evClose.length, clvHouse: stat(clvHouse), evClose: evStat, verdict: verdictOf(evStat) };
 }
 
+/** Mide un grupo de selecciones con la agenda y los cierres ya fijados (`resultsOf` parcialmente aplicada). */
+export type Measure = (list: MarkRow[]) => Results;
+
+/** Campos de una selección de «Valor del día» que no tienen las marcas. */
+type PickRow = MarkRow & { rule?: string; source?: string; prob?: number; savedAt?: string };
+
+/** Origen de una selección: la búsqueda de cada hora o el corte (lo que no dice «hora»). */
+function sourceOf(pick: PickRow): "corte" | "hora" {
+  return pick.source === "hora" ? "hora" : "corte";
+}
+
+/** Regla v2 (5 nov 2026): solo 40 %+ y, además de 1X2, doble oportunidad y empate no válido. Total, por mercado y por origen. */
+export function pickRuleV2Of(picks: PickRow[], measure: Measure): Review["pickRuleV2"] {
+  const v2 = picks.filter((pick) => pick.rule === "v2");
+  return {
+    all: measure(v2),
+    byMarket: (["1x2", "dc", "dnb"] as const).map((market) => ({ market, results: measure(v2.filter((pick) => (pick.market ?? "1x2") === market)) })),
+    bySource: (["corte", "hora"] as const).map((source) => ({ source, results: measure(v2.filter((pick) => sourceOf(pick) === source)) })),
+  };
+}
+
+/**
+ * Niveles de probabilidad de «Valor del día» (regla fijada el 5 nov 2026): todo el histórico y, aparte, solo lo
+ * registrado desde ese día, que es la prueba limpia (el corte de 40 % se eligió mirando el histórico).
+ */
+const TIER_SINCE = "2026-11-05";
+
+/** Tramos acumulados, como los filtros de la página: «40 % o más» y «25 % o más» (incluye la anterior). */
+const TIERS = [
+  { key: "alta", label: "40 % o más", min: 0.4 },
+  { key: "media", label: "25 % o más", min: 0.25 },
+  { key: "todas", label: "todas", min: 0 },
+];
+
+export function pickTiersOf(picks: PickRow[], measure: Measure): Review["pickTiers"] {
+  return TIERS.map((tier) => {
+    const inTier = picks.filter((pick) => Number(pick.prob) >= tier.min);
+    return {
+      key: tier.key,
+      label: tier.label,
+      all: measure(inTier),
+      since: TIER_SINCE,
+      forward: measure(inTier.filter((pick) => String(pick.savedAt ?? "") >= TIER_SINCE)),
+    };
+  });
+}
+
 export function buildReview(input: ReviewInput): Review {
   const now = input.now;
   const from = now - 7 * DAY;
@@ -418,34 +465,8 @@ export function buildReview(input: ReviewInput): Review {
   // «Favorito con valor» (en prueba): resultado real apostando lo mismo a cada uno.
   const favoriteResults = measure(input.favorites ?? []);
   const pickResultsLow = measure((input.picks ?? []).filter((pick) => Number(pick.odds) < 4));
-  // Regla v2 (5 nov 2026): solo 40 %+ y, además de 1X2, doble oportunidad y empate no válido. Medición aparte y por mercado.
-  const v2 = (input.picks ?? []).filter((pick) => (pick as { rule?: string }).rule === "v2");
-  const pickRuleV2 = {
-    all: measure(v2),
-    byMarket: (["1x2", "dc", "dnb"] as const).map((market) => ({ market, results: measure(v2.filter((pick) => (pick.market ?? "1x2") === market)) })),
-    bySource: (["corte", "hora"] as const).map((source) => ({
-      source,
-      results: measure(v2.filter((pick) => ((pick as { source?: string }).source === "hora" ? "hora" : "corte") === source)),
-    })),
-  };
-  // Niveles de probabilidad de «Valor del día» (regla fijada el 5 nov 2026): todo el histórico y, aparte, solo lo
-  // registrado desde ese día, que es la prueba limpia (el corte de 40 % se eligió mirando el histórico).
-  const TIER_SINCE = "2026-11-05";
-  // Acumulados, como los filtros de la página: «40 % o más» y «25 % o más» (incluye la anterior).
-  const pickTiers = [
-    { key: "alta", label: "40 % o más", min: 0.4 },
-    { key: "media", label: "25 % o más", min: 0.25 },
-    { key: "todas", label: "todas", min: 0 },
-  ].map((tier) => {
-    const inTier = (input.picks ?? []).filter((pick) => Number((pick as { prob?: number }).prob) >= tier.min);
-    return {
-      key: tier.key,
-      label: tier.label,
-      all: measure(inTier),
-      since: TIER_SINCE,
-      forward: measure(inTier.filter((pick) => String((pick as { savedAt?: string }).savedAt ?? "") >= TIER_SINCE)),
-    };
-  });
+  const pickRuleV2 = pickRuleV2Of(input.picks ?? [], measure);
+  const pickTiers = pickTiersOf(input.picks ?? [], measure);
 
   // 5. Sombras contra la publicada, en los mismos partidos.
   const shadowLabels: Record<string, string> = {
