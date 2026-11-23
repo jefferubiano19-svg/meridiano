@@ -13,7 +13,7 @@ export type Light = "verde" | "amarillo" | "rojo" | "gris";
 
 type Way = { home: number; draw: number; away: number };
 
-interface CutRow {
+export interface CutRow {
   cut: string | null;
   corte: string | null;
   startedAtBogota: string | null;
@@ -25,7 +25,7 @@ interface CutRow {
   predictionsWithConsensus?: number | null;
 }
 
-interface PredictionRow {
+export interface PredictionRow {
   id: string;
   matchId: string;
   kickoff: string;
@@ -39,7 +39,7 @@ interface PredictionRow {
   verifiedOdds?: { readAtBogota?: string; wplay1x2?: unknown } | null;
 }
 
-interface ByMatch {
+export interface ByMatch {
   matchId: string;
   rowId: string | null;
   actual: "home" | "draw" | "away";
@@ -465,6 +465,46 @@ function modelBlendOf(byMatch: ByMatch[], rowById: Map<string, PredictionRow>): 
   return { n: diffs.length, diff: stat(diffs) };
 }
 
+/* ---- 6. Calibración: probabilidad publicada del favorito contra lo que pasó ------------------------------ */
+
+type Side = "home" | "draw" | "away";
+type Bin = { low: number; high: number; p: number[]; hit: number };
+
+/** Resultado más probable de la 1X2 y su probabilidad (en empate gana el primero: local, empate, visita). */
+function favoriteOf(way: Way): [Side, number] {
+  const sides: [Side, number][] = [
+    ["home", way.home],
+    ["draw", way.draw],
+    ["away", way.away],
+  ];
+  return sides.sort((a, b) => b[1] - a[1])[0];
+}
+
+/** Tramo [low, low + 0,1) de la probabilidad; 90 % o más va al último. Menos de 30 %: ninguno. */
+function binOf(bins: Bin[], p: number): Bin | undefined {
+  return bins.find((item) => p >= item.low && p < item.high) ?? (p >= 0.9 ? bins[bins.length - 1] : undefined);
+}
+
+/** Por tramo de la probabilidad del favorito: cuántos, la media dicha y cuántas veces ganó el favorito. */
+export function calibrationOf(byMatch: ByMatch[], rowById: Map<string, PredictionRow>): Review["calibration"] {
+  const bins: Bin[] = [0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9].map((low) => ({ low, high: low + 0.1, p: [], hit: 0 }));
+  for (const row of byMatch) {
+    const way = row.rowId ? rowById.get(row.rowId)?.published : undefined;
+    if (!way) continue;
+    const [side, p] = favoriteOf(way);
+    const bin = binOf(bins, p);
+    if (!bin) continue;
+    bin.p.push(p);
+    if (row.actual === side) bin.hit += 1;
+  }
+  return bins.map((bin) => ({
+    label: `${Math.round(bin.low * 100)}–${Math.round(bin.high * 100)} %`,
+    n: bin.p.length,
+    expected: mean(bin.p),
+    observed: bin.p.length ? bin.hit / bin.p.length : null,
+  }));
+}
+
 /* ---- Medición del dinero: liquidación y comparación con el cierre ---------------------------------------- */
 
 /** Fila del registro de marcas, de «Valor del día» o de «Favorito con valor». */
@@ -657,30 +697,6 @@ export function buildReview(input: ReviewInput): Review {
   const pickTiers = pickTiersOf(input.picks ?? [], measure);
 
 
-  // 6. Calibración: probabilidad publicada del favorito contra lo que pasó.
-  const bins = [0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9].map((low) => ({ low, high: low + 0.1, p: [] as number[], hit: 0 }));
-  for (const row of byMatch) {
-    const pred = row.rowId ? rowById.get(row.rowId) : undefined;
-    const way = pred?.published;
-    if (!way) continue;
-    const sides: ["home" | "draw" | "away", number][] = [
-      ["home", way.home],
-      ["draw", way.draw],
-      ["away", way.away],
-    ];
-    const [side, p] = sides.sort((a, b) => b[1] - a[1])[0];
-    const bin = bins.find((item) => p >= item.low && p < item.high) ?? (p >= 0.9 ? bins[bins.length - 1] : undefined);
-    if (!bin) continue;
-    bin.p.push(p);
-    if (row.actual === side) bin.hit += 1;
-  }
-  const calibration = bins.map((bin) => ({
-    label: `${Math.round(bin.low * 100)}–${Math.round(bin.high * 100)} %`,
-    n: bin.p.length,
-    expected: mean(bin.p),
-    observed: bin.p.length ? bin.hit / bin.p.length : null,
-  }));
-
   // 7. Anomalías de datos.
   const items: Review["anomalies"]["items"] = [];
   const push = (key: string, label: string, rows: string[]) => items.push({ key, label, count: rows.length, examples: rows.slice(0, 5) });
@@ -792,7 +808,7 @@ export function buildReview(input: ReviewInput): Review {
     shadows: shadowsOf(byMatch),
     wplayMarket: wplayMarketOf(byMatch, input.predictions),
     modelBlend: modelBlendOf(byMatch, rowById),
-    calibration,
+    calibration: calibrationOf(byMatch, rowById),
     rivalGoal,
     anomalies: { light: anomaliesLight, items },
   };
