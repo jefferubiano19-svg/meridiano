@@ -263,6 +263,100 @@ export function cutsSummary(cuts: CutRow[], from: number, now: number): Review["
   return { light: cutsLightOf(fatal, expected.length - done, late), expected: expected.length, done, late, fatal, list };
 }
 
+/* ---- 2. Cobertura: predicciones guardadas esta semana y la anterior --------------------------------------- */
+
+type Coverage = Review["coverage"]["week"];
+
+/** Predicciones calculadas en [start, end): total, por nivel y cuántas tenían consenso. */
+function coverageFor(predictions: PredictionRow[], start: number, end: number): Coverage {
+  const rows = predictions.filter((row) => {
+    const at = Date.parse(row.calculatedAt);
+    return at >= start && at < end;
+  });
+  const byLevel: Record<string, number> = {};
+  for (const row of rows) byLevel[row.level ?? "?"] = (byLevel[row.level ?? "?"] ?? 0) + 1;
+  return { total: rows.length, byLevel, withConsensus: rows.filter((row) => row.consensus).length };
+}
+
+/* ---- 3. Evaluación: RPS publicada contra el consenso, con IC 95 % y etapa --------------------------------- */
+
+type Evaluation = Review["evaluation"];
+
+/** Predicciones por id de fila (la última gana si un id se repite). */
+function predictionIndex(predictions: PredictionRow[]): Map<string, PredictionRow> {
+  return new Map(predictions.map((row) => [row.id, row]));
+}
+
+/** ¿El partido se puede comparar con el consenso? */
+function withConsensus(rows: ByMatch[]): ByMatch[] {
+  return rows.filter((row) => row.comparable && row.rpsPublished != null && row.rpsConsensus != null);
+}
+
+/** RPS publicada − RPS del consenso en partidos comparables: negativa = la publicada le gana al consenso. */
+function consensusDistance(comparable: ByMatch[]): Stat {
+  return stat(comparable.map((row) => (row.rpsPublished as number) - (row.rpsConsensus as number)));
+}
+
+/** Evaluados agrupados por el nivel de su predicción («?» sin fila o sin nivel), en orden de aparición. */
+function groupByLevel(byMatch: ByMatch[], rowById: Map<string, PredictionRow>): Map<string, ByMatch[]> {
+  const levels = new Map<string, ByMatch[]>();
+  for (const row of byMatch) {
+    const level = (row.rowId && rowById.get(row.rowId)?.level) || "?";
+    const bucket = levels.get(level) ?? [];
+    bucket.push(row);
+    levels.set(level, bucket);
+  }
+  return levels;
+}
+
+function levelEntry(level: string, rows: ByMatch[]): Evaluation["byLevel"][number] {
+  const comparable = withConsensus(rows);
+  return {
+    level,
+    n: rows.length,
+    rpsPublished: mean(rows.map((row) => row.publishedRps ?? row.rpsPublished).filter((v): v is number => v != null)),
+    comparable: comparable.length,
+    distance: consensusDistance(comparable),
+  };
+}
+
+/** Gris con muestra insuficiente; verde si el IC entero está bajo cero, rojo si está sobre cero, si no amarillo. */
+function evaluationLight(stage: Evaluation["stage"], distance: Stat): Light {
+  if (stage === "muestra insuficiente" || distance.high == null || distance.low == null) return "gris";
+  if (distance.high < 0) return "verde";
+  return distance.low > 0 ? "rojo" : "amarillo";
+}
+
+export function evaluationOf(byMatch: ByMatch[], rowById: Map<string, PredictionRow>, goal: number): Evaluation {
+  const comparable = withConsensus(byMatch);
+  const distance = consensusDistance(comparable);
+  const stage = stageOf(comparable.length);
+  return {
+    light: evaluationLight(stage, distance),
+    stage,
+    evaluated: byMatch.length,
+    comparable: comparable.length,
+    goal,
+    rpsModel: mean(comparable.map((row) => row.rpsModel).filter((v): v is number => v != null)),
+    rpsPublished: mean(comparable.map((row) => row.rpsPublished as number)),
+    rpsConsensus: mean(comparable.map((row) => row.rpsConsensus as number)),
+    distance,
+    byLevel: [...groupByLevel(byMatch, rowById).entries()].map(([level, rows]) => levelEntry(level, rows)).sort((a, b) => a.level.localeCompare(b.level)),
+  };
+}
+
+/* ---- 4. Valor y CLV de las marcas (cierre guardado en la marca) ------------------------------------------ */
+
+function valueOf(marks: MarkRow[]): Review["value"] {
+  const closed = marks.filter((mark) => typeof mark.clv === "number" && (mark.closingOdds ?? 0) > 1);
+  return {
+    marks: marks.length,
+    withClose: closed.length,
+    clv: stat(closed.map((mark) => mark.clv as number)),
+    stage: closed.length >= 100 ? "con muestra" : "sin conclusión (menos de 100 marcas con cierre)",
+  };
+}
+
 /* ---- Medición del dinero: liquidación y comparación con el cierre ---------------------------------------- */
 
 /** Fila del registro de marcas, de «Valor del día» o de «Favorito con valor». */
@@ -439,50 +533,8 @@ export function buildReview(input: ReviewInput): Review {
 
   const recent = recentCuts(input.cuts, from, now);
 
-  // 2. Cobertura: predicciones guardadas esta semana y la anterior.
-  const coverageFor = (start: number, end: number) => {
-    const rows = input.predictions.filter((row) => {
-      const at = Date.parse(row.calculatedAt);
-      return at >= start && at < end;
-    });
-    const byLevel: Record<string, number> = {};
-    for (const row of rows) byLevel[row.level ?? "?"] = (byLevel[row.level ?? "?"] ?? 0) + 1;
-    return { total: rows.length, byLevel, withConsensus: rows.filter((row) => row.consensus).length };
-  };
-
-  // 3. Evaluación.
   const byMatch = input.evaluations.byMatch ?? [];
-  const rowById = new Map(input.predictions.map((row) => [row.id, row]));
-  const comparable = byMatch.filter((row) => row.comparable && row.rpsPublished != null && row.rpsConsensus != null);
-  const distance = stat(comparable.map((row) => (row.rpsPublished as number) - (row.rpsConsensus as number)));
-  const levels = new Map<string, ByMatch[]>();
-  for (const row of byMatch) {
-    const level = (row.rowId && rowById.get(row.rowId)?.level) || "?";
-    const bucket = levels.get(level) ?? [];
-    bucket.push(row);
-    levels.set(level, bucket);
-  }
-  const byLevel = [...levels.entries()]
-    .map(([level, rows]) => {
-      const withConsensus = rows.filter((row) => row.comparable && row.rpsPublished != null && row.rpsConsensus != null);
-      return {
-        level,
-        n: rows.length,
-        rpsPublished: mean(rows.map((row) => row.publishedRps ?? row.rpsPublished).filter((v): v is number => v != null)),
-        comparable: withConsensus.length,
-        distance: stat(withConsensus.map((row) => (row.rpsPublished as number) - (row.rpsConsensus as number))),
-      };
-    })
-    .sort((a, b) => a.level.localeCompare(b.level));
-  const stage = stageOf(comparable.length);
-  let evalLight: Light = "gris";
-  if (stage !== "muestra insuficiente" && distance.high != null && distance.low != null) {
-    evalLight = distance.high < 0 ? "verde" : distance.low > 0 ? "rojo" : "amarillo";
-  }
-
-  // 4. Valor y CLV.
-  const closed = input.marks.filter((mark) => typeof mark.clv === "number" && (mark.closingOdds ?? 0) > 1);
-  const clv = stat(closed.map((mark) => mark.clv as number));
+  const rowById = predictionIndex(input.predictions);
 
   // 4b. Resultado real de las marcas 1X2 y de «Valor del día», y comparación con el cierre (data/cierres.json).
   const agendaById = agendaIndex(input.agenda);
@@ -697,25 +749,9 @@ export function buildReview(input: ReviewInput): Review {
     generatedAt: new Date(now).toISOString(),
     window: { from: bogotaDay(from), to: bogotaDay(now) },
     cuts: cutsSummary(input.cuts, from, now),
-    coverage: { week: coverageFor(from, now + 1), previous: coverageFor(from - 7 * DAY, from) },
-    evaluation: {
-      light: evalLight,
-      stage,
-      evaluated: byMatch.length,
-      comparable: comparable.length,
-      goal: input.evaluations.goal ?? 500,
-      rpsModel: mean(comparable.map((row) => row.rpsModel).filter((v): v is number => v != null)),
-      rpsPublished: mean(comparable.map((row) => row.rpsPublished as number)),
-      rpsConsensus: mean(comparable.map((row) => row.rpsConsensus as number)),
-      distance,
-      byLevel,
-    },
-    value: {
-      marks: input.marks.length,
-      withClose: closed.length,
-      clv,
-      stage: closed.length >= 100 ? "con muestra" : "sin conclusión (menos de 100 marcas con cierre)",
-    },
+    coverage: { week: coverageFor(input.predictions, from, now + 1), previous: coverageFor(input.predictions, from - 7 * DAY, from) },
+    evaluation: evaluationOf(byMatch, rowById, input.evaluations.goal ?? 500),
+    value: valueOf(input.marks),
     valueResults,
     pickResults,
     pickResultsLow,
