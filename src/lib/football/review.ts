@@ -51,6 +51,8 @@ export interface ByMatch {
   shadowRps?: Record<string, number | null>;
   modelRps?: number | null;
   marketSource?: string | null;
+  /** Marcador [local, visita] del partido evaluado. */
+  score?: unknown;
 }
 
 export interface ReviewInput {
@@ -779,59 +781,56 @@ export function pickTiersOf(picks: PickRow[], measure: Measure): Review["pickTie
   });
 }
 
+/* ---- «El rival marca»: probabilidad de que el no favorito haga gol contra su marcador ---------------------- */
+
+type RivalRow = { p: number; y: number };
+
+/** Tramos de la probabilidad dicha (el último llega hasta 1,01 para que entre el 100 %). */
+const RIVAL_BUCKETS: [number, number, string][] = [
+  [0, 0.6, "menos de 60 %"],
+  [0.6, 0.7, "60–70 %"],
+  [0.7, 0.8, "70–80 %"],
+  [0.8, 0.9, "80–90 %"],
+  [0.9, 1.01, "90 % o más"],
+];
+
+/** Lo dicho (p) y lo que pasó (y = 1 si el no favorito marcó) de un partido evaluado; null sin 1X2 o sin marcador. */
+function rivalRowOf(ev: ByMatch, rowById: Map<string, PredictionRow>): RivalRow | null {
+  const published = ev.rowId ? rowById.get(ev.rowId)?.published : undefined;
+  const score = ev.score;
+  if (!published || !Array.isArray(score) || score.length < 2) return null;
+  const rival = rivalScores(published);
+  if (!rival) return null;
+  return { p: rival.p, y: Number(rival.side === "home" ? score[0] : score[1]) >= 1 ? 1 : 0 };
+}
+
+/** Brier contra la frecuencia real (una constante) y calibración por tramos. */
+export function rivalGoalOf(byMatch: ByMatch[], rowById: Map<string, PredictionRow>): Review["rivalGoal"] {
+  const rows = byMatch.map((ev) => rivalRowOf(ev, rowById)).filter((row): row is RivalRow => row != null);
+  const rate = mean(rows.map((row) => row.y));
+  return {
+    n: rows.length,
+    rate,
+    brier: mean(rows.map((row) => (row.p - row.y) ** 2)),
+    brierConstant: rate == null ? null : mean(rows.map((row) => (rate - row.y) ** 2)),
+    buckets: RIVAL_BUCKETS.map(([low, high, label]) => {
+      const part = rows.filter((row) => row.p >= low && row.p < high);
+      return { label, n: part.length, expected: mean(part.map((row) => row.p)), observed: mean(part.map((row) => row.y)) };
+    }),
+  };
+}
+
+/* ---- Ensamblador ---------------------------------------------------------------------------------------- */
+
+/** Revisión de la semana que termina en `input.now`. Solo mide: no cambia nada de lo que recibe. */
 export function buildReview(input: ReviewInput): Review {
   const now = input.now;
   const from = now - 7 * DAY;
-
-  const recent = recentCuts(input.cuts, from, now);
   const byMatch = input.evaluations.byMatch ?? [];
   const rowById = predictionIndex(input.predictions);
-
-  // 4b. Resultado real de las marcas 1X2 y de «Valor del día», y comparación con el cierre (data/cierres.json).
   const agendaById = agendaIndex(input.agenda);
-  const measure = (list: MarkRow[]) => resultsOf(list, agendaById, input.closings ?? {});
-  const valueResults = measure(input.marks);
-  const pickResults = measure(input.picks ?? []);
-  // Filtro «cuota menor a 4» de la página /valor: la misma medición solo con esas selecciones.
-  // «Favorito con valor» (en prueba): resultado real apostando lo mismo a cada uno.
-  const favoriteResults = measure(input.favorites ?? []);
-  const pickResultsLow = measure((input.picks ?? []).filter((pick) => Number(pick.odds) < 4));
-  const pickRuleV2 = pickRuleV2Of(input.picks ?? [], measure);
-  const pickTiers = pickTiersOf(input.picks ?? [], measure);
-
-
-  // «El rival marca»: la fila evaluada de cada partido contra su marcador.
-  const rivalRows: { p: number; y: number }[] = [];
-  {
-    const rowsById = new Map(input.predictions.map((row) => [row.id, row]));
-    for (const ev of byMatch) {
-      const row = ev.rowId ? rowsById.get(ev.rowId) : undefined;
-      const score = (ev as unknown as { score?: unknown }).score;
-      if (!row?.published || !Array.isArray(score) || score.length < 2) continue;
-      const rival = rivalScores(row.published);
-      if (!rival) continue;
-      const { side, p } = rival;
-      rivalRows.push({ p, y: Number(side === "home" ? score[0] : score[1]) >= 1 ? 1 : 0 });
-    }
-  }
-  const rivalRate = mean(rivalRows.map((row) => row.y));
-  const rivalGoal: Review["rivalGoal"] = {
-    n: rivalRows.length,
-    rate: rivalRate,
-    brier: mean(rivalRows.map((row) => (row.p - row.y) ** 2)),
-    brierConstant: rivalRate == null ? null : mean(rivalRows.map((row) => (rivalRate - row.y) ** 2)),
-    buckets: [
-      [0, 0.6, "menos de 60 %"],
-      [0.6, 0.7, "60–70 %"],
-      [0.7, 0.8, "70–80 %"],
-      [0.8, 0.9, "80–90 %"],
-      [0.9, 1.01, "90 % o más"],
-    ].map(([low, high, label]) => {
-      const part = rivalRows.filter((row) => row.p >= (low as number) && row.p < (high as number));
-      return { label: label as string, n: part.length, expected: mean(part.map((row) => row.p)), observed: mean(part.map((row) => row.y)) };
-    }),
-  };
-
+  const measure: Measure = (list) => resultsOf(list, agendaById, input.closings ?? {});
+  const picks = input.picks ?? [];
   return {
     generatedAt: new Date(now).toISOString(),
     window: { from: bogotaDay(from), to: bogotaDay(now) },
@@ -839,17 +838,19 @@ export function buildReview(input: ReviewInput): Review {
     coverage: { week: coverageFor(input.predictions, from, now + 1), previous: coverageFor(input.predictions, from - 7 * DAY, from) },
     evaluation: evaluationOf(byMatch, rowById, input.evaluations.goal ?? 500),
     value: valueOf(input.marks),
-    valueResults,
-    pickResults,
-    pickResultsLow,
-    pickTiers,
-    pickRuleV2,
-    favoriteResults,
+    valueResults: measure(input.marks),
+    pickResults: measure(picks),
+    // Filtro «cuota menor a 4» de la página /valor (anterior a la regla v2): la misma medición solo con esas.
+    pickResultsLow: measure(picks.filter((pick) => Number(pick.odds) < 4)),
+    pickTiers: pickTiersOf(picks, measure),
+    pickRuleV2: pickRuleV2Of(picks, measure),
+    // «Favorito con valor» (en prueba): resultado real apostando lo mismo a cada uno.
+    favoriteResults: measure(input.favorites ?? []),
     shadows: shadowsOf(byMatch),
     wplayMarket: wplayMarketOf(byMatch, input.predictions),
     modelBlend: modelBlendOf(byMatch, rowById),
     calibration: calibrationOf(byMatch, rowById),
-    rivalGoal,
-    anomalies: anomaliesOf({ agenda: input.agenda, predictions: input.predictions, standings: input.standings, recent, from, now }),
+    rivalGoal: rivalGoalOf(byMatch, rowById),
+    anomalies: anomaliesOf({ agenda: input.agenda, predictions: input.predictions, standings: input.standings, recent: recentCuts(input.cuts, from, now), from, now }),
   };
 }
