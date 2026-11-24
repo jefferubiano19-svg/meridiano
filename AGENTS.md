@@ -219,9 +219,14 @@ de acciones, commits pequeños que dicen por qué, qué y cómo se probó).
   los mismos archivos y correos. Cambios de comportamiento a propósito: «Mis apuestas» compara con la mínima a 2
   decimales como `/valor`; el valor al cierre del 1X2 usa el consenso normalizado como el registro (+4,29 % → +4,25 %
   en 205 cierres el 23 nov).
-- Fuera del núcleo todavía no cumple (803 funciones, 158 con complejidad ≥ 10 al 23 nov; `main` del corte 253,
-  `buildReview` 167, `cierre` 106). Se aplica a lo que se toque: no se agrega a un archivo sin pruebas una función
-  compleja sin prueba.
+- **Revisión automática** (23 nov 2026): `buildReview` pasó de complejidad 156 a un ensamblador de 6; cada sección
+  es una función pura (`cutsSummary`, `resultsOf`, `pickRuleV2Of`, `pickTiersOf`, `shadowsOf`, `calibrationOf`,
+  `anomaliesOf`, `rivalGoalOf`…) con pruebas en `review.test.ts`. review.ts entero con CRAP < 10, sin duplicados,
+  302/333 mutantes muertos; los 31 vivos son equivalentes (`?? → ||` donde la izquierda nunca es "" ni 0, `?.` tras
+  una guarda, bordes imposibles de horario y de suma). El semáforo de cortes espera también el corte de las 17:00
+  (`CUT_SCHEDULE`), cada tipo desde la primera vez que corrió.
+- Fuera de lo anterior todavía no cumple (al 23 nov: `main` del corte 253, `cierre` 106, `analyzeFixture` 102,
+  páginas). Se aplica a lo que se toque: no se agrega a un archivo sin pruebas una función compleja sin prueba.
 
 ## Comandos
 

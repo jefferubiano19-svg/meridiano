@@ -13,10 +13,12 @@ TOOLS="${CALIDAD_TOOLS:-.tools}"
 CORE=(
   src/lib/football/mercados.ts
   src/lib/football/valor.ts
+  src/lib/football/review.ts
   src/lib/store/mis-apuestas.ts
+  src/lib/share.ts
 )
-# Revisadas por duplicados junto con el núcleo (allí se usaba la matemática repetida).
-DRY_ALSO=(src/lib/football/review.ts src/lib/football/engine.ts)
+# Revisadas por duplicados junto con el núcleo.
+DRY_ALSO=(src/lib/football/engine.ts)
 
 declare -A PIN=(
   [crapper]=c757ec79a6c15dc815238bbd9c2f4601eb54d3cc
