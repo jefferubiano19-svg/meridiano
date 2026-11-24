@@ -231,11 +231,22 @@ function cutEntry(row: CutRow): Review["cuts"]["list"][number] {
 }
 
 /** Turnos esperados («fecha|corte»): los de la ventana, desde el primer corte registrado y con al menos 1 hora de margen. */
+/** Los tres cortes del día (cron-job.org, hora de Bogotá). Hasta el 23 nov 2026 el semáforo no esperaba el de la tarde. */
+const CUT_SCHEDULE: readonly (readonly [clock: string, corte: string])[] = [
+  ["00:15", "noche"],
+  ["12:00", "mediodia"],
+  ["17:00", "tarde"],
+];
+
+/**
+ * Turnos esperados en la ventana: cada tipo de corte desde la primera vez que corrió (menos 1 hora) y con al menos
+ * 1 hora de margen antes de ahora.
+ */
 function expectedSlots(cuts: CutRow[], from: number, now: number): Set<string> {
-  const firstStart = Math.min(...cuts.map(startedMs).filter(Number.isFinite));
   const slots = new Set<string>();
-  for (let day = Date.parse(`${bogotaDay(from)}T00:00:00-05:00`); day <= now; day += DAY) {
-    for (const [clock, corte] of [["00:15", "noche"], ["12:00", "mediodia"]]) {
+  for (const [clock, corte] of CUT_SCHEDULE) {
+    const firstStart = Math.min(...cuts.filter((row) => row.corte === corte).map(startedMs).filter(Number.isFinite));
+    for (let day = Date.parse(`${bogotaDay(from)}T00:00:00-05:00`); day <= now; day += DAY) {
       const date = bogotaDay(day + 6 * HOUR);
       const at = Date.parse(`${date}T${clock}:00-05:00`);
       if (at >= from && at >= firstStart - HOUR && at <= now - HOUR) slots.add(`${date}|${corte}`);

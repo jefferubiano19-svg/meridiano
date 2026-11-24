@@ -290,6 +290,23 @@ describe("cutsSummary: semáforo de cortes", () => {
     );
   });
 
+  it("el corte de la tarde (17:00) también se espera desde que existe", () => {
+    const withAfternoon = [
+      ...week(),
+      cut("2026-11-16", "tarde", "17:02"),
+      ...days.map((date) => cut(date, "tarde", "17:04")),
+    ];
+    const full = cutsSummary(withAfternoon, from, now);
+    assert.deepEqual([full.light, full.expected, full.done], ["verde", 21, 21]);
+    const missing = cutsSummary(withAfternoon.filter((row) => !(row.corte === "tarde" && row.cut === "2026-11-19")), from, now);
+    assert.deepEqual([missing.light, missing.expected, missing.done], ["amarillo", 21, 20]);
+    assert.equal(full.list.find((row) => row.corte === "tarde")?.delayMin, 2);
+  });
+
+  it("un tipo de corte que nunca corrió no se espera", () => {
+    assert.equal(cutsSummary(week(), from, now).expected, 14);
+  });
+
   it("un corte fatal: rojo", () => {
     const cuts = week();
     cuts[5] = { ...cuts[5], fatal: true };
@@ -319,14 +336,15 @@ describe("cutsSummary: semáforo de cortes", () => {
     assert.deepEqual([row.predictions, row.withConsensus, row.failures], [400, 120, 2]);
   });
 
-  it("no espera turnos antes del primer corte registrado ni de la última hora", () => {
+  it("no espera turnos antes del primer corte de su tipo ni de la última hora", () => {
+    // Cada tipo (noche, mediodía, tarde) se espera desde la primera vez que corrió: aquí solo hay mediodía.
     const first = cutsSummary([cut("2026-11-22", "mediodia", "12:00")], from, now);
-    assert.deepEqual([first.expected, first.done, first.light], [2, 1, "amarillo"]); // 22 mediodía y 23 noche
+    assert.deepEqual([first.expected, first.done, first.light], [1, 1, "verde"]);
     const hourAgo = Date.parse("2026-11-23T00:15:00-05:00") + 3600 * 1000;
     assert.equal(cutsSummary(week(), from, hourAgo).expected, 14);
     assert.equal(cutsSummary(week(), from, hourAgo - 1).expected, 13);
-    assert.equal(cutsSummary([cut("2026-11-22", "mediodia", "13:00")], from, now).expected, 2); // 12:00 = 13:00 − 1 h: entra
-    assert.equal(cutsSummary([cut("2026-11-22", "mediodia", "13:01")], from, now).expected, 1); // 12:00 < 13:01 − 1 h: no
+    assert.equal(cutsSummary([cut("2026-11-22", "mediodia", "13:00")], from, now).expected, 1); // 12:00 = 13:00 − 1 h: entra
+    assert.equal(cutsSummary([cut("2026-11-22", "mediodia", "13:01")], from, now).expected, 0); // 12:00 < 13:01 − 1 h: no
   });
 
   it("sin cortes no se espera nada; los de fuera de la ventana no cuentan", () => {
@@ -748,7 +766,7 @@ describe("bordes de la revisión", () => {
   it("un turno justo en el inicio de la ventana se espera", () => {
     const noon = Date.parse("2026-11-23T12:00:00-05:00");
     const week = cutsSummary([{ cut: "2026-11-16", corte: "mediodia", startedAtBogota: "2026-11-16T12:00:00-05:00" }], noon - 7 * 24 * 3600 * 1000, noon);
-    assert.equal(week.expected, 14);
+    assert.equal(week.expected, 7); // los 7 mediodías del 16 al 22 (el del 23 aún no tiene la hora de margen)
     assert.equal(week.done, 1);
   });
 
